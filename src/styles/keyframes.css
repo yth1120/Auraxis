@@ -1,0 +1,276 @@
+/* ================================================================
+   Auraxis — Animation Keyframes
+   ================================================================ */
+
+/* ── Fade In Down ──────────────────────────────────────── */
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Fade Out Down (exit animation) ────────────────────── */
+@keyframes fadeOutDown {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+/* ── Slide In Right (drawer / modal entrance) ──────────── */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* ── Slide In Left ─────────────────────────────────────── */
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* ── Slide In Up (bottom sheet) ────────────────────────── */
+@keyframes slideInUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* ── Slide Up Subtle (toast entrance, ~16px) ───────────── */
+@keyframes slideUpSubtle {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Slide Down Subtle (toast exit, ~16px) ─────────────── */
+@keyframes slideDownSubtle {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+/* ── Cursor Blink (typing indicator) ───────────────────── */
+@keyframes cursorBlink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
+/* ── Spin (loading spinner) ────────────────────────────── */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── User Message In ──────────────────────────────────── */
+@keyframes userMsgIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Spark Beat (thinking indicator core pulse) ────────── */
+@keyframes sparkBeat {
+  0%, 100% {
+    transform: scale(1);
+    background: var(--color-primary);
+    box-shadow: 0 0 6px var(--color-primary-border);
+  }
+  50% {
+    transform: scale(1.35);
+    background: var(--color-primary-hover);
+    box-shadow: 0 0 12px var(--color-primary-strong);
+  }
+}
+
+/* ── Spark Ring (thinking indicator ring expand) ───────── */
+@keyframes sparkRing {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+
+/* ── Dot Blink (loading dots stagger) ──────────────────── */
+@keyframes dotBlink {
+  0%, 80%, 100% { opacity: 0.25; }
+  40%           { opacity: 1; }
+}
+
+/* ── Indicator In (thinking indicator entrance) ────────── */
+@keyframes indicatorIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Terminal Pulse (status dot) ──────────────────────── */
+@keyframes terminal-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ── Tool Card In (tool call card entrance) ────────────── */
+@keyframes toolCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Pulse Dot (timeline status dot) ───────────────────── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+/* ── Dot Pulse (status dots) ──────────────────────────── */
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* ── Compression In ───────────────────────────────────── */
+@keyframes compressionIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Compression Out ──────────────────────────────────── */
+@keyframes compressionOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* ── ChatInput smart panel entrance ────────────────────── */
+@keyframes smartPanelIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes smartPanelInDown {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes smartPanelInUp {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── SiderNav agent pending badge pulse ────────────────── */
+@keyframes agentPendingPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+/* ── 运行中工具行流光 ─────────────────── */
+@keyframes toolRowSweep {
+  0%          { left: -300px; }
+  90%, 100%   { left: 100%; }
+}
+
+/* ── StateDot pixel chase ─────────────────────────────── */
+@keyframes stateDotChase {
+  0%, 12.4%  { opacity: 1; }
+  12.5%, 24.9% { opacity: 0.6; }
+  25%, 37.4% { opacity: 0.35; }
+  37.5%, 100% { opacity: 0.15; }
+}
+
+/* ── Thinking-depth effort label swap（Claude-style）────── */
+@keyframes effortLabelIn {
+  from {
+    opacity: 0;
+    transform: translateY(var(--effort-enter-y, 4px));
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes effortLabelOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(var(--effort-exit-y, -4px));
+    filter: blur(2px);
+  }
+}
+
+/* 项目展开：子会话/任务列表淡入 + 轻微下移入场 */
+@keyframes projectExpandIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Reduced motion ────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-electron/
+release/
+out/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Logs & debug
+*.log
+npm-debug.log*
+.vitest/
+
+# Coverage
+coverage/
+test-results/
+playwright-report/
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.vs/
+.claude/
+*.swp
+*.swo
+*.sublime-*
+
+# Electron / Vite
+*.local
+
+# Agent workspaces & snapshots (local dev)
+.auraxis-snapshots/
+shots/
+.trash-cleanup/
+
+# TypeScript
+*.tsbuildinfo
+
+# Temp files
+*.tmp
+*.temp
+**/temp/
+**/tmp/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/

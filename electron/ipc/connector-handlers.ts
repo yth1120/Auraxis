@@ -1,0 +1,44 @@
+/**
+ * connector-handlers.ts — Slack / Drive / Notion connector IPC for Settings.
+ */
+import { ipcMain } from 'electron';
+import {
+  getConnectorStatuses,
+  setConnectorToken,
+  testConnector,
+  type ConnectorKind,
+} from '../connectors';
+
+function isKind(v: unknown): v is ConnectorKind {
+  return v === 'slack' || v === 'drive' || v === 'notion';
+}
+
+export function registerConnectorHandlers() {
+  ipcMain.handle('connector:status', async () => {
+    try {
+      return { ok: true, data: await getConnectorStatuses() };
+    } catch (error: any) {
+      return { ok: false, error: error?.message ?? String(error) };
+    }
+  });
+
+  ipcMain.handle('connector:setToken', async (_event, kind: unknown, token: unknown) => {
+    try {
+      if (!isKind(kind)) return { ok: false, error: '连接器类型无效' };
+      if (typeof token !== 'string') return { ok: false, error: 'Token 必须是字符串' };
+      await setConnectorToken(kind, token);
+      return { ok: true };
+    } catch (error: any) {
+      return { ok: false, error: error?.message ?? String(error) };
+    }
+  });
+
+  ipcMain.handle('connector:test', async (_event, kind: unknown) => {
+    try {
+      if (!isKind(kind)) return { ok: false, error: '连接器类型无效' };
+      return { ok: true, data: await testConnector(kind) };
+    } catch (error: any) {
+      return { ok: false, error: error?.message ?? String(error) };
+    }
+  });
+}

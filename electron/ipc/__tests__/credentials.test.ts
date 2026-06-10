@@ -1,0 +1,56 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { promises as fs } from 'fs';
+import os from 'os';
+import path from 'path';
+import { resolveCredential, describeCredential, setCredential, unsetCredential } from '../../credentials';
+
+let root: string;
+const ORIGINAL_ENV = { ...process.env };
+
+beforeEach(async () => {
+  root = await fs.mkdtemp(path.join(os.tmpdir(), 'auraxis-creds-'));
+  process.env.AURAXIS_USER_DATA_DIR = root;
+  delete process.env.TEST_CRED_A;
+});
+
+afterEach(async () => {
+  process.env = ORIGINAL_ENV;
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+describe('credentials', () => {
+  it('resolves from the process environment first', async () => {
+    process.env.TEST_CRED_A = 'from-env';
+    const r = await resolveCredential('TEST_CRED_A');
+    expect(r?.value).toBe('from-env');
+    expect(r?.source).toBe('env');
+  });
+
+  it('resolves from the user .env and reports it read-write', async () => {
+    await fs.writeFile(path.join(root, '.env'), 'TEST_CRED_A="from-user-env"\n', 'utf8');
+    const r = await resolveCredential('TEST_CRED_A');
+    expect(r?.value).toBe('from-user-env');
+    expect(r?.source).toBe('user-env');
+    const d = await describeCredential('TEST_CRED_A');
+    expect(d.configured).toBe(true);
+    expect(d.writable).toBe(true);
+  });
+
+  it('set writes the user .env and unset removes it', async () => {
+    await setCredential('TEST_CRED_A', 'sk-abc');
+    expect((await resolveCredential('TEST_CRED_A'))?.value).toBe('sk-abc');
+    await unsetCredential('TEST_CRED_A');
+    expect(await resolveCredential('TEST_CRED_A')).toBeUndefined();
+  });
+
+  it('process-env shadowing is read-only', async () => {
+    process.env.TEST_CRED_A = 'shadow';
+    const d = await describeCredential('TEST_CRED_A');
+    expect(d.writable).toBe(false);
+    await expect(setCredential('TEST_CRED_A', 'x')).rejects.toThrow(/只读/);
+  });
+
+  it('rejects invalid identifiers', () => {
+    return expect(resolveCredential('bad name')).rejects.toThrow();
+  });
+});

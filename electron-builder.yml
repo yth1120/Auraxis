@@ -1,0 +1,54 @@
+appId: com.auraxis.app
+productName: Auraxis
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+asar: true
+# node-pty 1.x 使用 N-API 并随包附带各平台预编译产物，无需 node-gyp 重编译；
+# better-sqlite3 为可选原生依赖（未安装时自动回退 JSON）。跳过 rebuild 可让
+# 无本地 C++ 工具链的环境直接完成打包。
+npmRebuild: false
+asarUnpack:
+  - "node_modules/better-sqlite3/**"
+  - "node_modules/node-pty/**"
+extraResources:
+  - from: electron/sandbox-windows.ps1
+    to: sandbox/sandbox-windows.ps1
+  - from: electron/sandbox-appcontainer.ps1
+    to: sandbox/sandbox-appcontainer.ps1
+  - from: electron/sandbox-linux.sh
+    to: sandbox/sandbox-linux.sh
+  - from: electron/sandbox-macos.sh
+    to: sandbox/sandbox-macos.sh
+  - from: electron/tokenizer/tokenizer.json
+    to: tokenizer/tokenizer.json
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: build/icon-512.png
+linux:
+  target:
+    - AppImage
+  icon: build/icon.png
+extraMetadata:
+  main: dist-electron/main.js
