@@ -246,12 +246,12 @@ export default function ChatArea() {
            stopped tasks stay viewable as history. */
             <div className="flex-1 min-h-0 flex flex-col" style={{ paddingTop: headerHeight }}>
               <Suspense fallback={<div className="flex-1 min-h-0" />}>
-                <AgentConversation />
+                <AgentConversation bottomInset={composerHeight} />
               </Suspense>
             </div>
           ) : isCode ? (
             /* Code-mode home: personal dashboard (always show when no active agent task). */
-            <div className="stats-home-scroll flex-1 min-h-0 overflow-y-auto flex justify-center" style={{ paddingTop: headerHeight }}>
+            <div className="stats-home-scroll flex-1 min-h-0 overflow-y-auto flex justify-center" style={{ paddingTop: headerHeight, paddingBottom: composerHeight }}>
               <div className="w-full max-w-[1080px] min-h-full flex flex-col justify-center py-10 px-8 box-border">
                 <div className="flex w-full max-w-[720px] mx-auto flex-col items-start text-left gap-1 mb-[18px]">
                   <span className="flex items-center gap-2">

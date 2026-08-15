@@ -629,7 +629,7 @@ const LogEntry = memo(function LogEntry({
   }
 });
 
-export default function AgentConversation() {
+export default function AgentConversation({ bottomInset = 0 }: { bottomInset?: number }) {
   const tConv = useT();
   const currentAgentId = useAgentStore((s) => s.currentAgentId);
   const agentLogFocusRequest = useAppStore((s) => s.agentLogFocusRequest);
@@ -934,7 +934,12 @@ export default function AgentConversation() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden relative">
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-8 pb-4 pt-4" ref={logViewerRef} onScroll={onLogScroll}>
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-8 pt-4"
+        style={{ paddingBottom: 16 + bottomInset }}
+        ref={logViewerRef}
+        onScroll={onLogScroll}
+      >
         <div className="w-full min-w-0 max-w-[var(--content-max-width)] mx-auto">
           {/* 会话流: one flat 16px flow — right-aligned user
               bubble → assistant markdown → inline tool rows → a quiet per-turn
