@@ -1,0 +1,47 @@
+appId: com.auraxis.app
+productName: Auraxis
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+asar: true
+asarUnpack:
+  - "node_modules/better-sqlite3/**"
+extraResources:
+  - from: electron/sandbox-windows.ps1
+    to: sandbox/sandbox-windows.ps1
+  - from: electron/sandbox-appcontainer.ps1
+    to: sandbox/sandbox-appcontainer.ps1
+  - from: electron/sandbox-linux.sh
+    to: sandbox/sandbox-linux.sh
+  - from: electron/sandbox-macos.sh
+    to: sandbox/sandbox-macos.sh
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: build/icon-512.png
+linux:
+  target:
+    - AppImage
+  icon: build/icon.png
+extraMetadata:
+  main: dist-electron/main.js
