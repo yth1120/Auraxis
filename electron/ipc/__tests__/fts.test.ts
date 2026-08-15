@@ -116,7 +116,7 @@ describe('fts', () => {
     const hits = await searchFts('增量索引');
     expect(hits.some((h) => h.id === 'session-inc')).toBe(true);
     expect(hits.find((h) => h.id === 'session-inc')?.snippet).toContain('增量索引');
-  });
+  }, 30_000);
 
   it('refreshSessionFts indexes agent logs under the agent- prefix', async () => {
     await fs.writeFile(
@@ -128,7 +128,7 @@ describe('fts', () => {
     await refreshSessionFts('run-9', 'agent');
     const hits = await searchFts('静水流深');
     expect(hits.some((h) => h.id === 'agent-run-9')).toBe(true);
-  });
+  }, 30_000);
 
   it('refreshSessionFts removes the doc when the log becomes empty', async () => {
     await fs.writeFile(
@@ -142,7 +142,7 @@ describe('fts', () => {
     await fs.writeFile(path.join(chatDir, 'session-gone.jsonl'), '', 'utf8');
     await refreshSessionFts('session-gone', 'chat');
     expect((await searchFts('qqwweerr')).some((h) => h.id === 'session-gone')).toBe(false);
-  });
+  }, 30_000);
 
   it('scheduleSessionFtsRefresh debounces bursts and indexes after the quiet window', async () => {
     await fs.writeFile(

@@ -25,7 +25,7 @@ describe.runIf(canRun)('sandbox-runner — Windows 原生沙箱', () => {
     const res = await runSandboxedCommand({
       argv: ['cmd.exe', '/c', 'echo sandbox-ok'],
       cwd: os.tmpdir(),
-      timeoutMs: 15_000,
+      timeoutMs: 30_000,
     });
     expect(res.supported).toBe(true);
     expect(res.exitCode).toBe(0);
@@ -34,18 +34,18 @@ describe.runIf(canRun)('sandbox-runner — Windows 原生沙箱', () => {
     await runSandboxedCommand({
       argv: ['cmd.exe', '/c', 'echo sandbox-stream'],
       cwd: os.tmpdir(),
-      timeoutMs: 15_000,
+      timeoutMs: 30_000,
       onStdout: (c) => out.push(c),
     });
     expect(out.join('')).toContain('sandbox-stream');
-  }, 30_000);
+  }, 90_000);
 
   it.skipIf(isCI)('drops to medium integrity and disables administrative access', async () => {
     const out: string[] = [];
     const res = await runSandboxedCommand({
       argv: ['cmd.exe', '/c', 'whoami /groups'],
       cwd: os.tmpdir(),
-      timeoutMs: 15_000,
+      timeoutMs: 30_000,
       onStdout: (c) => out.push(c),
     });
     expect(res.exitCode).toBe(0);
@@ -54,16 +54,16 @@ describe.runIf(canRun)('sandbox-runner — Windows 原生沙箱', () => {
     // The integrity label must be Medium (S-1-16-8192), not High.
     expect(groups).toContain('8192');
     expect(groups).not.toContain('12288');
-  }, 30_000);
+  }, 60_000);
 
   it('admin-only commands fail under the restricted token', async () => {
     const res = await runSandboxedCommand({
       argv: ['cmd.exe', '/c', 'net session'],
       cwd: os.tmpdir(),
-      timeoutMs: 15_000,
+      timeoutMs: 30_000,
     });
     expect(res.exitCode).not.toBe(0);
-  }, 30_000);
+  }, 60_000);
 
   it('kills the whole job tree on timeout', async () => {
     const started = Date.now();

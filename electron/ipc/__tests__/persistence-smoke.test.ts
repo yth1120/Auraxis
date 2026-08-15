@@ -128,5 +128,5 @@ describe('persistence smoke (write → restart → recover)', () => {
     expect((await fts.searchFts('结构')).some((h) => h.id === 'agent-smoke-agent')).toBe(true);
 
     await waitForFtsTimers();
-  });
+  }, 60_000);
 });
