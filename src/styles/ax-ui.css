@@ -175,6 +175,30 @@ body {
   overflow: hidden;
 }
 
+/* 运行流光：柔和的亮带 glides across the surface while the
+   command is still executing — no bounce, no glow, just a slow pass. */
+.terminal-block[data-running]::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -300px;
+  width: 300px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-bg-primary) 60%, transparent) 55%,
+    transparent 100%
+  );
+  animation: ax-tool-row-sweep 2.6s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes ax-tool-row-sweep {
+  0% { left: -300px; }
+  90%, 100% { left: 100%; }
+}
+
 .terminal-block-header {
   display: flex;
   align-items: flex-start;

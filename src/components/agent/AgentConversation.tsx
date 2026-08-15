@@ -418,7 +418,7 @@ function AgentToolRow({
       data-state={running ? 'running' : failed ? 'error' : 'ok'}
     >
       <div
-        className="ax-tool-row-head"
+        className={clsx('ax-tool-row-head', running && 'ax-tool-row-running')}
         role="button"
         tabIndex={0}
         aria-expanded={open}

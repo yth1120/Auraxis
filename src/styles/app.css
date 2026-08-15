@@ -7,9 +7,27 @@
 
 @import "tailwindcss";
 
-/* 工具行：保持相对定位以容纳内部悬停层。 */
+/* 工具行：运行中的行带流光扫过 (keyframes in
+   keyframes.css). The row must be position:relative for the overlay. */
 .ax-tool-row {
   position: relative;
+}
+
+.ax-tool-row-running::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -300px;
+  width: 300px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-bg-primary) 60%, transparent) 55%,
+    transparent 100%
+  );
+  animation: toolRowSweep 2.6s ease-out infinite;
+  pointer-events: none;
 }
 
 /* 工具行头部：24px 单行, no fill, icon→chevron hover preview. */
