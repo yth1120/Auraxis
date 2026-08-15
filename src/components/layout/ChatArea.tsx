@@ -156,7 +156,7 @@ export default function ChatArea() {
           className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-[var(--color-bg-primary)] via-[var(--color-bg-primary)]/80 to-transparent"
           aria-hidden="true"
         />
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="relative z-[1] flex items-center gap-2 min-w-0">
           {sidebarCollapsed && (
             <>
               <button
@@ -224,10 +224,10 @@ export default function ChatArea() {
             </div>
           )}
         </div>
-        <div className="min-w-0">
+        <div className="relative z-[1] min-w-0">
           <HeaderModeSwitcher />
         </div>
-        <div className="flex justify-end items-center gap-2 min-w-0">
+        <div className="relative z-[1] flex justify-end items-center gap-2 min-w-0">
           {hasMessages && (
             <button
               type="button"
