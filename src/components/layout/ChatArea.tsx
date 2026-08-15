@@ -253,22 +253,28 @@ export default function ChatArea() {
               </Suspense>
             </div>
           ) : isCode ? (
-            /* Code-mode home: personal dashboard (always show when no active agent task). */
-            <div className="stats-home-scroll flex-1 min-h-0 overflow-y-auto flex justify-center" style={{ paddingTop: headerHeight, paddingBottom: composerHeight }}>
-              <div className="w-full max-w-[1080px] min-h-full flex flex-col justify-center py-10 px-8 box-border">
-                <div className="flex w-full max-w-[720px] mx-auto flex-col items-start text-left gap-1 mb-[18px]">
-                  <span className="flex items-center gap-2">
-                    <img src={logoPng} alt="Auraxis" className="w-9 h-9 object-contain" />
-                    <span className="text-2xl font-medium text-text-primary tracking-[0.01em]">
-                      {ACCOUNT_NAME ? `${ACCOUNT_NAME}，` : ''}{greeting()}，
+            /* Code-mode home: personal dashboard (always show when no active agent task).
+               Centered scroll column mirrors chat mode, so the scrollbar sits
+               at the same X position with the same global styling. */
+            <div className="flex-1 min-h-0 flex flex-row min-w-0" style={{ paddingTop: headerHeight, paddingBottom: composerHeight }}>
+              <div className="stats-home-scroll w-full max-w-[var(--content-max-width,880px)] mx-auto overflow-y-auto">
+                <div className="min-h-full flex flex-col justify-center py-10 px-8 box-border">
+                  <div className="flex w-full max-w-[720px] mx-auto flex-col items-start text-left gap-1 mb-[18px]">
+                    <span className="flex items-center gap-2">
+                      <img src={logoPng} alt="Auraxis" className="w-9 h-9 object-contain" />
+                      <span className="text-2xl font-medium text-text-primary tracking-[0.01em]">
+                        {ACCOUNT_NAME ? `${ACCOUNT_NAME}，` : ''}{greeting()}，
+                      </span>
                     </span>
-                  </span>
-                  <span className="text-md font-semibold leading-6 text-[var(--color-text-muted)]">
-                    {tConv('chat.fromIdea')}
-                  </span>
+                    <span className="text-md font-semibold leading-6 text-[var(--color-text-muted)]">
+                      {tConv('chat.fromIdea')}
+                    </span>
+                  </div>
+                  <QuickActionsPanel />
                 </div>
-                <QuickActionsPanel />
               </div>
+              {/* 与对话模式右侧时间轴同宽的占位，保证滚动条 X 坐标一致 */}
+              <div className="w-[22px] shrink-0" aria-hidden="true" />
             </div>
           ) : hasMessages ? (
             <MessageList bottomInset={composerHeight} headerInset={headerHeight} />
