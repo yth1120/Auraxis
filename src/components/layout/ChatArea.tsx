@@ -247,9 +247,9 @@ export default function ChatArea() {
           {isCode && currentAgentId ? (
         /* Code mode with a selected task: live execution view — completed /
            stopped tasks stay viewable as history. */
-            <div className="flex-1 min-h-0 flex flex-col" style={{ paddingTop: headerHeight }}>
+            <div className="flex-1 min-h-0 flex flex-col">
               <Suspense fallback={<div className="flex-1 min-h-0" />}>
-                <AgentConversation bottomInset={composerHeight} />
+                <AgentConversation headerInset={headerHeight} bottomInset={composerHeight} />
               </Suspense>
             </div>
           ) : isCode ? (

@@ -128,7 +128,7 @@ export default memo(function UserMessage({ message }: UserMessageProps) {
               </button>
             </span>
           )}
-          <Typography.Text type="secondary" className="ax-message-time">{formatTime(message.timestamp)}</Typography.Text>
+          <Typography.Text className="ax-message-time">{formatTime(message.timestamp)}</Typography.Text>
         </Flex>
       </div>
     </div>

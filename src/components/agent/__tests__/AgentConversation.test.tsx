@@ -41,6 +41,9 @@ describe('AgentConversation — Agent 执行视图', () => {
     expect(text).toContain('Bash');
     expect(text).toContain('npm test');
     expect(text).toContain('测试通过。');
+    // Agent 执行视图与对话模式同构：每轮有锚点，右侧有时间轴
+    expect(container.querySelector('[data-agent-turn]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="对话提示时间轴"]')).not.toBeNull();
   });
 
   it('keeps the running-only filter active while streaming', () => {

@@ -1,5 +1,5 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { Modal, message, notification } from 'antd';
 import {
   Check as CheckIcon,
@@ -26,6 +26,8 @@ import { ensureAgentViewShortcuts } from '../../utils/agentViewShortcuts';
 import CompactionRow from '../common/CompactionRow';
 import ThinkingBlock from '../chat/ThinkingBlock';
 import DisclosureRow from '../common/DisclosureRow';
+import TimelineScrubber from '../chat/TimelineScrubber';
+import type { TimelineTick } from '../chat/TimelineScrubber';
 import ExecutingIndicator from '../common/ExecutingIndicator';
 import StateDot from '../common/StateDot';
 import TerminalBlock from '../common/TerminalBlock';
@@ -629,7 +631,85 @@ const LogEntry = memo(function LogEntry({
   }
 });
 
-export default function AgentConversation({ bottomInset = 0 }: { bottomInset?: number }) {
+function turnSummary(turn: TurnGroup): string {
+  const textEntry = turn.entries.find(
+    (e) => e.type === 'text' && typeof (e as { text?: unknown }).text === 'string' && String((e as { text?: unknown }).text).trim(),
+  );
+  if (textEntry) {
+    const s = String((textEntry as { text?: unknown }).text ?? '').replace(/\s+/g, ' ').trim();
+    return s.length > 80 ? `${s.slice(0, 80)}…` : s;
+  }
+  const toolEntry = turn.entries.find((e) => ['tool_start', 'tool_end', 'tool_error'].includes(e.type));
+  return toolEntry?.toolName ?? '';
+}
+
+/** Agent-mode turn timeline: one tick per execution turn, mirrors the
+ *  chat-mode prompt dock on the right of the centered content column. */
+function AgentTurnTimeline({
+  turns,
+  scrollerRef,
+}: {
+  turns: TurnGroup[];
+  scrollerRef: RefObject<HTMLElement | null>;
+}) {
+  const tTimeline = useT();
+  const [scrollRatio, setScrollRatio] = useState(0);
+  const rafRef = useRef(0);
+
+  const ticks = useMemo<TimelineTick[]>(
+    () => turns.map((turn, i) => ({
+      id: `turn-${turn.iteration}`,
+      title: tTimeline('timeline.round', { n: turn.iteration }),
+      summary: turnSummary(turn) || tTimeline('timeline.round', { n: turn.iteration }),
+      timestamp: turn.startTs ?? turn.entries[0]?.timestamp,
+      index: i,
+    })),
+    [turns, tTimeline],
+  );
+
+  useEffect(() => {
+    let bound: HTMLElement | null = null;
+    const update = () => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        const scroller = scrollerRef.current;
+        if (!scroller) return;
+        const max = Math.max(1, scroller.scrollHeight - scroller.clientHeight);
+        setScrollRatio(Math.min(1, Math.max(0, scroller.scrollTop / max)));
+      });
+    };
+    const bind = () => {
+      const scroller = scrollerRef.current;
+      if (!scroller) {
+        rafRef.current = requestAnimationFrame(bind);
+        return;
+      }
+      bound = scroller;
+      scroller.addEventListener('scroll', update, { passive: true });
+      update();
+    };
+    bind();
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      bound?.removeEventListener('scroll', update);
+    };
+  }, [scrollerRef]);
+
+  const onScrubTo = useCallback((index: number, mode: 'click' | 'drag') => {
+    const viewer = scrollerRef.current;
+    const turn = turns[index];
+    if (!viewer || !turn) return;
+    const el = viewer.querySelector(`[data-agent-turn="${turn.iteration}"]`);
+    if (!el) return;
+    const top = (el as HTMLElement).getBoundingClientRect().top - viewer.getBoundingClientRect().top + viewer.scrollTop;
+    viewer.scrollTo({ top: Math.max(0, top - 12), behavior: mode === 'click' ? 'smooth' : 'auto' });
+  }, [scrollerRef, turns]);
+
+  if (turns.length === 0) return null;
+  return <TimelineScrubber ticks={ticks} scrollRatio={scrollRatio} onScrubTo={onScrubTo} />;
+}
+
+export default function AgentConversation({ headerInset = 0, bottomInset = 0 }: { headerInset?: number; bottomInset?: number }) {
   const tConv = useT();
   const currentAgentId = useAgentStore((s) => s.currentAgentId);
   const agentLogFocusRequest = useAppStore((s) => s.agentLogFocusRequest);
@@ -934,13 +1014,18 @@ export default function AgentConversation({ bottomInset = 0 }: { bottomInset?: n
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden relative">
-      <div
-        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-8 pt-4"
-        style={{ paddingBottom: 16 + bottomInset }}
-        ref={logViewerRef}
-        onScroll={onLogScroll}
-      >
-        <div className="w-full min-w-0 max-w-[var(--content-max-width)] mx-auto">
+      <div className="flex-1 min-h-0 flex flex-row min-w-0">
+        <div className="flex-1 min-w-0 max-w-[var(--content-max-width,880px)] mx-auto w-full flex flex-col overflow-hidden">
+          <div
+            className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-8 pt-4"
+            style={{ paddingBottom: 16 + bottomInset }}
+            ref={logViewerRef}
+            onScroll={onLogScroll}
+          >
+            {/* Scroll room under the floating transparent header — the agent
+                stream slides beneath it exactly like chat mode. */}
+            <div style={{ height: headerInset }} aria-hidden="true" />
+            <div className="w-full min-w-0 max-w-[var(--content-max-width)] mx-auto">
           {/* 会话流: one flat 16px flow — right-aligned user
               bubble → assistant markdown → inline tool rows → a quiet per-turn
               tail. No round cards, no round headers. */}
@@ -1018,7 +1103,7 @@ export default function AgentConversation({ bottomInset = 0 }: { bottomInset?: n
               const hasTail = turn.end != null
                 && (turnText !== '' || stats !== '' || tailTime != null || durationMs != null);
               return (
-                <Fragment key={turn.iteration}>
+                <div key={turn.iteration} data-agent-turn={turn.iteration} className="flex flex-col gap-4">
                   {visibleTurnEntries.map((entry, i) => (
                     <div
                       key={i}
@@ -1066,7 +1151,7 @@ export default function AgentConversation({ bottomInset = 0 }: { bottomInset?: n
                       </span>
                     </div>
                   )}
-                </Fragment>
+                </div>
               );
             })}
             {agent.status === 'running' && (
@@ -1124,7 +1209,10 @@ export default function AgentConversation({ bottomInset = 0 }: { bottomInset?: n
             />
           ))}
           <div ref={logEndRef} />
+          </div>
         </div>
+      </div>
+      <AgentTurnTimeline turns={turnGroups} scrollerRef={logViewerRef} />
       </div>
       <Modal
         title={tConv('conv.rawLog')}
