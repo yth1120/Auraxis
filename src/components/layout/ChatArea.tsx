@@ -45,7 +45,6 @@ export default function ChatArea() {
   const dockRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const hasMessages = messages.length > 0;
-  const chatRunning = useChatStore((s) => s.isStreaming);
   const selectedModel = useChatStore((s) => s.selectedModel);
   const inputTokens = useChatStore((s) => s.exactInputTokens);
   const outputTokens = useChatStore((s) => s.exactOutputTokens);
@@ -58,6 +57,9 @@ export default function ChatArea() {
   const isCode = sidebarMode === 'code';
   const currentAgentId = useAgentStore((s) => s.currentAgentId);
   const currentAgent = useAgentStore((s) => s.agents.find((a) => a.id === currentAgentId));
+  // Divider appears whenever a conversation view is active (chat has messages
+  // or an Agent task is selected), and hides only when maximized.
+  const showChatDivider = ((!isCode && hasMessages) || (isCode && !!currentAgentId)) && !isMaximized;
 
   const totalTokens = inputTokens + outputTokens + reasoningTokens;
 
@@ -147,10 +149,11 @@ export default function ChatArea() {
         ref={headerRef}
         className={
           'absolute inset-x-0 top-0 z-30 grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 pt-3 '
-          + (((!isCode && chatRunning) || (isCode && currentAgent?.status === 'running')) && !isMaximized
+          + (showChatDivider
             ? 'pb-2 border-b border-[var(--color-border-default)]'
             : 'pb-1')
         }
+        data-divider={showChatDivider ? 'on' : 'off'}
       >
         <div
           className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-[var(--color-bg-primary)] via-[var(--color-bg-primary)]/80 to-transparent"
