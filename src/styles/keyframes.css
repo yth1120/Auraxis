@@ -213,12 +213,6 @@
   50%      { opacity: 0.55; }
 }
 
-/* ── 运行中工具行流光 ─────────────────── */
-@keyframes toolRowSweep {
-  0%          { left: -300px; }
-  90%, 100%   { left: 100%; }
-}
-
 /* ── StateDot pixel chase ─────────────────────────────── */
 @keyframes stateDotChase {
   0%, 12.4%  { opacity: 1; }

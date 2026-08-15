@@ -30,7 +30,7 @@ export default memo(function ThinkingBlock({ blocks, isStreaming }: ThinkingBloc
   return (
     <div className="ax-thinking" data-open={userOpen || undefined}>
       <button
-        className={clsx('ax-tool-row-head', isStreaming && 'ax-tool-row-running')}
+        className="ax-tool-row-head"
         onClick={toggle}
         type="button"
         aria-expanded={userOpen}

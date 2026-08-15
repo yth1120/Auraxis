@@ -155,10 +155,6 @@ export default function ChatArea() {
         }
         data-divider={showChatDivider ? 'on' : 'off'}
       >
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-[var(--color-bg-primary)] via-[var(--color-bg-primary)]/80 to-transparent"
-          aria-hidden="true"
-        />
         <div className="relative z-[1] flex items-center gap-2 min-w-0">
           {sidebarCollapsed && (
             <>
@@ -281,10 +277,6 @@ export default function ChatArea() {
               float above them, so scrolling continues underneath the dock. */}
           {composerBottom ? (
             <div ref={dockRef} className="absolute inset-x-0 bottom-0 z-20 pointer-events-none">
-              <div
-                className="pointer-events-none absolute inset-x-0 -top-20 bottom-0 z-0 bg-gradient-to-t from-[var(--color-bg-primary)] via-[var(--color-bg-primary)]/82 to-transparent"
-                aria-hidden="true"
-              />
               <div className="relative z-[1] pointer-events-auto">
                 {hasMessages && totalTokens > 0 && (
                   <div className="ax-context-meter flex items-center justify-center gap-2 shrink-0 px-4 py-1 font-mono tabular-nums">

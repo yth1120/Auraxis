@@ -258,7 +258,7 @@ const ToolCallCard = memo(function ToolCallCard({ toolCall }: ToolCallCardProps)
       data-tool={toolCall.toolName}
     >
       <div
-        className={clsx('ax-tool-row-head', isRunning && 'ax-tool-row-running')}
+        className="ax-tool-row-head"
         role="button"
         tabIndex={0}
         aria-expanded={expanded}
