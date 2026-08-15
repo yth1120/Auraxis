@@ -1,0 +1,378 @@
+import { ipcMain, BrowserWindow } from 'electron';
+import axios from 'axios';
+import type { Readable } from 'stream';
+import { readErrorBody } from './agent-loop';
+import { runQuery } from './query-engine';
+import { requestPermission } from './permission-handlers';
+import { trackMessage } from './stats-handlers';
+import { readSettings } from './settings-store';
+import { resolveApiBase } from './model-config';
+import { executeToolCall, abortTool } from './tool-handlers';
+import type { EngineEvent } from './engine-events';
+import { toToolStreamEvent } from './event-bridge';
+import { resolveCredential } from '../credentials';
+
+const activeStreams = new Map<string, AbortController>();
+const activeQueries = new Map<string, AbortController>();
+const nudgeQueues = new Map<string, string[]>();
+
+/** Clean up all active streams/queries for a closed window */
+export function cleanupWindowStreams() {
+  for (const [id, ctrl] of activeStreams) { ctrl.abort(); activeStreams.delete(id); }
+  for (const [id, ctrl] of activeQueries) { ctrl.abort(); activeQueries.delete(id); }
+  nudgeQueues.clear();
+}
+
+async function performWebSearch(query: string): Promise<string | null> {
+  try {
+    const result = await executeToolCall('WebSearch', { query }, { projectRoot: '', requestId: 'websearch', mode: 'ask' });
+    if (result.error || !result.output) return null;
+    const output = result.output as any;
+    if (!output.results || output.results.length === 0) return null;
+    return output.results
+      .map((r: any, i: number) => `[${i + 1}] ${r.title}\n${r.snippet}\n${r.url}`)
+      .join('\n\n');
+  } catch {
+    return null;
+  }
+}
+
+async function getApiKey(overrideKey?: string): Promise<string | null> {
+  if (overrideKey) return overrideKey;
+  const envKey = process.env.DEEPSEEK_API_KEY;
+  if (envKey) return envKey;
+  const credential = await resolveCredential('DEEPSEEK_API_KEY');
+  if (credential) return credential.value;
+  const settings = await readSettings();
+  const key = settings.deepseekApiKey;
+  if (key && typeof key === 'string' && key.length > 0) return key;
+  return null;
+}
+
+function sendToRenderer(win: BrowserWindow, requestId: string, type: 'chunk' | 'done' | 'error', text?: string, error?: string) {
+  try { win.webContents.send(`ai:chunk:${requestId}`, { requestId, type, text, error }); } catch { /* window destroyed */ }
+}
+
+function sendQueryEvent(win: BrowserWindow, requestId: string, type: 'done' | 'error', text?: string, error?: string) {
+  try { win.webContents.send(`ai:queryEvent:${requestId}`, { requestId, type, text, error }); } catch { /* window destroyed */ }
+}
+
+export function registerAiHandlers() {
+  ipcMain.handle('ai:chatStream', async (event, payload: {
+    requestId: string;
+    model: string;
+    messages: { role: string; content: string }[];
+    isDeepThink: boolean;
+    reasoningEffort?: 'high' | 'max';
+    isWebSearch: boolean;
+    apiKey?: string;
+  }) => {
+    const { requestId, model, messages, isDeepThink, reasoningEffort, isWebSearch, apiKey } = payload;
+    const win = BrowserWindow.fromWebContents(event.sender);
+
+    if (!win) {
+      event.sender.send(`ai:chunk:${requestId}`, { requestId, type: 'error' as const, error: '无法获取窗口实例' });
+      return;
+    }
+
+    const resolvedKey = await getApiKey(apiKey);
+    const apiBase = resolveApiBase(model);
+    if (!resolvedKey) {
+      sendToRenderer(win, requestId, 'error', undefined, '未配置 DeepSeek API Key。请在设置中添加或在环境变量中设置。');
+      return;
+    }
+
+    let searchPromise: Promise<string | null> = Promise.resolve(null);
+    if (isWebSearch) {
+      const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
+      const searchQuery = lastUserMsg?.content?.slice(0, 200) || '';
+      if (searchQuery) {
+        searchPromise = performWebSearch(searchQuery);
+      }
+    }
+
+    const abortController = new AbortController();
+    activeStreams.set(requestId, abortController);
+
+    const signal = abortController.signal;
+    // 'done' is emitted exactly once from the finally block. The previous
+    // implementation sent 'done' from BOTH an abort listener AND the success
+    // path, causing the renderer to receive duplicate done events under
+    // certain abort timings. Single-emit invariant keeps cleanup deterministic.
+    let doneEmitted = false;
+    const emitDone = () => {
+      if (doneEmitted) return;
+      doneEmitted = true;
+      sendToRenderer(win, requestId, 'done');
+    };
+
+    try {
+      const searchResults = await searchPromise;
+      await streamDeepSeek({ model, messages, isDeepThink, reasoningEffort, isWebSearch }, resolvedKey, apiBase, requestId, win, signal, searchResults);
+      emitDone();
+    } catch (error: any) {
+      if (error.name === 'AbortError') { emitDone(); return; }
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        sendToRenderer(win, requestId, 'error', undefined, '请求超时，请重试。');
+      } else if (error.response?.status === 401) {
+        sendToRenderer(win, requestId, 'error', undefined, 'API Key 无效或已过期。');
+      } else if (error.response?.status === 429) {
+        sendToRenderer(win, requestId, 'error', undefined, '请求过于频繁，请稍后重试。');
+      } else if (error.response?.status) {
+        const errorBody = await readErrorBody(error);
+        let detail = '';
+        try { const p = JSON.parse(errorBody); detail = p?.error?.message || p?.message || p?.error || ''; } catch { detail = errorBody.slice(0, 200); }
+        console.error('[chatStream] API error:', { status: error.response?.status, body: errorBody.slice(0, 500) });
+        sendToRenderer(win, requestId, 'error', undefined, `API 错误 (${error.response?.status}): ${detail || error.message}`);
+      } else {
+        sendToRenderer(win, requestId, 'error', undefined, `网络错误: ${error.message}`);
+      }
+    } finally {
+      activeStreams.delete(requestId);
+      emitDone();
+    }
+  });
+
+  ipcMain.handle('ai:abortStream', async (_event, requestId: string) => {
+    const controller = activeStreams.get(requestId);
+    if (controller) {
+      controller.abort();
+      activeStreams.delete(requestId);
+    }
+  });
+
+  ipcMain.handle('ai:sendQuery', async (event, payload: {
+    requestId: string;
+    model: string;
+    messages: { role: string; content: string }[];
+    isDeepThink: boolean;
+    reasoningEffort?: 'high' | 'max';
+    projectRoot: string;
+    autoApprove?: boolean;
+    apiKey?: string;
+    approvedPlanSteps?: string[];
+    surface?: 'chat' | 'code';
+  }) => {
+    const { requestId, model, messages, isDeepThink, reasoningEffort, projectRoot, autoApprove, apiKey, approvedPlanSteps, surface } = payload;
+    const win = BrowserWindow.fromWebContents(event.sender);
+
+    if (!win) {
+      event.sender.send(`ai:queryEvent:${requestId}`, { requestId, type: 'error' as const, error: '无法获取窗口实例' });
+      return;
+    }
+
+    // Backend-enforced mode isolation: the unified tool/agent engine must
+    // never run for a chat-mode request, even if the renderer misbehaves.
+    if (surface === 'chat') {
+      sendQueryEvent(win, requestId, 'error', undefined, '对话模式不支持 Agent 功能，请切换到 Work 或 Agent 模式。');
+      return;
+    }
+
+    const resolvedKey = await getApiKey(apiKey || undefined);
+    const apiBase = resolveApiBase(model);
+    const settings = await readSettings().catch(() => null) as Record<string, any> | null;
+    const sandboxMode = settings?.sandboxMode === 'read' || settings?.sandboxMode === 'workspace-write' || settings?.sandboxMode === 'full'
+      ? settings.sandboxMode
+      : 'workspace-write';
+
+    if (!resolvedKey) {
+      sendQueryEvent(win, requestId, 'error', undefined, '未配置 DeepSeek API Key。请在设置中添加。');
+      return;
+    }
+
+    const abortController = new AbortController();
+    activeQueries.set(requestId, abortController);
+
+    // Stats: count each user message sent (non-system messages)
+    const userMsgCount = messages.filter((m) => m.role === 'user').length;
+    for (let i = 0; i < userMsgCount; i++) trackMessage().catch(() => {});
+
+    try {
+      const checkPermission = autoApprove
+        ? () => Promise.resolve(true)
+        : (toolName: string, input: Record<string, unknown>, toolCallId?: string) =>
+            requestPermission(toolName, input, win, toolCallId, { mode: 'ask', approvedPlanSteps, projectRoot });
+
+      nudgeQueues.set(requestId, []);
+      await runQuery(
+        {
+          requestId, model, messages, isDeepThink, reasoningEffort, projectRoot, apiKey: resolvedKey, apiBase, checkPermission,
+          autoApprove,
+          mode: 'ask',
+          sandboxMode,
+          approvedPlanSteps,
+          win,
+          getPendingNudge: () => {
+            const q = nudgeQueues.get(requestId);
+            return q && q.length > 0 ? q.shift()! : null;
+          },
+        },
+        (event: EngineEvent) => {
+          // Engine emits the unified EngineEvent contract; the bridge is the
+          // only place that maps it to the renderer ToolStreamEvent shape.
+          const streamEvent = toToolStreamEvent(event, requestId);
+          if (!streamEvent) return; // engine-internal lifecycle event
+          try { win.webContents.send(`ai:queryEvent:${requestId}`, streamEvent); } catch { /* window destroyed */ }
+        },
+        abortController.signal,
+      );
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        sendQueryEvent(win, requestId, 'error', undefined, `查询失败: ${error.message}`);
+      }
+    } finally {
+      activeQueries.delete(requestId);
+      nudgeQueues.delete(requestId);
+    }
+  });
+
+  ipcMain.handle('ai:abortQuery', async (_event, requestId: string) => {
+    const controller = activeQueries.get(requestId);
+    if (controller) {
+      controller.abort();
+      activeQueries.delete(requestId);
+    }
+  });
+
+  ipcMain.handle('ai:abortTool', async (_event, requestId: string, toolCallId: string) => {
+    const ok = abortTool(toolCallId);
+    if (!ok) {
+      console.warn('[ai:abortTool] no running tool found for', toolCallId);
+    }
+    return { ok };
+  });
+
+  ipcMain.handle('ai:retryTool', async (_event, requestId: string, toolName: string) => {
+    const queue = nudgeQueues.get(requestId);
+    if (!queue) {
+      console.warn('[ai:retryTool] no active query found for', requestId);
+      return { ok: false, error: '无活跃查询' };
+    }
+    const nudge = `工具 ${toolName} 之前执行失败，请重试该工具调用。如果该方法反复失败，请换一种完全不同的方式。`;
+    queue.push(nudge);
+    return { ok: true };
+  });
+
+  ipcMain.handle('ai:testConnection', async (_event, payload: { apiKey: string }) => {
+    const { apiKey } = payload;
+    try {
+      // DEEPSEEK_BASE_URL in .env.example points at the chat completions
+      // endpoint (`.../v1/chat/completions`). Strip the chat path so we can
+      // append `/models` for the GET probe, otherwise we'd hit
+      // `.../chat/completions/models` → 404.
+      const raw = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1/chat/completions';
+      const apiRoot = raw.replace(/\/chat\/completions\/?$/i, '').replace(/\/+$/, '');
+      const response = await axios.get(`${apiRoot}/models`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        timeout: 15000,
+      });
+      if (response.status === 200) {
+        const modelIds = (response.data?.data || []).map((m: any) => m.id).slice(0, 10);
+        return { ok: true, data: { message: 'DeepSeek API 连接成功', models: modelIds } };
+      }
+      return { ok: false, error: `HTTP ${response.status}: ${response.statusText}` };
+    } catch (err: any) {
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        return { ok: false, error: 'API Key 无效或未授权，请检查密钥是否正确' };
+      }
+      if (err.response?.status === 429) {
+        return { ok: false, error: '请求过于频繁，请稍后重试' };
+      }
+      if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
+        return { ok: false, error: '无法连接到 API 服务器，请检查网络或 API 地址' };
+      }
+      const errorBody = await readErrorBody(err);
+      let detail = '';
+      try { const p = JSON.parse(errorBody); detail = p?.error?.message || p?.message || p?.error || ''; } catch { detail = errorBody.slice(0, 200); }
+      console.error('[testConnection] error:', { status: err.response?.status, body: errorBody.slice(0, 500) });
+      return { ok: false, error: `连接失败${detail ? `: ${detail}` : `: ${err.message}`}` };
+    }
+  });
+}
+
+async function streamDeepSeek(
+  request: { model: string; messages: { role: string; content: string }[]; isDeepThink: boolean; reasoningEffort?: 'high' | 'max'; isWebSearch?: boolean },
+  apiKey: string,
+  apiBase: string,
+  requestId: string,
+  win: BrowserWindow,
+  signal: AbortSignal,
+  searchResults?: string | null,
+): Promise<void> {
+  const body: Record<string, unknown> = {
+    model: request.model,
+    max_tokens: 8192,
+    messages: [...request.messages],
+    stream: true,
+  };
+
+  if (searchResults) {
+    (body.messages as any[]).push({
+      role: 'system',
+      content: `以下是与用户问题相关的网络搜索结果，请基于这些信息回答：\n\n${searchResults}\n\n请结合搜索结果提供准确、最新的回答，并引用来源编号。`,
+    });
+  }
+
+  if (request.isDeepThink) {
+    if (request.model.startsWith('deepseek-')) {
+      body.thinking = { type: 'enabled' };
+      body.reasoning_effort = request.reasoningEffort || 'high';
+    }
+  }
+
+  const response = await axios.post(apiBase, body, {
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    responseType: 'stream',
+    signal,
+    timeout: 120000,
+  });
+
+  const stream = response.data as Readable;
+  let buffer = '';
+  const decoder = new TextDecoder('utf-8', { fatal: false });
+
+  // ── Per‑chunk heartbeat: detect upstream stalls ──────────
+  // Axios timeout (120 s) is per‑request, not per‑byte, so a
+  // stream that starts sending data then stalls can sit idle
+  // indefinitely.  Reset lastDataTime on every chunk and
+  // abort if no data arrives for 60 s.
+  let lastDataTime = Date.now();
+  const heartbeatTimer = setInterval(() => {
+    if (Date.now() - lastDataTime > 60_000) {
+      // Abort the Axios request — this propagates to the signal
+      // and triggers the catch path with a timeout error.
+      signal.dispatchEvent(new Event('abort'));
+    }
+  }, 15_000);
+
+  try {
+    for await (const chunk of stream) {
+      lastDataTime = Date.now();
+      buffer += decoder.decode(chunk, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') return;
+
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              sendToRenderer(win, requestId, 'chunk', content);
+            }
+          } catch {
+            // skip malformed JSON
+          }
+        }
+      }
+    }
+  } finally {
+    clearInterval(heartbeatTimer);
+  }
+}

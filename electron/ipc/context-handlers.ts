@@ -1,0 +1,164 @@
+import { ipcMain } from 'electron';
+import { readFile, readdir, stat } from 'fs/promises';
+import path from 'path';
+import { isPathInside, normalizeWinPath, SAFE_EXTENSIONS, EXCLUDED_DIRS } from './shared';
+import { compactHistory, estimateTokens } from './context-manager';
+import { readSettings } from './settings-store';
+import { resolveApiBase } from './model-config';
+
+async function getFileTreeText(dirPath: string, prefix = '', depth = 0): Promise<string> {
+  if (depth > 4) return '';
+
+  try {
+    const entries = await readdir(dirPath, { withFileTypes: true });
+    let result = '';
+
+    const filtered = entries
+      .filter((e) => !e.name.startsWith('.') && !EXCLUDED_DIRS.has(e.name))
+      .sort((a, b) => {
+        if (a.isDirectory() && !b.isDirectory()) return -1;
+        if (!a.isDirectory() && b.isDirectory()) return 1;
+        return a.name.localeCompare(b.name);
+      });
+
+    for (let i = 0; i < filtered.length; i++) {
+      const entry = filtered[i];
+      const isLast = i === filtered.length - 1;
+      const connector = isLast ? '└── ' : '├── ';
+      const nextPrefix = prefix + (isLast ? '    ' : '│   ');
+
+      if (entry.isDirectory()) {
+        result += `${prefix}${connector}${entry.name}/\n`;
+        result += await getFileTreeText(
+          path.join(dirPath, entry.name),
+          nextPrefix,
+          depth + 1,
+        );
+      } else if (SAFE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+        result += `${prefix}${connector}${entry.name}\n`;
+      }
+    }
+
+    return result;
+  } catch {
+    return '';
+  }
+}
+
+export function registerContextHandlers() {
+  ipcMain.handle('context:compact', async (_event, params: {
+    projectRoot?: string;
+    messages: { role: string; content: string }[];
+  }) => {
+    try {
+      const settings: Record<string, any> = await readSettings();
+      const model = settings.selectedModel || 'deepseek-v4-pro';
+      const apiBase = resolveApiBase(model);
+      const apiKey = settings.deepseekApiKey || process.env.DEEPSEEK_API_KEY || '';
+
+      const normalized = (params.messages ?? []).map((m) => ({
+        role: m.role,
+        content: typeof m.content === 'string' ? m.content : String(m.content),
+      }));
+      const tokensBefore = estimateTokens(normalized);
+      const result = await compactHistory({
+        messages: normalized,
+        plan: null,
+        llmConfig: apiKey ? { model, apiKey, apiBase } : undefined,
+      });
+
+      return {
+        ok: true,
+        data: {
+          messages: result.messages,
+          messagesRemoved: result.messagesRemoved,
+          tokensSaved: result.tokensSaved,
+          tokensBefore,
+          tokensAfter: estimateTokens(result.messages),
+        },
+      };
+    } catch (error: any) {
+      return { ok: false, error: error?.message ?? String(error) };
+    }
+  });
+
+  ipcMain.handle('context:getProjectContext', async (_event, projectRoot: string) => {
+    try {
+      const root = path.resolve(projectRoot);
+
+      // Read project instruction file if present — precedence mirrors
+      // agent-instructions.ts (AGENTS.override.md > AGENTS.md),
+      // so injected context and the agent loop's system prompt agree.
+      let instructionsMd = '';
+      for (const name of ['AGENTS.override.md', 'AGENTS.md']) {
+        try {
+          const p = path.join(root, name);
+          await stat(p);
+          instructionsMd = await readFile(p, 'utf-8');
+          break;
+        } catch {
+          // Not found, continue
+        }
+      }
+
+      // Build file tree text
+      const treeText = await getFileTreeText(root);
+
+      // Read package.json if present
+      let packageJson = '';
+      try {
+        const pkgPath = path.join(root, 'package.json');
+        await stat(pkgPath);
+        const raw = await readFile(pkgPath, 'utf-8');
+        const pkg = JSON.parse(raw);
+        packageJson = JSON.stringify({
+          name: pkg.name,
+          description: pkg.description,
+          scripts: pkg.scripts,
+          dependencies: pkg.dependencies,
+          devDependencies: pkg.devDependencies,
+        }, null, 2);
+      } catch {
+        // No package.json
+      }
+
+      return {
+        ok: true,
+        data: {
+          instructionsMd,
+          fileTree: treeText,
+          packageJson,
+        },
+      };
+    } catch (error: any) {
+      return { ok: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('context:getFileStructure', async (_event, projectRoot: string) => {
+    try {
+      const root = path.resolve(projectRoot);
+      const treeText = await getFileTreeText(root);
+      return { ok: true, data: treeText };
+    } catch (error: any) {
+      return { ok: false, error: error.message };
+    }
+  });
+
+
+  ipcMain.handle('context:readFile', async (_event, filePath: string, projectRoot?: string) => {
+    try {
+      const resolved = path.resolve(normalizeWinPath(filePath));
+      if (!projectRoot) {
+        return { ok: false, error: '缺少项目路径，无法读取文件' };
+      }
+      if (!isPathInside(resolved, projectRoot)) {
+        return { ok: false, error: '路径越权：无法访问项目外的文件' };
+      }
+      const content = await readFile(resolved, 'utf-8');
+      return { ok: true, data: content };
+    } catch (error: any) {
+      return { ok: false, error: error.message };
+    }
+  });
+}
