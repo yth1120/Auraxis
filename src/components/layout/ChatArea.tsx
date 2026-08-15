@@ -279,10 +279,10 @@ export default function ChatArea() {
           {composerBottom ? (
             <div ref={dockRef} className="absolute inset-x-0 bottom-0 z-20 pointer-events-none">
               <div
-                className="pointer-events-none absolute inset-x-0 -top-20 bottom-0 bg-gradient-to-t from-[var(--color-bg-primary)] via-[var(--color-bg-primary)]/82 to-transparent"
+                className="pointer-events-none absolute inset-x-0 -top-20 bottom-0 z-0 bg-gradient-to-t from-[var(--color-bg-primary)] via-[var(--color-bg-primary)]/82 to-transparent"
                 aria-hidden="true"
               />
-              <div className="relative pointer-events-auto">
+              <div className="relative z-[1] pointer-events-auto">
                 {hasMessages && totalTokens > 0 && (
                   <div className="ax-context-meter flex items-center justify-center gap-2 shrink-0 px-4 py-1 font-mono tabular-nums">
                     <span className="max-w-[160px] overflow-hidden text-ellipsis whitespace-nowrap">{selectedModel}</span>
