@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { hljs, getLangFromFilename } from '../../utils/hljs-instance';
+import { useT } from '../../i18n';
 
 export type DiffMode = 'split' | 'unified';
 
@@ -156,6 +157,7 @@ export default function DiffView({
   highlight: doHighlight = true,
 }: DiffViewProps) {
   const [mode, setMode] = useState<DiffMode>(initialMode);
+  const t = useT();
 
   const lang = useMemo(() => (doHighlight ? getLangFromFilename(fileName) : undefined), [fileName, doHighlight]);
   const unified = useMemo(() => computeUnifiedDiff(oldContent, newContent), [oldContent, newContent]);
@@ -185,7 +187,7 @@ export default function DiffView({
             )}
             onClick={() => setMode('split')}
           >
-            并排
+            {t('diff.sideBySide')}
           </button>
           <button
             type="button"
@@ -199,14 +201,14 @@ export default function DiffView({
             )}
             onClick={() => setMode('unified')}
           >
-            统一
+            {t('diff.unified')}
           </button>
         </div>
       </div>
 
       {isNewFile && (
         <div className="px-3 py-1 text-success text-2xs bg-success-soft border-b border-dim">
-          + 新建文件 ({newContent.split('\n').length} 行)
+          {t('diff.newFile', { n: newContent.split('\n').length })}
         </div>
       )}
 

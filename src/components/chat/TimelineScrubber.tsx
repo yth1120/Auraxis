@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
+import { useT } from '../../i18n';
 
 export interface TimelineTick {
   id: string;
@@ -34,6 +35,7 @@ export default function TimelineScrubber({
   onScrubTo,
   className,
 }: TimelineScrubberProps) {
+  const tScrub = useT();
   const railRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
@@ -96,7 +98,7 @@ export default function TimelineScrubber({
         className="absolute right-[3px] top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 p-2 rounded-lg border-none bg-transparent text-inherit cursor-pointer hover:bg-[var(--color-hover)] focus-visible:outline-1 focus-visible:outline-[var(--color-primary-border)]"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label="对话提示时间轴"
+        aria-label={tScrub('scrubber.aria')}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={onKeyDown}
       >
@@ -118,7 +120,7 @@ export default function TimelineScrubber({
         <div
           ref={panelRef}
           role="listbox"
-          aria-label="提示列表"
+          aria-label={tScrub('scrubber.listAria')}
           className="absolute right-full mr-1.5 top-1/2 -translate-y-1/2 w-[260px] max-h-[calc(100%-24px)] overflow-y-auto p-1 flex flex-col bg-[var(--color-bg-elevated)] border border-[var(--color-border-default)] rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
         >
           {ticks.map((t, i) => (
@@ -137,7 +139,7 @@ export default function TimelineScrubber({
               onClick={() => jump(i)}
               onMouseEnter={() => setCursor(i)}
             >
-              <span className="flex-1 min-w-0 truncate">{t.summary || t.title || '消息'}</span>
+              <span className="flex-1 min-w-0 truncate">{t.summary || t.title || tScrub('scrubber.message')}</span>
               {t.timestamp != null && (
                 <span className="shrink-0 text-2xs tabular-nums text-[var(--color-text-muted)]">
                   {new Date(t.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}

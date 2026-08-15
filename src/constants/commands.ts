@@ -9,6 +9,7 @@ import type { AgentPriority } from '../types/agent';
 import type { PermissionMode } from '../types/advanced';
 import { fetchModels } from '../types/chat';
 import { AGENT_SKILLS, startAgentSkill } from '../core/skills';
+import { t, slashCommandDescKey } from '../i18n';
 
 /** Goal mode iteration ceiling used by `/goal` (single source, no magic number). */
 const DEFAULT_GOAL_MAX_ROUNDS = 256;
@@ -84,7 +85,7 @@ export function createAgent(params: {
       projectPath,
     )
     .catch((err: Error) => {
-      message.error(err.message || '任务启动失败');
+      message.error(err.message || t('cmd.msg.taskStartFailed'));
       return null;
     });
 }
@@ -115,7 +116,7 @@ export function executeCommand(
       void fetchModels().then((models) => {
         const match = models.find((m) => m.id === trimmedArgs || m.name === trimmedArgs);
         if (!match) {
-          message.error(`模型不存在：${trimmedArgs}`);
+          message.error(t('cmd.msg.modelNotFound', { name: trimmedArgs }));
           ctx.setInputValue('');
           return;
         }
@@ -159,7 +160,7 @@ export function executeCommand(
         void window.electronAPI.goal.create(sessionId, trimmedArgs, DEFAULT_GOAL_MAX_ROUNDS);
       }
       ctx.setInputValue('');
-      message.success('目标模式已启动');
+      message.success(t('cmd.msg.goalStarted'));
       return true;
     }
 
@@ -175,7 +176,7 @@ export function executeCommand(
           const match = (list?.data?.skills ?? []).find((s) =>
             s.name === trimmedArgs || s.name.toLowerCase() === trimmedArgs.toLowerCase());
           if (!match) {
-            message.error(`技能不存在：${trimmedArgs}`);
+            message.error(t('cmd.msg.skillNotFound', { name: trimmedArgs }));
             return;
           }
           const read = await window.electronAPI?.skills?.read(match.name);
@@ -212,24 +213,24 @@ export function executeCommand(
         }).then((id) => {
           if (id) {
             useAgentStore.getState().setCurrentAgent(id);
-            message.success('计划任务已启动 — 先生成计划，批准后执行');
+            message.success(t('cmd.msg.planStarted'));
           }
         });
       } else {
         chat.setPendingPlanMode(true);
-        message.success('已进入计划模式：输入任务后发送，将先生成计划并审批');
+        message.success(t('cmd.msg.planArmed'));
       }
       ctx.setInputValue('');
       return true;
     }
 
     case 'review': {
-      const scope = trimmedArgs || '未提交的变更';
+      const scope = trimmedArgs || t('cmd.msg.reviewScope');
       void createAgent({
-        name: '代码审查',
+        name: t('cmd.msg.reviewName'),
         type: 'Explore',
         instruction: `请对当前项目的「${scope}」进行代码审查：检查逻辑错误、安全漏洞、性能问题与边界条件。对每个问题给出文件路径、行号和修复建议，最后按严重程度排序输出。只读分析，不要修改任何文件。`,
-        displayText: `审查：${scope}`,
+        displayText: t('cmd.msg.reviewDisplay', { scope }),
         mode: 'ask',
         autoApprove: false,
         sandboxMode: 'read',
@@ -240,7 +241,7 @@ export function executeCommand(
           useAppStore.getState().setRightPanelView('review');
           if (!useAppStore.getState().showRightPanel) useAppStore.getState().toggleRightPanel();
           ctx.setInputValue('');
-          message.success('审查 Agent 已启动');
+          message.success(t('cmd.msg.reviewStarted'));
         }
       });
       return true;
@@ -254,16 +255,16 @@ export function executeCommand(
       const projectRoot = useSettingsStore.getState().projectPath;
       if (!projectRoot) {
         ctx.setInputValue('');
-        message.warning('请先在设置中配置项目路径');
+        message.warning(t('cmd.msg.needProject'));
         return true;
       }
       void (async () => {
         const list = await window.electronAPI?.workflow?.list(projectRoot);
         const def = (list?.data || []).find((d) => d.id === trimmedArgs || d.name === trimmedArgs);
-        if (!def) { message.error(`工作流不存在: ${trimmedArgs}`); return; }
+        if (!def) { message.error(t('cmd.msg.workflowNotFound', { name: trimmedArgs })); return; }
         const r = await window.electronAPI?.workflow?.run({ workflowId: def.id, projectRoot });
-        if (r?.ok) message.success(`工作流已启动：${r.data?.runId}`);
-        else message.error(r?.error || '启动失败');
+        if (r?.ok) message.success(t('cmd.msg.workflowStarted', { id: r.data?.runId ?? '' }));
+        else message.error(r?.error || t('cmd.msg.startFailed'));
       })();
       ctx.setInputValue('');
       return true;
@@ -276,7 +277,7 @@ export function executeCommand(
       }
       useChatStore.getState().setMemoriesEnabled(trimmedArgs === 'on');
       ctx.setInputValue('');
-      message.success(`已${trimmedArgs === 'on' ? '开启' : '关闭'}当前对话的记忆`);
+      message.success(trimmedArgs === 'on' ? t('cmd.msg.memoriesOn') : t('cmd.msg.memoriesOff'));
       return true;
     }
 
@@ -286,8 +287,8 @@ export function executeCommand(
         return false;
       }
       void window.electronAPI?.feedback?.submit(trimmedArgs).then((r) => {
-        if (r?.ok) message.success('反馈已记录，感谢！');
-        else message.error(r?.error || '反馈记录失败');
+        if (r?.ok) message.success(t('cmd.msg.feedbackRecorded'));
+        else message.error(r?.error || t('cmd.msg.feedbackFailed'));
       });
       ctx.setInputValue('');
       return true;
@@ -307,7 +308,7 @@ export function executeCommand(
     case 'help':
       ctx.setInputValue('');
       Modal.info({
-        title: '可用命令',
+        title: t('cmd.msg.availableCommands'),
         width: 520,
         content: createElement(
           'div',
@@ -317,7 +318,7 @@ export function executeCommand(
             { key: c.name, className: 'text-xs text-text-secondary' },
             createElement('span', { className: 'font-mono text-primary' }, c.usage),
             ' — ',
-            c.description,
+            t(slashCommandDescKey(c.name)),
           )),
         ),
       });

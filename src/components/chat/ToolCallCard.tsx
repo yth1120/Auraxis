@@ -344,7 +344,7 @@ const ToolCallCard = memo(function ToolCallCard({ toolCall }: ToolCallCardProps)
                       {Boolean((toolCall.output as Record<string, unknown> | null | undefined)?.image) && (
                         <img
                           src={String((toolCall.output as Record<string, unknown>).image ?? '')}
-                          alt="ReadImage 结果"
+                          alt={t('toolCard.readImageResult')}
                           className="max-w-full max-h-[320px] rounded-md border border-[var(--color-border-dim)] object-contain bg-[var(--color-bg-inset)]"
                         />
                       )}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Tooltip, Progress } from 'antd';
 import { ShieldCheck as FileProtectOutlined } from '@/components/common/icons';
+import { useT } from '../../i18n';
 
 interface ModuleCoverage {
   total: number;
@@ -30,6 +31,7 @@ function unwrap(d: Record<string, unknown>): CoverageData {
 }
 
 export default function CoverageBadge() {
+  const t = useT();
   const [data, setData] = useState<CoverageData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -60,7 +62,7 @@ export default function CoverageBadge() {
   const tooltipContent = (
     <div style={{ fontSize: 12, minWidth: 200 }}>
       <div style={{ fontWeight: 600, marginBottom: 6 }}>
-        行覆盖率 {pct}% ({data.lines.covered}/{data.lines.total})
+        {t('coverage.line', { pct, covered: data.lines.covered, total: data.lines.total })}
       </div>
       {data.modules && Object.entries(data.modules).map(([name, m]) => (
         <div key={name} style={{ marginBottom: 4 }}>

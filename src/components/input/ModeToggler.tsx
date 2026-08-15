@@ -14,13 +14,12 @@ const THINKING_LEVELS: { key: ThinkingLevel; labelKey: I18nKey; descKey: I18nKey
   { key: 'high', labelKey: 'think.high', descKey: 'think.high.desc' },
 ];
 
-const MODEL_DESCRIPTIONS: Record<string, string> = {
-  'deepseek-v4-flash': '轻快响应，适合高频对话与简单任务',
-  'deepseek-v4-pro': '深度推理，适合复杂任务与编码',
-};
-
 function modelName(modelId: string): string {
   return BUILT_IN_MODELS.find((m) => m.id === modelId)?.name ?? modelId;
+}
+
+function modelDescriptionKey(modelId: string): I18nKey {
+  return modelId === 'deepseek-v4-flash' ? 'model.desc.flash' : 'model.desc.pro';
 }
 
 const ChevronDown = ({ open }: { open?: boolean }) => (
@@ -120,7 +119,7 @@ export const ModePanelContent = memo(function ModePanelContent({ onSelect }: { o
           >
             <span className="flex-1 min-w-0 flex flex-col">
               <span className="overflow-hidden text-ellipsis whitespace-nowrap text-sm leading-5 font-medium text-text-primary">{m.name}</span>
-              <span className="overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-[17px] text-text-muted">{MODEL_DESCRIPTIONS[m.id] ?? m.id}</span>
+              <span className="overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-[17px] text-text-muted">{t(modelDescriptionKey(m.id))}</span>
             </span>
             <span className="flex flex-none w-[18px] items-center justify-center">{selected ? <Check /> : null}</span>
           </button>

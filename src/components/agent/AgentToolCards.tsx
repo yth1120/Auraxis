@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { Check, Copy } from '@/components/common/icons';
 import DiffView from '../permissions/DiffView';
+import { useT } from '../../i18n';
 
 const MAX_LINES = 16;
 const HEAD_LINES = 8;
@@ -20,6 +21,7 @@ function copyText(text: string, setCopied: (v: boolean) => void) {
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
+  const t = useT();
   return (
     <button
       type="button"
@@ -27,7 +29,7 @@ function CopyButton({ text }: { text: string }) {
       onClick={(e) => { e.stopPropagation(); copyText(text, setCopied); }}
     >
       {copied ? <Check size={11} /> : <Copy size={11} />}
-      {copied ? '已复制' : '复制'}
+      {copied ? t('tool.copied') : t('tool.copy')}
     </button>
   );
 }
@@ -41,6 +43,7 @@ export interface AgentReadCardProps {
 }
 
 export function AgentReadCard({ label, content, startLine = 1, totalLines }: AgentReadCardProps) {
+  const t = useT();
   const lines = useMemo(() => content.replace(/\n$/, '').split('\n'), [content]);
   const [expanded, setExpanded] = useState(false);
   const hidden = Math.max(0, lines.length - MAX_LINES);
@@ -62,7 +65,7 @@ export function AgentReadCard({ label, content, startLine = 1, totalLines }: Age
       <div className="flex items-center justify-between gap-3 px-[14px] py-[9px] bg-[var(--color-bg-inset)] border-b border-border-dim">
         <span className="min-w-0 truncate font-mono text-2xs text-text-primary">{label ? basename(label) : ''}</span>
         <span className="flex items-center gap-3 shrink-0">
-          {windowed && <span className="text-2xs text-text-muted">显示 {lines.length} / {totalLines} 行</span>}
+          {windowed && <span className="text-2xs text-text-muted">{t('tool.showLines', { shown: lines.length, total: totalLines })}</span>}
           <CopyButton text={raw} />
         </span>
       </div>
@@ -74,7 +77,7 @@ export function AgentReadCard({ label, content, startLine = 1, totalLines }: Age
             className="block w-full pl-12 text-left text-2xs text-text-muted border-none bg-transparent cursor-pointer hover:text-text-secondary"
             onClick={() => setExpanded(true)}
           >
-            … 其余 {hidden} 行
+            {t('tool.moreLines', { n: hidden })}
           </button>
         )}
         {capped && tail.map((line, i) => row(line, lines.length - TAIL_LINES + i + 1))}
@@ -84,7 +87,7 @@ export function AgentReadCard({ label, content, startLine = 1, totalLines }: Age
             className="block w-full pl-12 text-left text-2xs text-text-muted border-none bg-transparent cursor-pointer hover:text-text-secondary"
             onClick={() => setExpanded(false)}
           >
-            收起
+            {t('tool.collapse')}
           </button>
         )}
       </div>
@@ -102,6 +105,7 @@ export interface AgentSearchCardProps {
 }
 
 export function AgentSearchCard({ kind, files = [], paths = [], total, truncated }: AgentSearchCardProps) {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   const [collapsedFiles, setCollapsedFiles] = useState<ReadonlySet<number>>(() => new Set());
   const matchRows = useMemo(() => files.flatMap((f, fi) =>
@@ -120,8 +124,8 @@ export function AgentSearchCard({ kind, files = [], paths = [], total, truncated
     ? paths.join('\n')
     : files.map((f) => [f.path, ...f.matches.map((m) => `${m.lineNumber}: ${m.line}`)].join('\n')).join('\n\n');
   const summary = truncated
-    ? `显示 ${shown} / 共 ${total ?? shown} ${kind === 'paths' ? '个路径' : '处匹配'}`
-    : `${shown} ${kind === 'paths' ? '个路径' : `处匹配 · ${files.length} 个文件`}`;
+    ? t('tool.searchSummaryTruncated', { shown, total: total ?? shown, kind: kind === 'paths' ? t('tool.paths') : t('tool.matches') })
+    : `${shown} ${kind === 'paths' ? t('tool.paths') : `${t('tool.matches')} · ${files.length} ${t('tool.files')}`}`;
 
   return (
     <div className="rounded-xl border border-border-default bg-code-bg overflow-hidden">
@@ -144,7 +148,7 @@ export function AgentSearchCard({ kind, files = [], paths = [], total, truncated
             className="block w-full text-left text-2xs text-text-muted border-none bg-transparent cursor-pointer hover:text-text-secondary"
             onClick={() => setExpanded(true)}
           >
-            … 其余 {hidden} 行
+            {t('tool.moreLines', { n: hidden })}
           </button>
         )}
         {capped && tail.map((row, i) => row.type === 'path' ? (
@@ -167,9 +171,9 @@ export function AgentSearchCard({ kind, files = [], paths = [], total, truncated
                 setCollapsedFiles(next);
               }}
             >
-              {collapsedFiles.size === files.length ? '展开全部文件' : '折叠全部文件'}
+              {collapsedFiles.size === files.length ? t('tool.expandAllFiles') : t('tool.collapseAllFiles')}
             </button>
-            <span className="ml-auto text-2xs text-text-faint">{files.length} 个文件</span>
+            <span className="ml-auto text-2xs text-text-faint">{files.length} {t('tool.files')}</span>
           </div>
         )}
       </div>
@@ -207,6 +211,7 @@ function linkLabel(url: string, title?: string): string {
 }
 
 export function AgentWebCard({ kind, answer, sources = [], url, statusCode, truncated }: AgentWebCardProps) {
+  const t = useT();
   const empty = kind === 'search' && !answer && sources.length === 0;
   return (
     <div className="rounded-xl border border-border-default bg-code-bg overflow-hidden">
@@ -225,7 +230,7 @@ export function AgentWebCard({ kind, answer, sources = [], url, statusCode, trun
             )}
           </div>
         ) : empty ? (
-          <div className="text-text-muted">未找到结果</div>
+          <div className="text-text-muted">{t('tool.noResults')}</div>
         ) : (
           <>
             {answer && <div className="text-text-secondary leading-relaxed mb-2 whitespace-pre-wrap break-words">{answer}</div>}
@@ -244,7 +249,7 @@ export function AgentWebCard({ kind, answer, sources = [], url, statusCode, trun
                 </li>
               ))}
             </ol>
-            {truncated && <div className="mt-1.5 text-2xs text-text-muted">来源列表已截断</div>}
+            {truncated && <div className="mt-1.5 text-2xs text-text-muted">{t('tool.sourcesTruncated')}</div>}
           </>
         )}
       </div>
@@ -277,6 +282,7 @@ export function AgentRunCodeCard({
   exitCode?: number | null;
   timedOut?: boolean;
 }) {
+  const t = useT();
   const output = [stdout, stderr].filter(Boolean).join('\n');
   return (
     <div className="rounded-xl border border-border-default bg-code-bg overflow-hidden">
@@ -285,7 +291,7 @@ export function AgentRunCodeCard({
           {language ? `RunCode · ${language}` : 'RunCode'}
           {exitCode != null && (
             <span className={clsx('ml-2 px-1.5 rounded-full text-2xs', exitCode === 0 ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger')}>
-              {timedOut ? '超时' : `退出码 ${exitCode}`}
+              {timedOut ? t('tool.timedOut') : t('tool.exitCode', { code: exitCode })}
             </span>
           )}
         </span>
@@ -306,7 +312,7 @@ export function AgentRunCodeCard({
         </div>
       )}
       {!output && exitCode != null && (
-        <div className="px-3 py-2 text-2xs text-text-faint">（无输出）</div>
+        <div className="px-3 py-2 text-2xs text-text-faint">{t('tool.noOutput')}</div>
       )}
     </div>
   );

@@ -83,8 +83,8 @@ export default function NotificationsPanel({ onClose }: { onClose?: () => void }
         <div className="mb-1.5 px-1 text-2xs font-medium text-text-muted">{label}</div>
         <ul className="m-0 p-0 list-none rounded-xl bg-[var(--color-bg-secondary)] overflow-hidden divide-y divide-[var(--color-border-dim)]/60">
           {list.map((n) => {
-            const running = n.title.includes('执行中');
-            const failed = n.title.includes('失败') || n.title.includes('出错');
+            const running = n.kind === 'cron' && (n.title.includes('执行中') || n.title.toLowerCase().includes('running'));
+            const failed = /失败|出错|failed|error/i.test(n.title);
             return (
               <li key={n.id} className="flex items-start gap-3 px-4 py-3 transition-colors duration-150 hover:bg-[var(--color-hover)]">
                 <span className="shrink-0 flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--color-bg-inset)]">

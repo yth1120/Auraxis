@@ -2,9 +2,11 @@ import clsx from 'clsx';
 import { useMemo } from 'react';
 import { useAppStore } from '../../stores/useAppStore';
 import type { AgentInfo } from '../../types/agent';
+import { useT } from '../../i18n';
 
 /** Shared 全部 / 失败 / 文本 segmented control for agent execution views. */
 export default function AgentViewFilter({ agent }: { agent: AgentInfo }) {
+  const t = useT();
   const agentErrorsOnly = useAppStore((s) => s.agentErrorsOnly);
   const setAgentErrorsOnly = useAppStore((s) => s.setAgentErrorsOnly);
   const agentTextOnly = useAppStore((s) => s.agentTextOnly);
@@ -29,10 +31,10 @@ export default function AgentViewFilter({ agent }: { agent: AgentInfo }) {
   return (
     <div className="flex items-center rounded-full bg-[var(--color-bg-inset)] p-0.5">
       {([
-        ['all', '全部'],
-        ['errors', `失败${failed > 0 ? ` (${failed})` : ''}`],
-        ['text', `文本${text > 0 ? ` (${text})` : ''}`],
-        ['running', `运行${running > 0 ? ` (${running})` : ''}`],
+        ['all', t('agentFilter.all')],
+        ['errors', `${t('agentFilter.errors')}${failed > 0 ? ` (${failed})` : ''}`],
+        ['text', `${t('agentFilter.text')}${text > 0 ? ` (${text})` : ''}`],
+        ['running', `${t('agentFilter.running')}${running > 0 ? ` (${running})` : ''}`],
       ] as const).map(([key, label]) => {
         const active = key === 'errors'
           ? agentErrorsOnly
@@ -62,7 +64,7 @@ export default function AgentViewFilter({ agent }: { agent: AgentInfo }) {
               setAgentTextOnly(key === 'text');
               setAgentRunningOnly(key === 'running');
             }}
-            title={key === 'errors' ? '只看失败 (Ctrl/Cmd+Shift+E)' : key === 'text' ? '只看文本 (Ctrl/Cmd+Shift+T)' : key === 'running' ? '只看运行中 (Ctrl/Cmd+Shift+R)' : '显示全部'}
+            title={key === 'errors' ? t('agentFilter.title.errors') : key === 'text' ? t('agentFilter.title.text') : key === 'running' ? t('agentFilter.title.running') : t('agentFilter.title.all')}
           >
             {label}
           </button>
@@ -80,9 +82,9 @@ export default function AgentViewFilter({ agent }: { agent: AgentInfo }) {
                 : 'text-text-muted bg-transparent hover:text-text-secondary',
             )}
             onClick={() => setAgentRunningFollow(!agentRunningFollow)}
-            title="自动跟随最新运行工具"
+            title={t('agentFilter.followTip')}
           >
-            跟随
+            {t('agentFilter.follow')}
           </button>
         </>
       )}

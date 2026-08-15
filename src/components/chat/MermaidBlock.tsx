@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import mermaid from 'mermaid';
+import { t, useT } from '../../i18n';
 
 // Initialise once
 let mermaidInitialised = false;
@@ -9,6 +10,7 @@ interface MermaidBlockProps {
 }
 
 export default function MermaidBlock({ code }: MermaidBlockProps) {
+  const tPanel = useT();
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -35,7 +37,7 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
         }
       } catch (err: any) {
         if (token === renderTokenRef.current) {
-          setError(err.message || '图表渲染失败');
+          setError(err.message || t('mermaid.renderFailed'));
         }
       }
     };
@@ -46,7 +48,7 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
     return (
       <div className="my-2.5 border border-dim rounded-lg overflow-hidden contain-[layout_style_paint]">
         <div className="px-4 py-3 bg-danger-soft border-l-[3px] border-l-danger">
-          <span className="text-sm font-semibold text-text-secondary">Mermaid 图表渲染失败</span>
+          <span className="text-sm font-semibold text-text-secondary">{tPanel('mermaid.renderFailedTitle')}</span>
           <pre className="mt-2 text-xs text-secondary font-mono whitespace-pre-wrap">{error}</pre>
         </div>
       </div>
@@ -62,7 +64,7 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
           dangerouslySetInnerHTML={{ __html: svg }}
         />
       ) : (
-        <div className="py-6 text-center text-sm text-muted">渲染图表...</div>
+        <div className="py-6 text-center text-sm text-muted">{tPanel('mermaid.rendering')}</div>
       )}
     </div>
   );

@@ -30,7 +30,7 @@ import { ModeTrigger, ModePanelContent } from './ModeToggler';
 import AccessSelector, { type AccessMode } from './AccessSelector';
 import { resolveSessionRefs } from '../../utils/sessionRefs';
 import { resolveFollowTarget } from '../../utils/followTarget';
-import { useT } from '../../i18n';
+import { t, useT } from '../../i18n';
 import GhostToast from '../layout/GhostToast';
 import { SLASH_COMMANDS, executeCommand, createAgent, type SlashCommand } from '../../constants/commands';
 import { listSlashCommands, findPluginCommand, resolveSkillRefs } from '../../utils/slashCommands';
@@ -42,10 +42,10 @@ import logoPng from '../../assets/auraxis-logo.png';
 
 function greeting(now = Date.now()): string {
   const h = new Date(now).getHours();
-  if (h < 6) return '夜深了';
-  if (h < 12) return '早上好';
-  if (h < 18) return '下午好';
-  return '晚上好';
+  if (h < 6) return t('chat.greeting.night');
+  if (h < 12) return t('chat.greeting.morning');
+  if (h < 18) return t('chat.greeting.afternoon');
+  return t('chat.greeting.evening');
 }
 
 interface PendingImage {
@@ -61,7 +61,7 @@ function parsePendingImages(text: string): PendingImage[] {
   const re = /【图片: ([^\n】]*)】\s*\n?(data:image\/[^\s]+)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
-    out.push({ name: m[1] || '图片', dataUrl: m[2], start: m.index, end: m.index + m[0].length });
+    out.push({ name: m[1] || t('chat.image'), dataUrl: m[2], start: m.index, end: m.index + m[0].length });
   }
   return out;
 }
@@ -459,14 +459,14 @@ export default function ChatInput({ position }: ChatInputProps) {
         useAgentStore.getState().setCurrentAgent(follow.id);
         return follow.id;
       }
-      message.error(cont.error || '续写失败，请检查任务状态后重试');
+      message.error(cont.error || t('composer.continueFailed'));
       return null;
     }
     const activeProjectPath = useChatStore.getState().currentProjectPath
       || useSettingsStore.getState().projectPath
       || '';
     if (!activeProjectPath) {
-      message.error('请先选择项目目录，再发送任务');
+      message.error(t('composer.needProject'));
       return null;
     }
     // /plan arms the next send in plan mode; resolve fresh at send time.
@@ -499,7 +499,7 @@ export default function ChatInput({ position }: ChatInputProps) {
         void window.electronAPI.goal.round(sessionId);
       }
     } else {
-      message.error('任务创建失败，请检查项目路径与 API Key');
+      message.error(t('composer.createFailed'));
     }
   }, [selectedModel, accessMode, taskPriority, isDeepThink, reasoningEffort, allSkills]);
 
@@ -512,7 +512,7 @@ export default function ChatInput({ position }: ChatInputProps) {
     const args = spaceIdx >= 0 ? trimmed.slice(spaceIdx + 1).trim() : '';
     const agentOnly = ['agent', 'goal', 'plan', 'memories', 'skill', 'review', 'workflow'];
     if (useAppStore.getState().sidebarMode === 'chat' && agentOnly.includes(name)) {
-      message.info('该功能仅限 Agent 模式');
+      message.info(t('composer.agentOnly'));
       return true;
     }
     const execCtx = {
@@ -537,12 +537,12 @@ export default function ChatInput({ position }: ChatInputProps) {
         if (executed) recordCommand(name, args);
         return true;
       } catch (e: any) {
-        message.error(`命令 /${name} 执行失败：${e?.message || e}`);
+        message.error(t('composer.commandFailed', { name, error: e?.message || e }));
         return true;
       }
     }
     // Unknown or invalid command must never fall through to the model.
-    message.error(`未知命令：/${name}（输入 /help 查看可用命令）`);
+    message.error(t('composer.unknownCommand', { name }));
     setInputValue('');
     return true;
   }, [setInputValue]);
@@ -732,7 +732,7 @@ export default function ChatInput({ position }: ChatInputProps) {
           try {
             executed = pluginCmd.execute(commandQuery.slice(cmd.name.length).trim(), execCtx);
           } catch (e: any) {
-            message.error(`命令 /${cmd.name} 执行失败：${e?.message || e}`);
+            message.error(t('composer.commandFailed', { name: cmd.name, error: e?.message || e }));
             executed = true;
           }
         }
@@ -922,7 +922,7 @@ export default function ChatInput({ position }: ChatInputProps) {
       for (const file of files) {
         if (isImage) {
           // Image upload: convert to base64 data URL
-          if (file.size > 5 * 1024 * 1024) { parts.push(`【图片: ${file.name}】（超过 5MB，已跳过）`); continue; }
+          if (file.size > 5 * 1024 * 1024) { parts.push(t('composer.imageTooLarge', { name: file.name })); continue; }
           try {
             const dataUrl = await new Promise<string>((resolve, reject) => {
               const reader = new FileReader();
@@ -931,15 +931,15 @@ export default function ChatInput({ position }: ChatInputProps) {
               reader.readAsDataURL(file);
             });
             parts.push(`【图片: ${file.name}】\n${dataUrl}`);
-          } catch { parts.push(`【图片: ${file.name}】（读取失败）`); }
+          } catch { parts.push(t('composer.imageReadFailed', { name: file.name })); }
         } else {
           // File upload: inline as text
-          if (file.size > 100 * 1024) { parts.push(`【附件: ${file.name}】（超过 100KB，已跳过）`); continue; }
+          if (file.size > 100 * 1024) { parts.push(t('composer.attachmentTooLarge', { name: file.name })); continue; }
           try {
             const text = await file.text();
             const ext = file.name.includes('.') ? file.name.split('.').pop() : '';
             parts.push(`【附件: ${file.name}】\n\`\`\`${ext || ''}\n${text}\n\`\`\``);
-          } catch { parts.push(`【附件: ${file.name}】（无法读取为文本）`); }
+          } catch { parts.push(t('composer.attachmentReadFailed', { name: file.name })); }
         }
       }
       if (parts.length > 0) {
@@ -953,7 +953,7 @@ export default function ChatInput({ position }: ChatInputProps) {
   const handleMicClick = useCallback(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
-      message.info('语音输入在当前环境中不可用。请使用 Electron 桌面应用或 Chrome 浏览器。');
+      message.info(t('composer.micUnavailable'));
       return;
     }
     try {
@@ -961,16 +961,16 @@ export default function ChatInput({ position }: ChatInputProps) {
       rec.lang = 'zh-CN';
       rec.interimResults = false;
       rec.onerror = () => {
-        message.error('语音识别启动失败，请检查麦克风权限。');
+        message.error(t('composer.micPermission'));
       };
       rec.onresult = (e: any) => {
         const t = e.results[0][0].transcript?.trim();
         if (t) { const { inputValue: iv, setInputValue: sv } = useChatStore.getState(); sv(iv + (iv.trim() ? ' ' : '') + t); }
       };
       rec.start();
-      message.success('正在聆听…');
+      message.success(t('composer.listening'));
     } catch {
-      message.error('语音识别启动失败。');
+      message.error(t('composer.micFailed'));
     }
   }, []);
 
@@ -981,7 +981,7 @@ export default function ChatInput({ position }: ChatInputProps) {
     if (result?.ok && result.data) {
       useSettingsStore.getState().setProjectPath(result.data);
       useChatStore.getState().setCurrentProjectPath(result.data);
-      message.success(`项目目录: ${result.data}`);
+      message.success(t('composer.projectDirSet', { path: result.data }));
     }
   }, []);
 
@@ -995,13 +995,13 @@ export default function ChatInput({ position }: ChatInputProps) {
           <button
             type="button"
             className="flex items-center gap-1.5 h-7 px-2.5 mb-2 min-w-0 border-none bg-transparent text-xs text-text-secondary rounded-full cursor-pointer transition-[background,color] duration-fast hover:bg-[var(--color-hover)] hover:text-text-primary"
-            aria-label="选择项目目录"
-            title={projectPath ?? '选择项目目录'}
+            aria-label={t('composer.selectProjectDir')}
+            title={projectPath ?? t('composer.selectProjectDir')}
             onClick={pickProjectDirectory}
           >
             <FolderOpenIcon size={14} />
             <span className="max-w-[220px] overflow-hidden text-ellipsis whitespace-nowrap">
-              {projectPath ? projectPath.split(/[\\/]/).pop() : '选择项目目录'}
+              {projectPath ? projectPath.split(/[\\/]/).pop() : t('composer.selectProjectDir')}
             </span>
           </button>
         )}
@@ -1022,8 +1022,8 @@ export default function ChatInput({ position }: ChatInputProps) {
                   type="button"
                   className="flex items-center justify-center w-5 h-5 rounded-full text-text-muted cursor-pointer border-none bg-transparent hover:bg-[var(--color-hover)] hover:text-text-primary"
                   onClick={() => removePendingImage(i)}
-                  aria-label={`移除 ${img.name}`}
-                  title="移除图片"
+                  aria-label={`${t('composer.removeImage')} ${img.name}`}
+                  title={t('composer.removeImage')}
                 >
                   <CloseIcon size={12} />
                 </button>
@@ -1091,14 +1091,14 @@ export default function ChatInput({ position }: ChatInputProps) {
               className="shrink-0 border-none bg-transparent p-0 text-2xs text-primary cursor-pointer hover:opacity-75"
               onClick={() => sendQueuedNow(agentQueue[0].id)}
             >
-              立即发送
+              {t('composer.sendNow')}
             </button>
             <button
               type="button"
               className="shrink-0 border-none bg-transparent p-0 text-2xs text-text-muted cursor-pointer hover:text-text-secondary"
               onClick={clearAgentQueue}
             >
-              取消
+              {t('composer.cancel')}
             </button>
           </div>
         )}
@@ -1141,13 +1141,13 @@ export default function ChatInput({ position }: ChatInputProps) {
         {isCode && (
           <>
             {pendingPlanMode && (
-              <span className="inline-flex items-center gap-[3px] self-center h-6 px-2 pl-2.5 text-xs font-medium text-primary bg-primary-soft rounded-full" title="计划模式：输入任务后发送，先生成计划并审批">
+              <span className="inline-flex items-center gap-[3px] self-center h-6 px-2 pl-2.5 text-xs font-medium text-primary bg-primary-soft rounded-full" title={t('runmode.planTip')}>
                 {t('runmode.plan')}
                 <button
                   type="button"
                   className="shrink-0 border-none bg-transparent cursor-pointer text-text-muted w-[20px] h-[20px] rounded-full flex items-center justify-center text-2xs leading-none hover:bg-[var(--color-hover)] hover:text-text-secondary"
                   onClick={() => useChatStore.getState().setPendingPlanMode(false)}
-                  aria-label="取消计划模式"
+                  aria-label={t('runmode.cancelPlan')}
                 >✕</button>
               </span>
             )}
@@ -1196,8 +1196,8 @@ export default function ChatInput({ position }: ChatInputProps) {
             )}
             onClick={handleSend}
             disabled={!hasInput && !isStreaming && !currentAgentRunning}
-            title={currentAgentRunning ? '停止任务' : isStreaming ? '停止生成' : isCode ? '启动任务' : '发送'}
-            aria-label={currentAgentRunning ? '停止任务' : isStreaming ? '停止生成' : isCode ? '启动任务' : '发送'}
+            title={currentAgentRunning ? t('composer.stopTask') : isStreaming ? t('composer.stopGenerate') : isCode ? t('composer.startTask') : t('composer.send')}
+            aria-label={currentAgentRunning ? t('composer.stopTask') : isStreaming ? t('composer.stopGenerate') : isCode ? t('composer.startTask') : t('composer.send')}
           >
             {(isStreaming || currentAgentRunning) ? (
               <span className="inline-flex items-center justify-center w-[18px] h-[18px]">
@@ -1261,10 +1261,10 @@ export default function ChatInput({ position }: ChatInputProps) {
           <div className="ax-hero-headline flex flex-col items-start w-full">
             <span className="flex items-center gap-2">
               <img src={logoPng} alt="Auraxis" className="w-9 h-9 object-contain" />
-              {ACCOUNT_NAME ? `${ACCOUNT_NAME}，` : ''}{greeting()}，
+              {ACCOUNT_NAME ? `${ACCOUNT_NAME}${t('chat.greetingComma')}` : ''}{greeting()}{t('chat.greetingComma')}
             </span>
             <span className="mt-1 text-md font-semibold leading-6 text-[var(--color-text-muted)]">
-              你有任何想法，都可以在下面提问：
+              {t('chat.heroPrompt')}
             </span>
           </div>
           {inputCard}

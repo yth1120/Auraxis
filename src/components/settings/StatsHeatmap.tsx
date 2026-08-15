@@ -4,6 +4,7 @@ import { HeatmapChart } from 'echarts/charts';
 import { CalendarComponent, TooltipComponent, VisualMapComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { EChartsType } from 'echarts/core';
+import { t, useI18nStore, useT } from '../../i18n';
 
 // Register only the pieces the calendar heatmap needs — importing `echarts`
 // wholesale pulls ~1 MB of unused charts into the settings chunk.
@@ -23,6 +24,7 @@ const HEAT_COLORS = ['#F3F4F6', '#E5E7EB', '#C3C8CF', '#7C828C', '#111418'];
 
 /** Activity heatmap redesigned with Apache ECharts (calendar heatmap). */
 export default function StatsHeatmap() {
+  const tPanel = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<EChartsType | null>(null);
   const [days, setDays] = useState<HeatmapDay[]>([]);
@@ -66,7 +68,7 @@ export default function StatsHeatmap() {
       tooltip: {
         formatter: (params: any) => {
           const [date, level] = params.value;
-          return `${date}<br/>活跃度：${level}`;
+          return `${date}<br/>${t('heatmap.activity', { level })}`;
         },
       },
       visualMap: {
@@ -78,7 +80,7 @@ export default function StatsHeatmap() {
         bottom: 0,
         itemWidth: 10,
         itemHeight: 80,
-        text: ['多', '少'],
+        text: [t('heatmap.more'), t('heatmap.less')],
         inRange: { color: HEAT_COLORS },
       },
       calendar: {
@@ -92,7 +94,7 @@ export default function StatsHeatmap() {
         },
         splitLine: { show: false },
         dayLabel: { show: false },
-        monthLabel: { nameMap: 'cn' },
+        monthLabel: { nameMap: useI18nStore.getState().locale === 'en-US' ? 'en' : 'cn' },
         yearLabel: { show: false },
       },
       series: [
@@ -116,11 +118,11 @@ export default function StatsHeatmap() {
   return (
     <section className="mb-8 last:mb-0">
       <div className="text-2xs font-semibold text-text-muted tracking-[0.08em] pb-2 border-b border-[var(--color-border-dim)] mb-1">
-        活动热力图
+        {tPanel('heatmap.title')}
       </div>
       {loaded && days.length === 0 ? (
         <div className="flex items-center justify-center h-[180px] text-sm text-text-muted">
-          暂无活动数据
+          {tPanel('heatmap.empty')}
         </div>
       ) : (
         <div ref={containerRef} className="w-full h-[240px]" />

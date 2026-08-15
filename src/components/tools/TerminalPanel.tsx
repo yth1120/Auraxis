@@ -19,7 +19,7 @@ import { useSettingsStore } from '@/stores/useSettingsStore';
 import { useTerminalTasksStore } from '@/stores/useTerminalTasksStore';
 import { useAgentStore } from '@/stores/useAgentStore';
 import type { TerminalTask } from '@/types/electron-api';
-import { useT } from '@/i18n';
+import { t, useT, type I18nKey } from '@/i18n';
 import clsx from 'clsx';
 
 function formatDuration(ms?: number): string {
@@ -30,13 +30,19 @@ function formatDuration(ms?: number): string {
   return `${Math.floor(s / 60)}m${Math.round(s % 60)}s`;
 }
 
-function statusLabel(task: TerminalTask, elapsedMs: number): string {
+function statusLabel(
+  translate: (key: I18nKey, vars?: Record<string, string | number>) => string,
+  task: TerminalTask,
+  elapsedMs: number,
+): string {
   switch (task.status) {
     case 'running': return formatDuration(elapsedMs);
-    case 'success': return `${formatDuration(task.durationMs)} · 退出码 0`;
-    case 'failed': return `${formatDuration(task.durationMs)}${task.exitCode != null ? ` · 退出码 ${task.exitCode}` : ''}`;
-    case 'stopped': return '已停止';
-    case 'timeout': return '已超时';
+    case 'success': return translate('terminal.status.exitCode0', { duration: formatDuration(task.durationMs) });
+    case 'failed': return task.exitCode != null
+      ? translate('terminal.status.exitCode', { duration: formatDuration(task.durationMs), code: task.exitCode })
+      : formatDuration(task.durationMs);
+    case 'stopped': return translate('terminal.status.stopped');
+    case 'timeout': return translate('terminal.status.timeout');
   }
 }
 
@@ -110,7 +116,7 @@ function TerminalSurface({
 
     const unsubData = api.onData(id, (data) => term.write(data));
     const unsubExit = api.onExit(id, (info) => {
-      term.write(`\r\n\x1b[90m[进程已退出，退出码 ${info.exitCode}]\x1b[0m\r\n`);
+      term.write(`\r\n\x1b[90m${t('terminal.processExited', { code: info.exitCode })}\x1b[0m\r\n`);
     });
     const inputDisposable = term.onData((data) => { void api.input(id, data); });
 
@@ -188,15 +194,15 @@ function AgentShellSurface({ agentId }: { agentId: string }) {
     void api.attach(agentId).then((r) => {
       if (disposed) return;
       if (!r.ok) {
-        term.write(`\x1b[90m${r.error || '该任务还没有持久 shell 会话'}\x1b[0m\r\n`);
+        term.write(`\x1b[90m${r.error || t('terminal.noPersistentShell')}\x1b[0m\r\n`);
         return;
       }
       if (r.buffer) term.write(r.buffer);
-      if (r.exited) term.write('\r\n\x1b[90m[会话已退出]\x1b[0m\r\n');
+      if (r.exited) term.write(`\r\n\x1b[90m${t('terminal.sessionExited')}\x1b[0m\r\n`);
     });
     const unsubData = api.onData(agentId, (data) => term.write(data));
     const unsubExit = api.onExit(agentId, () => {
-      term.write('\r\n\x1b[90m[Agent 持久 shell 已退出]\x1b[0m\r\n');
+      term.write(`\r\n\x1b[90m${t('terminal.agentShellExited')}\x1b[0m\r\n`);
     });
 
     const ro = new ResizeObserver(() => {
@@ -301,33 +307,33 @@ export default function TerminalPanel({ onClose }: { onClose?: () => void }) {
   return (
     <div className="h-full w-full flex flex-col">
       {/* ── Header: icon · title · mode · actions ── */}
-      <div className="flex items-center gap-2.5 px-3 pt-2.5 pb-2 shrink-0">
-        <span className="shrink-0 flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--color-bg-inset)] text-primary">
-          <TerminalWindow size={14} />
+      <div className="flex items-center gap-2 px-2.5 pt-1.5 pb-1.5 shrink-0">
+        <span className="shrink-0 flex items-center justify-center w-6 h-6 rounded-md bg-[var(--color-bg-inset)] text-primary">
+          <TerminalWindow size={13} />
         </span>
         <span className="text-sm font-semibold text-text-primary">{t('terminal.title')}</span>
         {currentAgentId && (
-          <div className="flex items-center gap-0.5 h-7 px-0.5 rounded-full bg-[var(--color-bg-inset)]">
+          <div className="flex items-center gap-0.5 h-6 px-0.5 rounded-full bg-[var(--color-bg-inset)]">
             <button
               type="button"
               className={clsx(
-                'h-6 px-2.5 rounded-full text-2xs font-medium border-none cursor-pointer transition-colors duration-150',
+                'h-5 px-2 rounded-full text-2xs font-medium border-none cursor-pointer transition-colors duration-150',
                 viewMode === 'local' ? 'bg-[var(--color-bg-elevated)] text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary',
               )}
               onClick={() => setViewMode('local')}
             >
-              本地
+              {t('terminal.local')}
             </button>
             <button
               type="button"
               className={clsx(
-                'h-6 px-2.5 rounded-full text-2xs font-medium border-none cursor-pointer transition-colors duration-150',
+                'h-5 px-2 rounded-full text-2xs font-medium border-none cursor-pointer transition-colors duration-150',
                 viewMode === 'agent' ? 'bg-[var(--color-bg-elevated)] text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary',
               )}
               onClick={() => setViewMode('agent')}
-              title={currentAgent ? `${currentAgent.description || currentAgent.name} 的持久 shell` : undefined}
+              title={currentAgent ? t('terminal.persistentShellOf', { name: currentAgent.description || currentAgent.name }) : undefined}
             >
-              任务 Shell
+              {t('terminal.agentShell')}
             </button>
           </div>
         )}
@@ -339,7 +345,7 @@ export default function TerminalPanel({ onClose }: { onClose?: () => void }) {
         <div className="ml-auto flex items-center gap-0.5">
           <button
             type="button"
-            className="flex items-center justify-center w-7 h-7 rounded-lg text-text-muted cursor-pointer border-none bg-transparent transition-colors duration-150 hover:bg-[var(--color-hover)] hover:text-text-primary"
+            className="flex items-center justify-center w-6 h-6 rounded-md text-text-muted cursor-pointer border-none bg-transparent transition-colors duration-150 hover:bg-[var(--color-hover)] hover:text-text-primary"
             onClick={() => clearRef.current()}
             aria-label={t('terminal.clear')}
             title={t('terminal.clear')}
@@ -348,7 +354,7 @@ export default function TerminalPanel({ onClose }: { onClose?: () => void }) {
           </button>
           <button
             type="button"
-            className="flex items-center justify-center w-7 h-7 rounded-lg text-text-muted cursor-pointer border-none bg-transparent transition-colors duration-150 hover:bg-[var(--color-hover)] hover:text-text-primary"
+            className="flex items-center justify-center w-6 h-6 rounded-md text-text-muted cursor-pointer border-none bg-transparent transition-colors duration-150 hover:bg-[var(--color-hover)] hover:text-text-primary"
             onClick={() => setSessionKey((k) => k + 1)}
             aria-label={t('terminal.new')}
             title={t('terminal.new')}
@@ -358,7 +364,7 @@ export default function TerminalPanel({ onClose }: { onClose?: () => void }) {
           {onClose && (
             <button
               type="button"
-              className="flex items-center justify-center w-7 h-7 rounded-lg text-text-muted cursor-pointer border-none bg-transparent transition-colors duration-150 hover:bg-[var(--color-hover)] hover:text-text-primary"
+              className="flex items-center justify-center w-6 h-6 rounded-md text-text-muted cursor-pointer border-none bg-transparent transition-colors duration-150 hover:bg-[var(--color-hover)] hover:text-text-primary"
               onClick={onClose}
               aria-label={t('terminal.close')}
               title={t('terminal.close')}
@@ -426,7 +432,7 @@ export default function TerminalPanel({ onClose }: { onClose?: () => void }) {
                         </code>
                       </Tooltip>
                       <span className={`text-2xs shrink-0 font-mono ${task.status === 'failed' ? 'text-danger' : task.status === 'running' ? 'text-[var(--color-success)]' : 'text-text-muted'}`}>
-                        {statusLabel(task, elapsed)}
+                        {statusLabel(t, task, elapsed)}
                       </span>
                       {task.status === 'running' && (
                         <button
@@ -488,7 +494,7 @@ export default function TerminalPanel({ onClose }: { onClose?: () => void }) {
               <TerminalSurface key={sessionKey} registerClear={registerClear} registerFocus={registerFocus} onReady={onReady} />
             ) : (
               <div className="flex items-center justify-center h-full rounded-xl border border-[var(--color-border-dim)] bg-[var(--color-bg-secondary)] text-sm text-text-muted">
-                终端仅在桌面应用中可用
+                {t('terminal.desktopOnly')}
               </div>
             )}
           </div>

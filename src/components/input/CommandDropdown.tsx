@@ -1,5 +1,5 @@
 import type { SlashCommand } from '../../constants/commands';
-import { useT } from '../../i18n';
+import { useT, slashCommandDescKey } from '../../i18n';
 
 interface CommandDropdownProps {
   items: SlashCommand[];
@@ -32,7 +32,7 @@ export default function CommandDropdown({ items, selected, position, onSelect, o
             <span className="w-[18px] h-[18px] rounded-md flex items-center justify-center text-sm font-bold font-mono shrink-0 text-accent bg-accent-soft">/</span>
             <span className="overflow-hidden text-ellipsis whitespace-nowrap">
               <strong>{cmd.name}</strong>
-              <span style={{ opacity: 0.5, marginLeft: 8, fontSize: 11 }}>{cmd.description}</span>
+              <span style={{ opacity: 0.5, marginLeft: 8, fontSize: 11 }}>{t(slashCommandDescKey(cmd.name))}</span>
             </span>
             <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
               {cmd.usage}

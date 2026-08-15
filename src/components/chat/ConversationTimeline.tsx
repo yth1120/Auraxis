@@ -3,6 +3,7 @@ import type { RefObject } from 'react';
 import type { Message } from '../../types/chat';
 import { getContentText } from '../../types/chat';
 import TimelineScrubber, { type TimelineTick } from './TimelineScrubber';
+import { useT } from '../../i18n';
 
 interface ConversationTimelineProps {
   messages: Message[];
@@ -21,6 +22,7 @@ function summaryOf(m: Message): string {
  * gestures mapped back to scrollToIndex.
  */
 export default function ConversationTimeline({ messages, scrollerRef, scrollToIndex }: ConversationTimelineProps) {
+  const t = useT();
   const [scrollRatio, setScrollRatio] = useState(0);
   const rafRef = useRef(0);
 
@@ -29,12 +31,12 @@ export default function ConversationTimeline({ messages, scrollerRef, scrollToIn
       .filter((m) => m.role === 'user')
       .map((m, i) => ({
         id: m.id,
-        title: '你',
+        title: t('conv.you'),
         summary: summaryOf(m),
         timestamp: m.timestamp,
         index: messages.indexOf(m),
       })),
-    [messages],
+    [messages, t],
   );
 
   useEffect(() => {

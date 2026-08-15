@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useAgentStore } from '@/stores/useAgentStore';
 import { useNotificationStore } from '@/stores/useNotificationStore';
+import { t } from '@/i18n';
 
 const ACTIVE: ReadonlySet<string> = new Set(['running', 'paused', 'queued']);
 const lastAgentStatus = new Map<string, string>();
@@ -17,23 +18,23 @@ export function useNotificationsSource(): void {
         lastAgentStatus.set(a.id, a.status);
         if (prevStatus === a.status || !prevStatus) continue;
         if (!ACTIVE.has(prevStatus) || ACTIVE.has(a.status)) continue;
-        const name = a.name || '任务';
+        const name = a.name || t('app.task');
         if (a.status === 'completed') {
           push({
             kind: 'agent',
-            title: `任务完成：${name}`,
+            title: t('notif.taskDone', { name }),
             detail: (a.result || '').slice(0, 180) || undefined,
             agentId: a.id,
           });
         } else if (a.status === 'error') {
           push({
             kind: 'agent',
-            title: `任务失败：${name}`,
+            title: t('notif.taskFailed', { name }),
             detail: (a.error || '').slice(0, 180) || undefined,
             agentId: a.id,
           });
         } else if (a.status === 'stopped') {
-          push({ kind: 'agent', title: `任务已停止：${name}`, agentId: a.id });
+          push({ kind: 'agent', title: t('notif.taskStopped', { name }), agentId: a.id });
         }
       }
     });
@@ -55,10 +56,10 @@ export function useNotificationsSource(): void {
         lastCronRun.set(job.id, sig);
         const title =
           job.lastRun.status === 'success'
-            ? `定时任务完成：${job.name}`
+            ? t('notif.scheduledDone', { name: job.name })
             : job.lastRun.status === 'error'
-              ? `定时任务失败：${job.name}`
-              : `定时任务执行中：${job.name}`;
+              ? t('notif.scheduledFailed', { name: job.name })
+              : t('notif.scheduledRunning', { name: job.name });
         push({
           kind: 'cron',
           title,

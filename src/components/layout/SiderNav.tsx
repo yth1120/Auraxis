@@ -39,7 +39,7 @@ import ExecutingIndicator from '../common/ExecutingIndicator';
 import type { AgentStatus } from '../../types/agent';
 import clsx from 'clsx';
 import logoPng from '../../assets/auraxis-logo.png';
-import { useT, type I18nKey } from '../../i18n';
+import { t, useT, type I18nKey } from '../../i18n';
 import { getContentText } from '../../types/chat';
 import { groupSessionsByTime, groupSessionsByProject } from '../../utils/groupSessions';
 
@@ -81,14 +81,14 @@ const SIDEBAR_TOP_NAV: {
 function relativeTime(ts: number): string {
   const diff = Date.now() - ts;
   const sec = Math.floor(diff / 1000);
-  if (sec < 10) return '刚刚';
-  if (sec < 60) return `${sec}秒前`;
+  if (sec < 10) return t('time.justNow');
+  if (sec < 60) return t('time.secondsAgo', { n: sec });
   const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}分钟前`;
+  if (min < 60) return t('time.minutesAgo', { n: min });
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}小时前`;
+  if (hr < 24) return t('time.hoursAgo', { n: hr });
   const day = Math.floor(hr / 24);
-  if (day < 30) return `${day}天前`;
+  if (day < 30) return t('time.daysAgo', { n: day });
   return new Date(ts).toLocaleDateString('zh-CN');
 }
 
@@ -141,6 +141,7 @@ const SessionRow = memo(function SessionRow({
   onDragEnd,
   dropActive,
 }: SessionRowProps) {
+  const t = useT();
   const lastMsg = s.messages[s.messages.length - 1];
   let preview = '';
   if (lastMsg) {
@@ -194,27 +195,27 @@ const SessionRow = memo(function SessionRow({
       )}
       {!isRenaming && (
         <span className="flex items-center gap-1 shrink-0 ml-1 opacity-0 group-hover:opacity-100">
-          <Tooltip title={s.pinned ? '取消置顶' : '置顶'} placement="top">
+          <Tooltip title={s.pinned ? t('sidebar.unpin') : t('sidebar.pin')} placement="top">
             <button
               className="flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
               onClick={(e) => { e.stopPropagation(); useSessionStore.getState().togglePin(s.id); }}
-              aria-label={s.pinned ? '取消置顶' : '置顶'}
+              aria-label={s.pinned ? t('sidebar.unpin') : t('sidebar.pin')}
             >
               <MapPin weight={s.pinned ? 'fill' : 'regular'} style={{ fontSize: 14 }} className={s.pinned ? 'text-primary' : undefined} />
             </button>
           </Tooltip>
-          <Tooltip title="重命名" placement="top">
+          <Tooltip title={t('sidebar.rename')} placement="top">
             <button className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => onStartRename(e, s.id, s.title)}>
               <EditOutlined style={{ fontSize: 14 }} />
             </button>
           </Tooltip>
-          <Tooltip title="分叉（复制为新会话）" placement="top">
-            <button className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => onFork(e, s.id)} aria-label="分叉会话">
+          <Tooltip title={t('sidebar.forkTip')} placement="top">
+            <button className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => onFork(e, s.id)} aria-label={t('sidebar.fork')}>
               <ForkOutlined style={{ fontSize: 14 }} />
             </button>
           </Tooltip>
-          <Tooltip title={s.archived ? '取消归档' : '归档'} placement="top">
-            <button className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => onArchive(e, s.id)} aria-label={s.archived ? '取消归档' : '归档'}>
+          <Tooltip title={s.archived ? t('sidebar.unarchive') : t('sidebar.archive')} placement="top">
+            <button className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => onArchive(e, s.id)} aria-label={s.archived ? t('sidebar.unarchive') : t('sidebar.archive')}>
               <ArchiveOutlined style={{ fontSize: 14 }} />
             </button>
           </Tooltip>
@@ -232,19 +233,19 @@ const SessionRow = memo(function SessionRow({
               <button
                 className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
                 onClick={(e) => e.stopPropagation()}
-                aria-label="移动到工作区"
-                title="移动到工作区"
+                aria-label={t('sidebar.moveTo')}
+                title={t('sidebar.moveTo')}
               >
                 <FolderOpenOutlined style={{ fontSize: 14 }} />
               </button>
             </Dropdown>
           )}
           <Popconfirm
-            title="确定删除此对话？"
+            title={t('sidebar.deleteChatConfirm')}
             onConfirm={(e) => { e?.stopPropagation(); onDelete(e as any, s.id); }}
             onCancel={(e) => { e?.stopPropagation(); }}
-            okText="删除"
-            cancelText="取消"
+            okText={t('sidebar.delete')}
+            cancelText={t('common.cancel')}
             okButtonProps={{ danger: true, type: 'primary', style: { color: '#fff' } }}
           >
             <button className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => e.stopPropagation()}>
@@ -265,6 +266,7 @@ interface AgentRowProps {
 }
 
 const AgentRow = memo(function AgentRow({ agent: a, isActive, pendingCount, onSelect }: AgentRowProps) {
+  const t = useT();
   const statusColor = AGENT_STATUS_COLOR[a.status] || '';
   return (
     <div
@@ -284,51 +286,51 @@ const AgentRow = memo(function AgentRow({ agent: a, isActive, pendingCount, onSe
       </span>
       <span className="flex-1 min-w-0 flex items-center gap-[6px]">
         <span className={clsx('flex-1 min-w-0 text-sm overflow-hidden text-ellipsis whitespace-nowrap', isActive ? 'text-text-primary font-medium' : 'text-text-secondary')}>{a.name}</span>
-        {pendingCount > 0 && <span className="shrink-0 text-2xs font-semibold leading-[1.5] px-[6px] rounded-full text-text-on-accent bg-warning whitespace-nowrap">待审批 {pendingCount}</span>}
+        {pendingCount > 0 && <span className="shrink-0 text-2xs font-semibold leading-[1.5] px-[6px] rounded-full text-text-on-accent bg-warning whitespace-nowrap">{t('sidebar.pending', { n: pendingCount })}</span>}
       </span>
       <span className="shrink-0 flex items-center opacity-0 group-hover:opacity-100">
         {a.status === 'running' && (
-          <Tooltip title="暂停任务" placement="top">
+          <Tooltip title={t('sidebar.pause')} placement="top">
             <button
               className="flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
               onClick={(e) => { e.stopPropagation(); useAgentStore.getState().pauseAgent(a.id); }}
-              aria-label="暂停任务"
+              aria-label={t('sidebar.pause')}
             >
               <PauseCircleOutlined style={{ fontSize: 14 }} />
             </button>
           </Tooltip>
         )}
         {a.status === 'paused' && (
-          <Tooltip title="继续任务" placement="top">
+          <Tooltip title={t('sidebar.resume')} placement="top">
             <button
               className="flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
               onClick={(e) => { e.stopPropagation(); useAgentStore.getState().resumeAgent(a.id); }}
-              aria-label="继续任务"
+              aria-label={t('sidebar.resume')}
             >
               <PlayCircleOutlined style={{ fontSize: 14 }} />
             </button>
           </Tooltip>
         )}
         {a.status === 'running' || a.status === 'queued' || a.status === 'paused' ? (
-          <Tooltip title="停止任务" placement="top">
+          <Tooltip title={t('sidebar.stop')} placement="top">
             <button
               className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
               onClick={(e) => { e.stopPropagation(); useAgentStore.getState().stopAgent(a.id); }}
-              aria-label="停止任务"
+              aria-label={t('sidebar.stop')}
             >
               <StopOutlined style={{ fontSize: 14 }} />
             </button>
           </Tooltip>
         ) : (
           <Popconfirm
-            title="删除此任务？"
+            title={t('sidebar.deleteTaskConfirm')}
             onConfirm={(e) => { e?.stopPropagation(); useAgentStore.getState().removeAgent(a.id); }}
             onCancel={(e) => { e?.stopPropagation(); }}
-            okText="删除"
-            cancelText="取消"
+            okText={t('sidebar.delete')}
+            cancelText={t('common.cancel')}
             okButtonProps={{ danger: true, type: 'primary', style: { color: '#fff' } }}
           >
-            <button className="flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => e.stopPropagation()} aria-label="删除任务">
+            <button className="flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => e.stopPropagation()} aria-label={t('sidebar.deleteTask')}>
               <DeleteOutlined style={{ fontSize: 14 }} />
             </button>
           </Popconfirm>
@@ -448,9 +450,9 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
     const result = await window.electronAPI?.project.selectDirectory();
     if (result?.ok && result.data) {
       const p = useProjectStore.getState().addProject(result.data);
-      message.success(`已添加项目工作区: ${p.name}`);
+      message.success(t('sidebar.addedWorkspace', { name: p.name }));
     }
-  }, []);
+  }, [t]);
 
   const startSessionInProject = useCallback((path: string) => {
     useSettingsStore.getState().setProjectPath(path);
@@ -490,10 +492,10 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
     useAppStore.getState().setSidebarMode('chat');
     useAppStore.getState().setActiveToolView('none');
     const newId = useSessionStore.getState().forkSession(threadId);
-    if (!newId) { message.error('分叉失败：会话不存在'); return; }
+    if (!newId) { message.error(t('sidebar.forkFailed')); return; }
     useChatStore.getState().switchSession(newId);
-    message.success('已创建分支会话');
-  }, []);
+    message.success(t('sidebar.forked'));
+  }, [t]);
   const handleArchiveThread = useCallback((e: React.MouseEvent, threadId: string) => {
     e.stopPropagation();
     useSessionStore.getState().toggleArchive(threadId);
@@ -586,13 +588,13 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
     return (
       <>
         {/* ── 对话 (original session list, unchanged) ── */}
-        {!visualCollapsed && <div className="ax-sidebar-label">对话</div>}
+        {!visualCollapsed && <div className="ax-sidebar-label">{t('nav.chat')}</div>}
         <div className="flex flex-col gap-1 px-2 pb-1 sider-tree">
           {activeSessions.length === 0 ? (
             <div className="ax-sidebar-group flex flex-col items-center justify-center gap-[6px] px-4 py-10 text-center">
               <MessageOutlined className="text-[26px] text-text-faint opacity-75 mb-0.5" />
-              <span className="text-sm font-medium text-text-muted">还没有对话</span>
-              <span className="text-2xs text-text-muted leading-[1.5]">点击「新建对话」开始</span>
+              <span className="text-sm font-medium text-text-muted">{t('sidebar.noChats')}</span>
+              <span className="text-2xs text-text-muted leading-[1.5]">{t('sidebar.clickNewChat')}</span>
             </div>
           ) : singleProject ? (
             timeGroups.map((group) => (
@@ -616,7 +618,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
                         if (project) useProjectStore.getState().selectProject(project.id);
                       }
                     }}
-                    title={pg.projectRoot ?? '未指定项目'}
+                    title={pg.projectRoot ?? t('sidebar.unspecifiedProject')}
                   >
                     <span className={clsx('flex items-center justify-center w-[14px] h-[14px] shrink-0 text-text-muted', !isCollapsed && 'rotate-90')}>
                       <CaretRight />
@@ -652,14 +654,14 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
 
   const renderCodePanel = () => {
     const viewItems: MenuProps['items'] = [
-      { type: 'group', label: '分组方式', children: [
-        { key: 'groupBy-workspace', label: '按工作区', icon: projectGroupBy === 'workspace' ? <CheckOutlined size={12} className="text-primary" /> : undefined, onClick: () => useProjectStore.getState().setGroupBy('workspace') },
-        { key: 'groupBy-flat', label: '平铺', icon: projectGroupBy === 'flat' ? <CheckOutlined size={12} className="text-primary" /> : undefined, onClick: () => useProjectStore.getState().setGroupBy('flat') },
+      { type: 'group', label: t('sidebar.groupBy'), children: [
+        { key: 'groupBy-workspace', label: t('sidebar.groupByWorkspace'), icon: projectGroupBy === 'workspace' ? <CheckOutlined size={12} className="text-primary" /> : undefined, onClick: () => useProjectStore.getState().setGroupBy('workspace') },
+        { key: 'groupBy-flat', label: t('sidebar.groupByFlat'), icon: projectGroupBy === 'flat' ? <CheckOutlined size={12} className="text-primary" /> : undefined, onClick: () => useProjectStore.getState().setGroupBy('flat') },
       ]},
       { type: 'divider' },
-      { type: 'group', label: '排序', children: [
-        { key: 'orderBy-manual', label: '手动', icon: projectOrderBy === 'manual' ? <CheckOutlined size={12} className="text-primary" /> : undefined, onClick: () => useProjectStore.getState().setOrderBy('manual') },
-        { key: 'orderBy-updated', label: '最近更新', icon: projectOrderBy === 'updated' ? <CheckOutlined size={12} className="text-primary" /> : undefined, onClick: () => useProjectStore.getState().setOrderBy('updated') },
+      { type: 'group', label: t('sidebar.sort'), children: [
+        { key: 'orderBy-manual', label: t('sidebar.orderManual'), icon: projectOrderBy === 'manual' ? <CheckOutlined size={12} className="text-primary" /> : undefined, onClick: () => useProjectStore.getState().setOrderBy('manual') },
+        { key: 'orderBy-updated', label: t('sidebar.orderUpdated'), icon: projectOrderBy === 'updated' ? <CheckOutlined size={12} className="text-primary" /> : undefined, onClick: () => useProjectStore.getState().setOrderBy('updated') },
       ]},
     ];
     const sortSessions = (list: Session[]) => {
@@ -709,13 +711,13 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
     <div className="flex flex-col px-2 sider-code-panel">
         {/* ── 项目工作区 （工作区树 + 会话） ── */}
         <div className="shrink-0 flex items-center px-3 pt-2.5 pb-[6px]">
-          <span className="text-2xs font-semibold text-text-muted tracking-[0.06em]">项目工作区</span>
+          <span className="text-2xs font-semibold text-text-muted tracking-[0.06em]">{t('sidebar.projects')}</span>
           <Dropdown menu={{ items: viewItems }} trigger={['click']} placement="bottomRight" transitionName="">
             <button
               type="button"
               className="ml-auto flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
-              title="视图选项"
-              aria-label="视图选项"
+              title={t('sidebar.viewOptions')}
+              aria-label={t('sidebar.viewOptions')}
             >
               <SlidersHorizontal style={{ fontSize: 14 }} />
             </button>
@@ -724,8 +726,8 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
             type="button"
             className="flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
             onClick={addProjectWorkspace}
-            title="添加项目工作区"
-            aria-label="添加项目工作区"
+            title={t('sidebar.addWorkspace')}
+            aria-label={t('sidebar.addWorkspace')}
           >
             <FolderOpenOutlined size={16} />
           </button>
@@ -734,7 +736,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
         {projectGroupBy === 'flat' ? (
           <div className="flex flex-col gap-1 px-1 pb-1">
             {orderSessionsByKey('__flat__', activeSessions).length === 0 ? (
-              <div className="px-3 py-2 text-2xs text-text-faint">还没有会话</div>
+              <div className="px-3 py-2 text-2xs text-text-faint">{t('sidebar.noSessions')}</div>
             ) : orderSessionsByKey('__flat__', activeSessions).map(renderSessionRow)}
             {taskGroups.map(([root, list]) => (
               <div key={root || '__unassigned__'} className="flex flex-col gap-0.5">
@@ -750,7 +752,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
         ) : (
           <div className="flex flex-col gap-1 px-2 pb-1">
             {projects.length === 0 && (
-              <div className="px-3 py-2 text-2xs text-text-faint">还没有项目工作区，点击右上角添加</div>
+              <div className="px-3 py-2 text-2xs text-text-faint">{t('sidebar.noProjects')}</div>
             )}
             {orderedProjects.map((p) => {
               const isCurrent = p.id === currentProjectId || (settingsProjectPath !== null && p.path === settingsProjectPath);
@@ -840,36 +842,36 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
                         <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{p.name}</span>
                         <span className="shrink-0 text-2xs text-text-muted font-normal tabular-nums">{count}</span>
                         <span className="flex items-center gap-1 shrink-0 ml-1 opacity-0 group-hover:opacity-100">
-                          <Tooltip title="在此项目新建会话" placement="top">
+                          <Tooltip title={t('sidebar.newSessionInProject')} placement="top">
                             <button
                               className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
                               onClick={(e) => { e.stopPropagation(); startSessionInProject(p.path); }}
-                              aria-label="在此项目新建会话"
+                              aria-label={t('sidebar.newSessionInProject')}
                             >
                               <PlusOutlined style={{ fontSize: 14 }} />
                             </button>
                           </Tooltip>
-                          <Tooltip title="重命名项目" placement="top">
+                          <Tooltip title={t('sidebar.renameProject')} placement="top">
                             <button
                               className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
                               onClick={(e) => { e.stopPropagation(); setRenamingProjectId(p.id); setRenameProjectValue(p.name); }}
-                              aria-label="重命名项目"
+                              aria-label={t('sidebar.renameProject')}
                             >
                               <EditOutlined style={{ fontSize: 14 }} />
                             </button>
                           </Tooltip>
                           <Popconfirm
-                            title="从列表移除该项目？"
+                            title={t('sidebar.removeProjectConfirm')}
                             onConfirm={(e) => { e?.stopPropagation(); useProjectStore.getState().removeProject(p.id); }}
                             onCancel={(e) => { e?.stopPropagation(); }}
-                            okText="移除"
-                            cancelText="取消"
+                            okText={t('sidebar.remove')}
+                            cancelText={t('common.cancel')}
                             okButtonProps={{ danger: true, type: 'primary', style: { color: '#fff' } }}
                           >
                             <button
                               className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
                               onClick={(e) => e.stopPropagation()}
-                              aria-label="移除项目"
+                              aria-label={t('sidebar.remove')}
                             >
                               <DeleteOutlined style={{ fontSize: 14 }} />
                             </button>
@@ -881,7 +883,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
                   {expanded && (
                     <div className="pl-3 pr-1 pb-1 mt-0.5 flex flex-col gap-0.5">
                       {projectSessions.length === 0 ? (
-                        <div className="px-3 py-2 text-2xs text-text-faint">该项目还没有会话</div>
+                        <div className="px-3 py-2 text-2xs text-text-faint">{t('sidebar.noProjectSessions')}</div>
                       ) : visibleSessions.map(renderSessionRow)}
                       {projectSessions.length > 5 && (
                         <button
@@ -889,7 +891,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
                           className="self-start px-2 py-0.5 rounded-md border-none bg-transparent text-2xs text-text-muted cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-secondary"
                           onClick={() => toggleShowAllSessions(p.id)}
                         >
-                          {showAll ? '收起' : `显示全部 ${projectSessions.length} 条`}
+                          {showAll ? t('sidebar.collapse') : t('sidebar.showAll', { n: projectSessions.length })}
                         </button>
                       )}
                       {projectTasks.length > 0 && (
@@ -907,13 +909,13 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
 
       {projectGroupBy === 'workspace' && (taskGroupMap.get('') ?? []).length > 0 && (
         <div className="ax-sidebar-group">
-          <div className="px-3 pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">未归属任务</div>
+          <div className="px-3 pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">{t('sidebar.unassignedTasks')}</div>
           <div className="px-1 pb-1 flex flex-col gap-0.5">{(taskGroupMap.get('') ?? []).map(renderAgentRow)}</div>
         </div>
       )}
       {unassignedSessions.length > 0 && (
         <div className="ax-sidebar-group">
-          <div className="px-3 pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">未归属会话</div>
+          <div className="px-3 pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">{t('sidebar.unassignedSessions')}</div>
           <div className="px-1 pb-1 flex flex-col gap-0.5">
             {unassignedSessions.map(renderSessionRow)}
           </div>
@@ -949,16 +951,16 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
               input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
               input?.focus();
             }}
-            title="全局搜索"
-            aria-label="全局搜索"
+            title={t('sidebar.globalSearch')}
+            aria-label={t('sidebar.globalSearch')}
           >
             <SearchOutlined />
           </button>
           <button
             className="ax-header-action shrink-0"
             onClick={toggleSidebar}
-            title={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
-            aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+            title={sidebarCollapsed ? t('sidebar.expandSidebar') : t('sidebar.collapseSidebar')}
+            aria-label={sidebarCollapsed ? t('sidebar.expandSidebar') : t('sidebar.collapseSidebar')}
           >
             <SidebarSimpleIcon weight={sidebarCollapsed ? 'regular' : 'fill'} />
           </button>

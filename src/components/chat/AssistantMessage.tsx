@@ -118,7 +118,7 @@ export default memo(function AssistantMessage({ message, searchQuery, isLastAssi
               const sid = useSessionStore.getState().currentSessionId;
               if (sid) void useMessageFeedbackStore.getState().rate(message.id, sid, 'up');
             }}
-            title="有帮助"
+            title={t('msg.helpful')}
           >
             <ThumbsUp size={13} weight={rating === 'up' ? 'fill' : 'regular'} />
           </button>
@@ -128,7 +128,7 @@ export default memo(function AssistantMessage({ message, searchQuery, isLastAssi
               const sid = useSessionStore.getState().currentSessionId;
               if (sid) void useMessageFeedbackStore.getState().rate(message.id, sid, 'down');
             }}
-            title="有问题"
+            title={t('msg.problem')}
           >
             <ThumbsDown size={13} weight={rating === 'down' ? 'fill' : 'regular'} />
           </button>

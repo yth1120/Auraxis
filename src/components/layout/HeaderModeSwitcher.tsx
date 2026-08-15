@@ -55,7 +55,7 @@ export default function HeaderModeSwitcher({ collapsed }: Props) {
   // ── Collapsed: icon-only vertical stack ──
   if (collapsed) {
     return (
-      <div className="flex flex-col items-center gap-1" role="tablist" aria-label="工作模式">
+      <div className="flex flex-col items-center gap-1" role="tablist" aria-label={t('modeSwitcher.workMode')}>
         <Tooltip title={t('mode.switchToChat')} placement="right">
           <button
             role="tab"
@@ -98,7 +98,7 @@ export default function HeaderModeSwitcher({ collapsed }: Props) {
 
   // ── Expanded: track with sliding thumb that fills the whole rail ──
   return (
-    <div ref={trackRef} className="relative flex w-[172px] h-8 bg-bg-tertiary rounded-full" role="tablist" aria-label="工作模式">
+    <div ref={trackRef} className="relative flex w-[172px] h-8 bg-bg-tertiary rounded-full" role="tablist" aria-label={t('modeSwitcher.workMode')}>
       {thumbRect && (
         <span
           className="absolute inset-y-0 h-full bg-[var(--color-bg-elevated)] rounded-full shadow-sm transition-all duration-[380ms] ease-[cubic-bezier(0.22,1,0.36,1)]"

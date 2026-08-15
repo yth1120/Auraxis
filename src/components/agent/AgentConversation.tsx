@@ -167,7 +167,7 @@ function outputText(toolName: string | undefined, output: unknown): string {
     const parts: string[] = [];
     if (o.stdout) parts.push(o.stdout);
     if (o.stderr) parts.push(o.stderr);
-    if (o.exitCode !== undefined && o.exitCode !== 0) parts.push(`退出码: ${o.exitCode}`);
+    if (o.exitCode !== undefined && o.exitCode !== 0) parts.push(t('conv.exitCode', { code: o.exitCode }));
     return parts.join('\n');
   }
   try {
@@ -694,10 +694,10 @@ export default function AgentConversation() {
     const access = useSettingsStore.getState().sandboxMode;
     const auto = access === 'full';
     const id = await createAgent({
-      name: '按计划实施',
+      name: t('conv.implementPlan'),
       type: 'general-purpose',
       instruction: `请先阅读计划文件 ${agent.planFile}，严格按其中列出的步骤逐项实施。每完成一步用 TodoWrite 更新进度；遇到阻塞或风险操作时先说明再做。不要跳过任何步骤。`,
-      displayText: `按计划实施：${basename(agent.planFile)}`,
+      displayText: t('conv.implementPlanDisplay', { name: basename(agent.planFile) }),
       mode: auto ? 'afe' : 'ask',
       autoApprove: auto,
     });
@@ -924,7 +924,7 @@ export default function AgentConversation() {
   if (!agent) {
     return (
       <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-text-muted">
-        任务不存在或已被清理
+        {tConv('conv.notFound')}
       </div>
     );
   }
@@ -1122,7 +1122,7 @@ export default function AgentConversation() {
         </div>
       </div>
       <Modal
-        title="原始执行日志"
+        title={tConv('conv.rawLog')}
         open={rawLogOpen}
         onCancel={() => setRawLogOpen(false)}
         footer={[
@@ -1137,7 +1137,7 @@ export default function AgentConversation() {
               );
             }}
           >
-            复制
+            {tConv('conv.copy')}
           </button>,
           <button
             key="close"
@@ -1145,7 +1145,7 @@ export default function AgentConversation() {
             className="h-7 px-3 rounded-full text-xs font-medium text-text-secondary bg-[var(--color-bg-secondary)] border border-border-default cursor-pointer hover:bg-[var(--color-hover)]"
             onClick={() => setRawLogOpen(false)}
           >
-            关闭
+            {tConv('conv.close')}
           </button>,
         ]}
         width={720}

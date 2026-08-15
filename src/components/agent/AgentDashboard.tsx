@@ -423,8 +423,8 @@ export default function AgentDashboard() {
         {(agents || []).length === 0 ? (
           <div className="flex justify-center py-10">
             <EmptyState
-              title="暂无运行中的 Agent"
-              description="多个 Agent 可同时处理不同的子任务"
+              title={t('agentDash.noRunning')}
+              description={t('agentDash.multiAgentHint')}
             />
           </div>
         ) : (

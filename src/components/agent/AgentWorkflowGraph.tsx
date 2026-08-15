@@ -3,7 +3,7 @@ import clsx from 'clsx';
 import ExecutingIndicator from '../common/ExecutingIndicator';
 import { Check, Clock, WarningCircle } from '@/components/common/icons';
 import type { AgentPlan } from '../../types/agent';
-import { useT } from '../../i18n';
+import { useT, type I18nKey } from '../../i18n';
 
 type TodoItem = { content: string; status: string; activeForm?: string };
 
@@ -16,11 +16,11 @@ const STATUS_ICON: Record<string, React.ReactNode> = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  pending: '待执行',
-  in_progress: '执行中',
-  completed: '已完成',
-  verified: '已验证',
-  blocked: '受阻',
+  pending: 'workflow.status.pending',
+  in_progress: 'workflow.status.in_progress',
+  completed: 'workflow.status.completed',
+  verified: 'workflow.status.verified',
+  blocked: 'workflow.status.blocked',
 };
 
 function statusTone(status: string): string {
@@ -113,7 +113,7 @@ export default function AgentWorkflowGraph({ plan, onTaskClick }: Props) {
                   {todo.content}
                 </span>
                 <span className="text-2xs text-text-faint">
-                  {STATUS_LABEL[status] ?? status}
+                  {STATUS_LABEL[status] ? t(STATUS_LABEL[status] as I18nKey) : status}
                   {todo.activeForm && active ? ` · ${todo.activeForm}` : ''}
                 </span>
               </div>

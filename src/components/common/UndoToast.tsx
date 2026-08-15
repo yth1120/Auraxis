@@ -71,7 +71,7 @@ export default function UndoToast() {
         onContextMenu={(e) => { e.preventDefault(); setShowMenu((p) => !p); }}
       >
         <UndoOutlined className="text-base text-accent" />
-        {undos.length > 1 ? `撤销 (${undos.length})` : '撤销'}
+        {undos.length > 1 ? t('undo.undoN', { n: undos.length }) : t('undo.undo')}
         <span className="text-xs text-muted ml-1 max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap">{recent?.description}</span>
       </button>
     </div>

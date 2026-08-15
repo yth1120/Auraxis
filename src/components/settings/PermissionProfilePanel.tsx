@@ -3,13 +3,13 @@ import { Button, Input, Select, message } from 'antd';
 import { Plus as PlusOutlined, MinusCircle as MinusCircleOutlined } from '@/components/common/icons';
 import SettingItem from './SettingItem';
 import type { PermissionProfile } from '../../types/electron-api';
-import { useT } from '../../i18n';
+import { useT, type I18nKey } from '../../i18n';
 
 const BUILTIN_FALLBACK: PermissionProfile[] = [
   {
     id: 'standard',
-    name: '标准',
-    description: '项目内文件可读写，网络可用，危险操作按运行模式确认。',
+    name: 'profile.standard',
+    description: 'profile.standardDesc',
     builtin: true,
     toolPolicy: 'ask',
     fileScopes: [{ pattern: '**', access: 'write' }],
@@ -17,9 +17,9 @@ const BUILTIN_FALLBACK: PermissionProfile[] = [
   },
 ];
 
-const FILE_ACCESS_LABEL: Record<string, string> = { read: '只读', write: '可写', deny: '拒绝' };
-const NET_ACCESS_LABEL: Record<string, string> = { allow: '允许', deny: '拒绝' };
-const POLICY_LABEL: Record<string, string> = { ask: '逐步确认', plan: '计划驱动', afe: '全自动' };
+const FILE_ACCESS_LABEL: Record<string, I18nKey> = { read: 'profile.fileAccess.read', write: 'profile.fileAccess.write', deny: 'profile.fileAccess.deny' };
+const NET_ACCESS_LABEL: Record<string, I18nKey> = { allow: 'profile.netAccess.allow', deny: 'profile.netAccess.deny' };
+const POLICY_LABEL: Record<string, I18nKey> = { ask: 'profile.policy.ask', plan: 'profile.policy.plan', afe: 'profile.policy.afe' };
 
 const fileAccessOptions = Object.entries(FILE_ACCESS_LABEL).map(([value, label]) => ({ value, label }));
 const netAccessOptions = Object.entries(NET_ACCESS_LABEL).map(([value, label]) => ({ value, label }));
@@ -113,7 +113,7 @@ export default function PermissionProfilePanel() {
     const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const profile: PermissionProfile = {
       id,
-      name: '自定义 Profile',
+      name: t('profile.custom'),
       toolPolicy: 'ask',
       fileScopes: [{ pattern: '**', access: 'write' }],
       networkScopes: [{ pattern: '*', access: 'allow' }],
@@ -130,12 +130,12 @@ export default function PermissionProfilePanel() {
     message.success(t('profile.deleted'));
   };
 
-  const scopeChips = (items: { pattern: string; access: string }[], label: Record<string, string>) => (
+  const scopeChips = (items: { pattern: string; access: string }[], label: Record<string, I18nKey>) => (
     <div className="flex flex-wrap gap-1.5">
       {items.map((s, i) => (
         <span key={i} className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-border-dim text-2xs text-text-secondary">
           <code className="font-mono">{s.pattern || '?'}</code>
-          <span className="text-text-muted">{label[s.access] ?? s.access}</span>
+          <span className="text-text-muted">{label[s.access] ? t(label[s.access]) : s.access}</span>
         </span>
       ))}
     </div>
@@ -149,12 +149,12 @@ export default function PermissionProfilePanel() {
           {t('profile.newCustom')}
         </Button>
       </div>
-      <SettingItem title={t('profile.current')} description={active?.description}>
+      <SettingItem title={t('profile.current')} description={active?.id === 'standard' ? t('profile.standardDesc') : active?.description}>
         <Select
           value={activeId}
           onChange={(v) => persist(profiles, v)}
           style={{ width: '100%' }}
-          options={profiles.map((p) => ({ value: p.id, label: p.name }))}
+          options={profiles.map((p) => ({ value: p.id, label: p.builtin ? t('profile.standard') : p.name }))}
           getPopupContainer={(t) => t.parentElement || document.body}
         />
       </SettingItem>
@@ -181,7 +181,7 @@ export default function PermissionProfilePanel() {
               value={active.toolPolicy}
               onChange={(v) => updateProfile(active.id, { toolPolicy: v })}
               style={{ width: '100%' }}
-              options={policyOptions}
+              options={policyOptions.map((o) => ({ value: o.value, label: t(o.label as I18nKey) }))}
               getPopupContainer={(t) => t.parentElement || document.body}
             />
           </SettingItem>
@@ -200,7 +200,7 @@ export default function PermissionProfilePanel() {
                   className="w-[96px]"
                   value={s.access}
                   onChange={(v) => updateFileScope(active.id, i, { access: v })}
-                  options={fileAccessOptions}
+                  options={fileAccessOptions.map((o) => ({ value: o.value, label: t(o.label as I18nKey) }))}
                 />
                 <Button type="text" size="small" danger icon={<MinusCircleOutlined />} onClick={() => removeFileScope(active.id, i)} />
               </div>
@@ -224,7 +224,7 @@ export default function PermissionProfilePanel() {
                   className="w-[96px]"
                   value={s.access}
                   onChange={(v) => updateNetScope(active.id, i, { access: v })}
-                  options={netAccessOptions}
+                  options={netAccessOptions.map((o) => ({ value: o.value, label: t(o.label as I18nKey) }))}
                 />
                 <Button type="text" size="small" danger icon={<MinusCircleOutlined />} onClick={() => removeNetScope(active.id, i)} />
               </div>

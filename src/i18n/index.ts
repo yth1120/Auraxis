@@ -49,6 +49,52 @@ export function t(key: I18nKey, vars?: Record<string, string | number>): string 
   return translate(useI18nStore.getState().locale, key, vars);
 }
 
+const SLASH_DESC_KEYS: Record<string, I18nKey> = {
+  clear: 'cmd.desc.clear',
+  model: 'cmd.desc.model',
+  agent: 'cmd.desc.agent',
+  goal: 'cmd.desc.goal',
+  plan: 'cmd.desc.plan',
+  review: 'cmd.desc.review',
+  skill: 'cmd.desc.skill',
+  workflow: 'cmd.desc.workflow',
+  memories: 'cmd.desc.memories',
+  feedback: 'cmd.desc.feedback',
+  theme: 'cmd.desc.theme',
+  help: 'cmd.desc.help',
+};
+
+/** Slash command display description key (registry keeps stable ids). */
+export function slashCommandDescKey(name: string): I18nKey {
+  return SLASH_DESC_KEYS[name] ?? 'cmd.desc.help';
+}
+
+const KB_DESC_KEYS: Record<string, I18nKey> = {
+  '打开命令面板': 'kb.openPalette',
+  '切换侧边栏': 'kb.toggleSidebar',
+  '切换右侧面板': 'kb.toggleRightPanel',
+  '聚焦侧边栏': 'kb.focusSidebar',
+  '聚焦主内容区': 'kb.focusMain',
+  '聚焦右侧面板': 'kb.focusRight',
+  '右侧面板：计划': 'kb.rightPlan',
+  '右侧面板：时间线': 'kb.rightTimeline',
+  '右侧面板：审查': 'kb.rightReview',
+  '工作台：变更': 'kb.workbenchChanges',
+  '工作台：预览': 'kb.workbenchPreview',
+  '打开集成终端': 'kb.openTerminal',
+  '清空对话': 'kb.clearChat',
+  '新建对话': 'kb.newChat',
+  '撤销最近操作': 'kb.undo',
+  '打开设置': 'kb.openSettings',
+  '关闭当前标签页': 'kb.closeTab',
+  '停止生成 / 关闭面板': 'kb.escape',
+};
+
+/** Keybinding display description key (registry descriptions stay stable ids). */
+export function keybindingDescKey(description: string): I18nKey {
+  return KB_DESC_KEYS[description] ?? 'kb.openPalette';
+}
+
 /** Reactive translator hook — components re-render on locale change. */
 export function useT() {
   const locale = useI18nStore((s) => s.locale);

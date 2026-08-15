@@ -5,6 +5,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import CodeBlock from './CodeBlock';
+import { t } from '../../i18n';
 
 const LazyMermaidBlock = lazy(() => import('./MermaidBlock'));
 
@@ -113,7 +114,7 @@ const MarkdownBody = memo(function MarkdownBody({
             if (match && isBlock) {
               if (match[1] === 'mermaid') {
                 return (
-                  <Suspense fallback={<div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: 12 }}>加载图表...</div>}>
+                  <Suspense fallback={<div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{t('markdown.loading')}</div>}>
                     <LazyMermaidBlock code={codeStr} />
                   </Suspense>
                 );

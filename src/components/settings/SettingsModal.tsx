@@ -40,7 +40,7 @@ import SchemaPanel from './SchemaPanel';
 import { buildAgentRuntimeFields } from './agentRuntimeSchema';
 import PermissionProfilePanel from './PermissionProfilePanel';
 import { useI18nStore } from '../../i18n';
-import { useT, type I18nKey } from '../../i18n';
+import { useT, keybindingDescKey, type I18nKey } from '../../i18n';
 
 // Heavy sub-panels — lazy-loaded so first open of Settings only pays
 // for the General pane. The other panes fetch their bundle on click.
@@ -216,15 +216,15 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
   const [, setTestResults] = useState<Record<string, { ok: boolean; message: string; models?: string[] } | null>>({});
 
   const handleTestConnection = async () => {
-    if (!deepseekApiKey) { message.warning('请先填写 API Key'); return; }
+    if (!deepseekApiKey) { message.warning(t('settings.needApiKey')); return; }
     setTestingProvider('deepseek');
     setTestResults((prev) => ({ ...prev, deepseek: null }));
     try {
       if (window.electronAPI?.ai) {
         const result = await window.electronAPI.ai.testConnection(deepseekApiKey);
         setTestResults((prev) => ({ ...prev, deepseek: { ok: result.ok, message: result.data?.message || result.error || '', models: result.data?.models } }));
-        if (result.ok) message.success(result.data?.message || '连接成功');
-        else message.error(result.error || '连接失败');
+        if (result.ok) message.success(result.data?.message || t('settings.connectSuccess'));
+        else message.error(result.error || t('settings.connectFailed'));
       } else {
         const resp = await fetch('https://api.deepseek.com/v1/models', {
           headers: { Authorization: `Bearer ${deepseekApiKey}` },
@@ -232,9 +232,9 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
         let r: { ok: boolean; message: string; models?: string[] };
         if (resp.ok) {
           const data = await resp.json();
-          r = { ok: true, message: 'DeepSeek API 连接成功', models: (data.data || []).map((m: any) => m.id).slice(0, 10) };
+          r = { ok: true, message: t('settings.deepseekConnected'), models: (data.data || []).map((m: any) => m.id).slice(0, 10) };
         } else if (resp.status === 401 || resp.status === 403) {
-          r = { ok: false, message: 'API Key 无效或未授权' };
+          r = { ok: false, message: t('settings.apiKeyInvalid') };
         } else {
           r = { ok: false, message: `HTTP ${resp.status}: ${resp.statusText}` };
         }
@@ -243,9 +243,9 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
         else message.error(r.message);
       }
     } catch (err: any) {
-      const errMsg = err.message || '未知错误';
-      setTestResults((prev) => ({ ...prev, deepseek: { ok: false, message: `连接失败: ${errMsg}` } }));
-      message.error(`连接失败: ${errMsg}`);
+      const errMsg = err.message || t('settings.unknownError');
+      setTestResults((prev) => ({ ...prev, deepseek: { ok: false, message: t('settings.connectFailWith', { msg: errMsg }) } }));
+      message.error(t('settings.connectFailWith', { msg: errMsg }));
     } finally {
       setTestingProvider(null);
     }
@@ -284,9 +284,9 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
       );
       if (conflictIdx >= 0) {
         Modal.confirm({
-          title: '快捷键冲突',
-          content: `"${formatBinding(newBinding)}" 已被 "${KEY_BINDINGS[conflictIdx].description}" 使用。是否覆盖？`,
-          okText: '覆盖', cancelText: '取消',
+          title: t('settings.shortcutConflict'),
+          content: t('settings.shortcutConflictBody', { new: formatBinding(newBinding), desc: KEY_BINDINGS[conflictIdx].description }),
+          okText: t('settings.overwrite'), cancelText: t('common.cancel'),
           onOk: () => { setKeybindOverride(recordingIndex, newBinding); setRecordingIndex(null); },
           onCancel: () => setRecordingIndex(null),
         });
@@ -339,10 +339,10 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
             </Button>
             <Button
               onClick={async () => {
-                if (!deepseekApiKey) { message.warning('请先填写 API Key'); return; }
+                if (!deepseekApiKey) { message.warning(t('settings.needApiKey')); return; }
                 const r = await window.electronAPI?.credentials.set('DEEPSEEK_API_KEY', deepseekApiKey);
-                if (r?.ok) { message.success('已保存到本地 .env'); setCredSource('user-env'); }
-                else message.error(r?.error || '保存失败');
+                if (r?.ok) { message.success(t('settings.savedToEnv')); setCredSource('user-env'); }
+                else message.error(r?.error || t('settings.saveFailed'));
               }}
               disabled={!deepseekApiKey}
               className="!border-none !shadow-none !rounded-md"
@@ -352,7 +352,7 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
           </div>
           {credSource && (
             <div className="mt-1 text-2xs text-text-muted">
-              来源：{credSource === 'env' ? '进程环境变量' : credSource === 'user-env' ? '本地 .env' : '项目 .env'}
+              {t('settings.source', { source: credSource === 'env' ? t('settings.sourceEnv') : credSource === 'user-env' ? t('settings.sourceUserEnv') : t('settings.sourceProjectEnv') })}
             </div>
           )}
         </SettingItem>
@@ -367,23 +367,23 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
         </SettingItem>
       </section>
 
-      <SectionTitle>联网搜索</SectionTitle>
+      <SectionTitle>{t('settings.webSearchSection')}</SectionTitle>
       <section className="mb-2">
-        <SettingItem title="搜索服务" description="Agent 与对话模式联网搜索使用的服务商（DuckDuckGo 无需 Key，可作默认）">
+        <SettingItem title={t('settings.searchService')} description={t('settings.searchServiceDesc')}>
           <Select
             value={webSearchProvider}
             onChange={(val) => setWebSearchProvider(val)}
             style={{ width: '100%' }}
             getPopupContainer={(t) => t.parentElement || document.body}
             options={[
-              { value: 'duckduckgo', label: 'DuckDuckGo（默认，无需 Key）' },
+              { value: 'duckduckgo', label: t('settings.duckduckgo') },
               { value: 'exa', label: 'Exa' },
               { value: 'perplexity', label: 'Perplexity' },
-              { value: 'deepseek', label: 'DeepSeek 官方搜索（复用 DeepSeek API Key）' },
+              { value: 'deepseek', label: t('settings.deepseekSearch') },
             ]}
           />
         </SettingItem>
-        <SettingItem title="Exa API Key" description="选择 Exa 时需要（也支持环境变量 EXA_API_KEY）">
+        <SettingItem title={t('settings.exaKey')} description={t('settings.exaKeyDesc')}>
           <Input.Password
             value={exaApiKey}
             onChange={(e) => setExaApiKey(e.target.value)}
@@ -392,7 +392,7 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
             autoComplete="off"
           />
         </SettingItem>
-        <SettingItem title="Perplexity API Key" description="选择 Perplexity 时需要（也支持环境变量 PERPLEXITY_API_KEY）" noBorder>
+        <SettingItem title={t('settings.perplexityKey')} description={t('settings.perplexityKeyDesc')} noBorder>
           <Input.Password
             value={perplexityApiKey}
             onChange={(e) => setPerplexityApiKey(e.target.value)}
@@ -412,7 +412,7 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
             min={0}
             step={0.1}
             precision={2}
-            addonAfter="元"
+            addonAfter={t('settings.currencyUnit')}
             style={{ width: '100%' }}
             placeholder="0"
           />
@@ -424,7 +424,7 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
             min={0}
             step={0.1}
             precision={2}
-            addonAfter="元"
+            addonAfter={t('settings.currencyUnit')}
             style={{ width: '100%' }}
             placeholder="0"
           />
@@ -440,9 +440,9 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
             style={{ width: '100%' }}
             getPopupContainer={(t) => t.parentElement || document.body}
             options={[
-              { value: 'always', label: '始终提醒' },
-              { value: 'background', label: '仅后台时提醒' },
-              { value: 'never', label: '从不提醒' },
+              { value: 'always', label: t('settings.notifyAlways') },
+              { value: 'background', label: t('settings.notifyBackground') },
+              { value: 'never', label: t('settings.notifyNever') },
             ]}
           />
         </SettingItem>
@@ -454,7 +454,7 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
       <SectionTitle>{t('settings.section.danger')}</SectionTitle>
       <section className="mb-2">
         <SettingItem title={t('settings.clearKeys')} description={t('settings.clearKeys.desc')} noBorder>
-          <Button danger size="small" onClick={() => { clearApiKeys(); window.electronAPI?.ai.setApiKey(''); message.success('已清除'); }}>
+          <Button danger size="small" onClick={() => { clearApiKeys(); window.electronAPI?.ai.setApiKey(''); message.success(t('settings.cleared')); }}>
             {t('settings.clear')}
           </Button>
         </SettingItem>
@@ -501,12 +501,12 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
     <>
       <PaneHeader title={t('settings.item.keybindings')} description={t('settings.pane.keybindings.desc')} />
       <div className="flex items-center justify-between mb-1">
-        <span className="text-sm font-semibold text-text-primary">绑定列表</span>
+        <span className="text-sm font-semibold text-text-primary">{t('settings.bindings')}</span>
         <Button size="small" onClick={() => {
           Modal.confirm({
-            title: '恢复默认快捷键',
-            content: '将清除所有自定义快捷键绑定，恢复为默认值。',
-            okText: '确认', cancelText: '取消',
+            title: t('settings.restoreDefaultConfirmTitle'),
+            content: t('settings.restoreDefaultConfirmBody'),
+            okText: t('settings.confirm'), cancelText: t('common.cancel'),
             onOk: () => clearKeybindOverrides(),
           });
         }}>{t('settings.restoreDefault')}</Button>
@@ -518,7 +518,7 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
           const isOverridden = keybindOverrides[i] !== undefined;
           return (
             <div key={i} className="flex items-center justify-between py-3">
-              <span className="text-sm text-text-primary">{def.description}</span>
+              <span className="text-sm text-text-primary">{t(keybindingDescKey(def.description))}</span>
               <Space size={8}>
                 <span className={clsx(
                   "font-mono text-xs text-text-secondary bg-border-dim px-2 py-[2px] rounded-md",
@@ -531,7 +531,7 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
                   type={isRecording ? 'primary' : 'default'}
                   onClick={() => setRecordingIndex(isRecording ? null : i)}
                 >
-                  {isRecording ? '按下新组合键...' : '重新绑定'}
+                  {isRecording ? t('settings.pressNewKey') : t('settings.rebind')}
                 </Button>
               </Space>
             </div>
@@ -550,17 +550,17 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
         {permissionRules.length > 0 && (
           <Button danger size="small" onClick={() => {
             Modal.confirm({
-              title: '清除所有权限规则',
-              content: `确定要删除全部 ${permissionRules.length} 条权限规则？此操作不可撤销。`,
-              okText: '确认清除', cancelText: '取消',
+              title: t('settings.clearRulesTitle'),
+              content: t('settings.clearRulesBody', { n: permissionRules.length }),
+              okText: t('settings.confirmClear'), cancelText: t('common.cancel'),
               okButtonProps: { danger: true },
-              onOk: () => { clearPermissionRules(); message.success('所有权限规则已清除'); },
+              onOk: () => { clearPermissionRules(); message.success(t('settings.rulesCleared')); },
             });
-          }}>清除所有 ({permissionRules.length})</Button>
+          }}>{t('settings.clearAll', { n: permissionRules.length })}</Button>
         )}
       </div>
       {permissionRules.length === 0 ? (
-        <InlineEmpty description="暂无权限规则。规则会在你批准工具调用时自动创建。" compact />
+        <InlineEmpty description={t('settings.noRules')} compact />
       ) : (
         <div>
           {permissionRules.slice().reverse().map((rule) => (
@@ -572,14 +572,14 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
                     "inline-flex items-center px-2 py-[1px] rounded-full text-2xs font-medium leading-[1.6] whitespace-nowrap",
                     rule.scope === 'always' ? "bg-success-soft text-text-secondary" : "bg-border-dim text-text-secondary"
                   )}>
-                    {rule.scope === 'always' ? '始终允许' : rule.scope === 'session' ? '本次会话' : '单次'}
+                    {rule.scope === 'always' ? t('settings.ruleAlways') : rule.scope === 'session' ? t('settings.ruleSession') : t('settings.ruleOnce')}
                   </span>
-                  {rule.action === 'deny' && <span className="inline-flex items-center px-2 py-[1px] rounded-full text-2xs font-medium leading-[1.6] whitespace-nowrap bg-danger-soft text-text-secondary">拒绝</span>}
+                  {rule.action === 'deny' && <span className="inline-flex items-center px-2 py-[1px] rounded-full text-2xs font-medium leading-[1.6] whitespace-nowrap bg-danger-soft text-text-secondary">{t('settings.ruleDeny')}</span>}
                 </div>
-                {rule.matchPattern && <div className="text-xs text-text-muted mt-1 font-mono">匹配: {rule.matchPattern}</div>}
+                {rule.matchPattern && <div className="text-xs text-text-muted mt-1 font-mono">{t('settings.ruleMatch', { pattern: rule.matchPattern })}</div>}
                 <div className="text-2xs text-text-faint mt-1"><ClockCircleOutlined style={{ marginRight: 4 }} />{new Date(rule.createdAt).toLocaleString()}</div>
               </div>
-              <Popconfirm title="确定删除此权限规则？" onConfirm={() => removePermissionRule(rule.id)} okText="删除" cancelText="取消" okButtonProps={{ danger: true, type: 'primary' }}>
+              <Popconfirm title={t('settings.deleteRuleConfirm')} onConfirm={() => removePermissionRule(rule.id)} okText={t('sidebar.delete')} cancelText={t('common.cancel')} okButtonProps={{ danger: true, type: 'primary' }}>
                 <Button type="text" size="small" danger icon={<MinusCircleOutlined />} />
               </Popconfirm>
             </div>
@@ -593,7 +593,7 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
     <>
       <PaneHeader title={t('settings.item.plugins')} description={t('settings.pane.plugins.desc')} />
       <div className="flex items-center justify-between mb-1">
-        <span className="text-sm font-semibold text-text-primary">已安装 {installedPlugins.length} 个</span>
+        <span className="text-sm font-semibold text-text-primary">{t('settings.installedN', { n: installedPlugins.length })}</span>
         <Button size="small" icon={<PlusCircleOutlined />} onClick={() => {
           const input = document.createElement('input');
           input.type = 'file'; input.accept = '.js,.ts';
@@ -601,14 +601,14 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
             const file = (e.target as HTMLInputElement).files?.[0];
             if (!file) return;
             const ok = await pluginManager.installFromPath((file as any).path || file.name);
-            if (ok) message.success(`插件已安装: ${file.name}`);
-            else message.warning('插件安装失败，请检查格式是否正确');
+            if (ok) message.success(t('settings.pluginInstalled', { name: file.name }));
+            else message.warning(t('settings.pluginInstallFailed'));
           };
           input.click();
-        }}>安装插件</Button>
+        }}>{t('settings.installPlugin')}</Button>
       </div>
       {installedPlugins.length === 0 ? (
-        <InlineEmpty description="暂无已安装的插件。可通过 /timestamp、/uuid 体验示例插件。" compact />
+        <InlineEmpty description={t('settings.noPlugins')} compact />
       ) : (
         <div className="max-h-[420px] overflow-y-auto">
           {installedPlugins.map((p) => {
@@ -623,7 +623,7 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
                     <span className={clsx(
                       "inline-flex items-center px-2 py-[1px] rounded-full text-2xs font-medium leading-[1.6] whitespace-nowrap",
                       p.enabled ? "bg-success-soft text-text-secondary" : "bg-danger-soft text-text-secondary"
-                    )}>{p.enabled ? '已启用' : '已禁用'}</span>
+                    )}>{p.enabled ? t('settings.enabled') : t('settings.disabled')}</span>
                   </div>
                   <div className="text-xs text-text-muted mt-1">{p.description}</div>
                   {summary && <div className="text-xs text-text-faint mt-1">{summary}</div>}
@@ -632,22 +632,22 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
                   <Button size="small" onClick={() => {
                     if (!p.enabled) {
                       Modal.confirm({
-                        title: `启用插件 "${p.name}"？`,
-                        content: '启用后插件将立即在渲染进程中生效。请确保已审查插件的权限和代码。',
-                        okText: '确认启用', cancelText: '取消',
+                        title: t('settings.enablePluginTitle', { name: p.name }),
+                        content: t('settings.enablePluginBody'),
+                        okText: t('settings.confirmEnable'), cancelText: t('common.cancel'),
                         onOk: () => enablePlugin(p.id),
                       });
                     } else { disablePlugin(p.id); }
-                  }}>{p.enabled ? '禁用' : '启用'}</Button>
+                  }}>{p.enabled ? t('settings.disable') : t('settings.enable')}</Button>
                   <Button size="small" danger onClick={() => {
                     Modal.confirm({
-                      title: '卸载插件',
-                      content: `确定卸载 "${p.name}"？`,
-                      okText: '卸载', cancelText: '取消',
+                      title: t('settings.uninstallPlugin'),
+                      content: t('settings.uninstallBody', { name: p.name }),
+                      okText: t('settings.uninstall'), cancelText: t('common.cancel'),
                       okButtonProps: { danger: true },
                       onOk: () => pluginManager.uninstall(p.id),
                     });
-                  }}>卸载</Button>
+                  }}>{t('settings.uninstall')}</Button>
                 </Space>
               </div>
             );
@@ -663,7 +663,7 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
       <h2 className="auraxis-wordmark" style={{ fontSize: 30, margin: '0 0 6px' }}>Auraxis</h2>
       <p className="text-text-muted text-sm font-mono my-1 mb-6">Version {appVersion}</p>
       <p className="text-text-secondary text-sm leading-[1.8] mx-auto mb-6 max-w-[400px]">
-        基于 DeepSeek V4 的桌面 AI Agent workspace。1M 上下文窗口、中文原生优化。
+        {t('settings.aboutBody')}
       </p>
       <div className="flex justify-center flex-wrap gap-2">
         {['Electron', 'React 18', 'TypeScript', 'Ant Design 5', 'Zustand', 'DeepSeek SDK'].map((t) => (
@@ -697,15 +697,15 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
       case 'memory': return <Suspense fallback={paneFallback}><MemoryPanel /></Suspense>;
       case 'actions': return (
         <>
-      <PaneHeader title={t('settings.item.actions')} description="项目 .auraxis/actions.json 中定义的快捷命令。" />
+      <PaneHeader title={t('settings.item.actions')} description={t('settings.actionsDesc')} />
           <div className="flex items-center justify-between mb-1">
-            <span className="text-sm font-semibold text-text-primary">项目命令</span>
+            <span className="text-sm font-semibold text-text-primary">{t('settings.projectCommands')}</span>
             {projectPath && <span className="text-2xs text-text-faint font-mono truncate max-w-[220px]">{projectPath}/.auraxis/actions.json</span>}
           </div>
           {!projectPath ? (
-            <InlineEmpty description="请先在设置中配置项目路径" compact />
+            <InlineEmpty description={t('settings.actionsNeedProject')} compact />
           ) : projectActions.length === 0 ? (
-            <InlineEmpty description="未找到 Actions。在项目 .auraxis/actions.json 中配置后会自动读取。" compact />
+            <InlineEmpty description={t('settings.actionsNotFound')} compact />
           ) : (
             <ul className="list-none m-0 p-0 flex flex-col gap-2">
               {projectActions.map((a) => (
@@ -718,24 +718,24 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
             </ul>
           )}
           <div className="mt-3 text-xs text-text-muted leading-[1.6]">
-            配置格式：<code>{'{"actions":[{"name":"Run","command":"npm start"}]}'}</code>，支持 platform 字段按系统区分。
+            {t('settings.actionsFormat', { code: '{"actions":[{"name":"Run","command":"npm start"}]}' })}
           </div>
         </>
       );
       case 'workflows': return (
         <>
-      <PaneHeader title={t('settings.item.workflows')} description="项目 .auraxis/workflows/ 下定义的脚本化工作流。" />
+      <PaneHeader title={t('settings.item.workflows')} description={t('settings.workflowsDesc')} />
           {!projectPath ? (
-            <InlineEmpty description="请先在设置中配置项目路径" compact />
+            <InlineEmpty description={t('settings.actionsNeedProject')} compact />
           ) : workflows.length === 0 ? (
-            <InlineEmpty description="未找到工作流。在项目 .auraxis/workflows/ 下添加 JSON 或 Markdown 定义。" compact />
+            <InlineEmpty description={t('settings.workflowsNotFound')} compact />
           ) : (
             <ul className="list-none m-0 p-0 flex flex-col gap-2">
               {workflows.map((wf) => (
                 <li key={wf.id} className="px-4 py-3 rounded-xl bg-[var(--color-bg-secondary)]">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-text-primary">{wf.name}</span>
-                    <span className="text-2xs text-text-muted">{wf.steps.length} 步</span>
+                    <span className="text-2xs text-text-muted">{t('settings.stepsN', { n: wf.steps.length })}</span>
                     <span className="inline-flex items-center h-[18px] px-1.5 rounded text-2xs font-medium leading-none bg-border-dim text-text-muted">
                       {wf.source === 'markdown' ? 'MD' : 'JSON'}
                     </span>
@@ -745,13 +745,13 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
                       type="primary"
                       onClick={async () => {
                         const r = await window.electronAPI?.workflow?.run({ workflowId: wf.id, projectRoot: projectPath! });
-                        if (r?.ok) message.success(`工作流已启动：${r.data?.runId}`);
-                        else message.error(r?.error || '启动失败');
+                        if (r?.ok) message.success(t('settings.workflowStarted', { id: r.data?.runId ?? '' }));
+                        else message.error(r?.error || t('settings.startFailed'));
                         const runs = await window.electronAPI?.workflow?.runs();
                         setWorkflowRuns(runs?.ok && runs.data ? runs.data : []);
                       }}
                     >
-                      运行
+                      {t('settings.run')}
                     </Button>
                   </div>
                   {wf.description && <div className="mt-1 text-xs text-text-muted">{wf.description}</div>}
@@ -762,7 +762,7 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
           )}
           {workflowRuns.length > 0 && (
             <div className="mt-4">
-              <div className="text-sm font-semibold text-text-primary mb-1">最近运行</div>
+              <div className="text-sm font-semibold text-text-primary mb-1">{t('settings.recentRuns')}</div>
               <ul className="list-none m-0 p-0 flex flex-col gap-1">
                 {workflowRuns.slice(0, 10).map((run) => (
                   <li key={run.runId} className="flex items-center gap-2 text-xs text-text-secondary px-2 py-2 rounded-md bg-[var(--color-bg-secondary)]">
@@ -775,20 +775,20 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
             </div>
           )}
           <div className="mt-3 text-xs text-text-muted leading-[1.6]">
-            定义格式：JSON（steps 数组：id/name/agentType/prompt/dependsOn，按依赖拓扑执行，结果以 {'{{stepId.result}}'} 注入后续步骤），或 Markdown 模板（frontmatter 写 name/description，每个 `##` 小节为一个顺序步骤）。
+            {t('settings.workflowFormat', { ref: '{{stepId.result}}' })}
           </div>
         </>
       );
       case 'connections': return (
         <>
-      <PaneHeader title={t('settings.item.connections')} description="SSH 远程主机（仅密钥 / SSH Agent 认证，密码永不落盘）。" />
+      <PaneHeader title={t('settings.item.connections')} description={t('settings.connectionsDesc')} />
           <div className="flex flex-col gap-2 mb-3">
             <div className="grid grid-cols-2 gap-2">
-              <Input placeholder="名称" value={sshForm.name} onChange={(e) => setSshForm({ ...sshForm, name: e.target.value })} />
-              <Input placeholder="主机地址" value={sshForm.host} onChange={(e) => setSshForm({ ...sshForm, host: e.target.value })} />
-              <Input placeholder="端口" value={sshForm.port} onChange={(e) => setSshForm({ ...sshForm, port: e.target.value })} />
-              <Input placeholder="用户名" value={sshForm.username} onChange={(e) => setSshForm({ ...sshForm, username: e.target.value })} />
-              <Input placeholder="密钥路径（可选）" value={sshForm.keyPath} onChange={(e) => setSshForm({ ...sshForm, keyPath: e.target.value })} className="col-span-2" />
+              <Input placeholder={t('settings.sshName')} value={sshForm.name} onChange={(e) => setSshForm({ ...sshForm, name: e.target.value })} />
+              <Input placeholder={t('settings.sshHost')} value={sshForm.host} onChange={(e) => setSshForm({ ...sshForm, host: e.target.value })} />
+              <Input placeholder={t('settings.sshPort')} value={sshForm.port} onChange={(e) => setSshForm({ ...sshForm, port: e.target.value })} />
+              <Input placeholder={t('settings.sshUser')} value={sshForm.username} onChange={(e) => setSshForm({ ...sshForm, username: e.target.value })} />
+              <Input placeholder={t('settings.sshKeyPath')} value={sshForm.keyPath} onChange={(e) => setSshForm({ ...sshForm, keyPath: e.target.value })} className="col-span-2" />
             </div>
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-1.5 text-xs text-text-muted cursor-pointer">
@@ -799,18 +799,18 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
                 size="small"
                 loading={sshTesting}
                 onClick={async () => {
-                  if (!sshForm.host.trim()) { message.warning('请填写主机地址'); return; }
+                  if (!sshForm.host.trim()) { message.warning(t('settings.needHost')); return; }
                   setSshTesting(true);
                   const r = await window.electronAPI?.ssh.test({
                     host: sshForm.host.trim(), port: Number(sshForm.port) || 22,
                     username: sshForm.username || 'root', keyPath: sshForm.keyPath || undefined, useAgent: sshForm.useAgent,
                   });
                   setSshTesting(false);
-                  if (r?.ok) message.success(`连接成功：${r.data?.output || ''}`);
-                  else message.error(r?.error || '连接失败');
+                  if (r?.ok) message.success(t('settings.connected', { out: r.data?.output || '' }));
+                  else message.error(r?.error || t('settings.connectFailed'));
                 }}
               >
-                测试连接
+                {t('settings.testConnection')}
               </Button>
               <Button
                 size="small"
@@ -821,16 +821,16 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
                     port: Number(sshForm.port) || 22, username: sshForm.username || 'root',
                     keyPath: sshForm.keyPath || undefined, useAgent: sshForm.useAgent,
                   });
-                  if (r?.ok) { message.success('已保存'); setSshConnections(r.data || []); setSshForm({ name: '', host: '', port: '22', username: 'root', keyPath: '', useAgent: false }); }
-                  else message.error(r?.error || '保存失败');
+                  if (r?.ok) { message.success(t('settings.saved')); setSshConnections(r.data || []); setSshForm({ name: '', host: '', port: '22', username: 'root', keyPath: '', useAgent: false }); }
+                  else message.error(r?.error || t('settings.saveFailed'));
                 }}
               >
-                保存连接
+                {t('settings.saveConnection')}
               </Button>
             </div>
           </div>
           {sshConnections.length === 0 ? (
-            <InlineEmpty description="暂无 SSH 连接" compact />
+            <InlineEmpty description={t('settings.noSsh')} compact />
           ) : (
             <ul className="list-none m-0 p-0 flex flex-col gap-2">
               {sshConnections.map((c) => (
@@ -840,29 +840,29 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
                   <span className="ml-auto flex items-center gap-1">
                     <Button size="small" onClick={async () => {
                       const r = await window.electronAPI?.ssh.test(c);
-                      if (r?.ok) message.success(`连接成功：${r.data?.output || ''}`);
-                      else message.error(r?.error || '连接失败');
+                      if (r?.ok) message.success(t('settings.connected', { out: r.data?.output || '' }));
+                      else message.error(r?.error || t('settings.connectFailed'));
         }}>{t('settings.test')}</Button>
                     <Button size="small" danger onClick={async () => {
                       const r = await window.electronAPI?.ssh.remove(c.id);
-                      if (r?.ok) { message.success('已删除'); setSshConnections(r.data || []); }
-                      else message.error(r?.error || '删除失败');
-                    }}>删除</Button>
+                      if (r?.ok) { message.success(t('settings.deleted')); setSshConnections(r.data || []); }
+                      else message.error(r?.error || t('settings.deleteFailed'));
+                    }}>{t('sidebar.delete')}</Button>
                   </span>
                 </li>
               ))}
             </ul>
           )}
           <div className="mt-3 text-xs text-text-muted leading-[1.6]">
-            仅支持密钥文件或 SSH Agent 认证，密码永不落盘。远程 Agent 执行将在后续接入。
+            {t('settings.sshHint')}
           </div>
         </>
       );
       case 'rules': return (
         <>
-      <PaneHeader title={t('settings.item.rules')} description="用户规则目录或项目 .auraxis/rules/ 下的前缀规则。" />
+      <PaneHeader title={t('settings.item.rules')} description={t('settings.rulesDesc')} />
           {rulesList.length === 0 ? (
-            <InlineEmpty description="暂无规则。规则文件位于用户 rules 目录或项目 .auraxis/rules/ 下。" compact />
+            <InlineEmpty description={t('settings.noRulesFiles')} compact />
           ) : (
             <ul className="list-none m-0 p-0 flex flex-col gap-2">
               {rulesList.map((r, i) => (
@@ -870,7 +870,7 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-text-primary truncate">{r.pattern.join(' ')}</span>
                     <span className={`text-2xs px-1.5 rounded-full ${r.decision === 'allow' ? 'bg-[var(--color-success-soft)]' : r.decision === 'deny' ? 'bg-[var(--color-danger-soft)]' : 'bg-[var(--color-primary-soft)]'} text-text-secondary`}>
-                      {r.decision === 'allow' ? '放行' : r.decision === 'deny' ? '拒绝' : '询问'}
+                      {r.decision === 'allow' ? t('settings.ruleAllow') : r.decision === 'deny' ? t('settings.ruleDeny') : t('settings.ruleAsk')}
                     </span>
                   </div>
                   {r.justification && <div className="mt-1 text-xs text-text-muted">{r.justification}</div>}
@@ -902,7 +902,7 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
       maskTransitionName=""
     >
       <div className="flex h-[640px]">
-        <nav className="w-[184px] shrink-0 px-3 py-5 bg-bg-secondary overflow-y-auto" aria-label="设置导航">
+        <nav className="w-[184px] shrink-0 px-3 py-5 bg-bg-secondary overflow-y-auto" aria-label={t('settings.navAria')}>
           {NAV_GROUPS.map((g) => (
       <div key={g.labelKey} className="mb-5 last:mb-0">
               <div className="px-[10px] pb-1.5 text-2xs font-semibold text-text-muted tracking-[0.06em]">{t(g.labelKey)}</div>

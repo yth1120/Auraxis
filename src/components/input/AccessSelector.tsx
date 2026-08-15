@@ -126,7 +126,7 @@ export default function AccessSelector({
       <button
         type="button"
         className="flex items-center gap-1 h-8 px-2.5 min-w-0 border-none bg-transparent text-xs text-text-secondary rounded-full cursor-pointer transition-[background,color] duration-fast hover:bg-[var(--color-hover)] hover:text-text-primary"
-        aria-label="访问权限"
+        aria-label={t('access.title')}
         title={`${t('access.title')}：${label(accessMode)}`}
       >
         {ACCESS_ICON[accessMode]}

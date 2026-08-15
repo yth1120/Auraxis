@@ -5,6 +5,7 @@ import ErrorBoundary from './components/layout/ErrorBoundary';
 import CommandPalette from './components/layout/CommandPalette';
 import UndoToast from './components/common/UndoToast';
 import AskUserHost from './components/common/AskUserHost';
+import { t } from './i18n';
 
 const SettingsModal = lazy(() => import('./components/settings/SettingsModal'));
 import { useChatStore, initPlanListener, flushChatLogNow } from './stores/useChatStore';
@@ -69,7 +70,7 @@ export default function App() {
   useEffect(() => {
     const { tabs, addTab } = useAppStore.getState();
     if (tabs.length === 0) {
-      addTab({ type: 'chat', label: '对话', metadata: {} });
+      addTab({ type: 'chat', label: t('nav.chat'), metadata: {} });
     }
   }, []);
 
@@ -79,8 +80,8 @@ export default function App() {
   // no idea why something stopped working.
   useEffect(() => {
     const unsub = window.electronAPI?.app?.onError?.((err) => {
-      const text = err?.message || '后台发生未知错误';
-      message.error({ content: `[主进程错误] ${text}`, duration: 6 });
+      const text = err?.message || t('app.mainError');
+      message.error({ content: t('app.mainErrorPrefix', { text }), duration: 6 });
       console.error('[main-process error]', err?.stack || err?.message);
     });
     return () => { unsub?.(); };
@@ -112,10 +113,10 @@ export default function App() {
         const { currentAgentId, agents } = useAgentStore.getState();
         const onScreen = currentAgentId === agentId && useAppStore.getState().sidebarMode === 'code';
         if (!onScreen) {
-          const agentName = agents.find((a) => a.id === agentId)?.name || '任务';
+          const agentName = agents.find((a) => a.id === agentId)?.name || t('app.task');
           notification.info({
             key: request.requestId,
-            message: `「${agentName}」等待权限审批`,
+            message: t('app.permissionPending', { name: agentName }),
             description: request.message,
             placement: 'bottomRight',
             duration: 0,
@@ -170,11 +171,11 @@ export default function App() {
       if (shouldNotify && prev !== agent.status && (agent.status === 'completed' || agent.status === 'error')) {
         try {
           const n = new Notification(
-            agent.status === 'completed' ? 'Agent 任务完成' : 'Agent 执行出错',
+            agent.status === 'completed' ? t('app.agentDone') : t('app.agentError'),
             {
               body: agent.status === 'completed'
-                ? `${agent.name} 已完成所有任务`
-                : `${agent.name}: ${agent.error || '未知错误'}`,
+                ? t('app.agentCompletedMsg', { name: agent.name })
+                : t('app.agentErrorMsg', { name: agent.name, error: agent.error || t('app.unknownError') }),
               silent: false,
             },
           );
@@ -276,10 +277,10 @@ export default function App() {
           const state = useChatStore.getState();
           if (state.messages.length === 0) return;
           Modal.confirm({
-            title: '清空对话',
-            content: '当前对话记录将被清除，此操作不可撤销。',
-            okText: '确认清空',
-            cancelText: '取消',
+            title: t('app.clearChatTitle'),
+            content: t('app.clearChatBody'),
+            okText: t('app.confirmClear'),
+            cancelText: t('common.cancel'),
             okButtonProps: { danger: true },
             onOk: () => state.clearMessages(),
           });

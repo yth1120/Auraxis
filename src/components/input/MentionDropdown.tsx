@@ -65,8 +65,8 @@ export default function MentionDropdown({
               <ChatIcon size={12} />
             </span>
             <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-              <strong>{s.title || '未命名会话'}</strong>
-              <span style={{ opacity: 0.5, marginLeft: 6, fontSize: 11 }}>会话</span>
+              <strong>{s.title || t('mention.untitled')}</strong>
+              <span style={{ opacity: 0.5, marginLeft: 6, fontSize: 11 }}>{t('mention.session')}</span>
             </span>
           </div>
         ))}

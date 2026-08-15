@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Input, InputNumber, Select, Switch, message } from 'antd';
 import SettingItem from './SettingItem';
+import { t as i18nT, useT } from '../../i18n';
 
 export interface SchemaField {
   key: string;
@@ -27,6 +28,7 @@ interface SchemaPanelProps {
  * new setting is one schema entry instead of hand-written JSX.
  */
 export default function SchemaPanel({ title, description, fields }: SchemaPanelProps) {
+  const tPanel = useT();
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [savedKeys, setSavedKeys] = useState<Record<string, boolean>>({});
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -49,7 +51,7 @@ export default function SchemaPanel({ title, description, fields }: SchemaPanelP
       ?.set(key, value)
       .then((r) => {
         if (!r?.ok) {
-          message.error(r?.error || `保存「${key}」失败`);
+          message.error(r?.error || i18nT('schema.saveFailed', { key }));
           return;
         }
         setSavedKeys((s) => ({ ...s, [key]: true }));
@@ -59,7 +61,7 @@ export default function SchemaPanel({ title, description, fields }: SchemaPanelP
         }, 1_400);
         timers.current[key] = t;
       })
-      .catch(() => message.error(`保存「${key}」失败`));
+      .catch(() => message.error(i18nT('schema.saveFailed', { key })));
   }, []);
 
   const renderControl = (f: SchemaField) => {
@@ -112,7 +114,7 @@ export default function SchemaPanel({ title, description, fields }: SchemaPanelP
               <span
                 className={`text-2xs text-text-muted whitespace-nowrap transition-opacity duration-200 ${savedKeys[f.key] ? 'opacity-100' : 'opacity-0'}`}
               >
-                已保存
+                {tPanel('schema.saved')}
               </span>
               {renderControl(f)}
             </div>

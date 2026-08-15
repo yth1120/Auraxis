@@ -628,13 +628,13 @@ export default function TimelinePanel() {
       '',
       agent.description ? `${agent.description}` : '',
       '',
-      `- 状态：${agent.status}`,
-      `- 轮次：${agent.iteration ?? 0}`,
-      `- 工具调用：${agent.toolCallCount ?? 0}`,
+      tPanel('timeline.exportStatus', { status: agent.status }),
+      tPanel('timeline.exportRound', { n: agent.iteration ?? 0 }),
+      tPanel('timeline.exportToolCalls', { n: agent.toolCallCount ?? 0 }),
       '',
     ];
     for (const turn of turns) {
-      lines.push(`## 第 ${turn.iteration} 轮${turnStats(turn.end) ? ` · ${turnStats(turn.end)}` : ''}`, '');
+      lines.push(`${tPanel('timeline.exportTurn', { n: turn.iteration })}${turnStats(turn.end) ? ` · ${turnStats(turn.end)}` : ''}`, '');
       for (const entry of turn.entries) {
         if (entry.type !== 'tool_start' && entry.type !== 'tool_end' && entry.type !== 'tool_error') {
           if (entry.type === 'text' && entry.text) lines.push(`> ${entry.text.replace(/\n/g, ' ').slice(0, 120)}`);
@@ -675,7 +675,7 @@ export default function TimelinePanel() {
   if (agentErrorsOnly && !hasAnyError) {
     return (
       <div className="h-full flex items-center justify-center px-6">
-        <p className="text-xs text-text-muted text-center leading-[1.6]">没有失败事件</p>
+        <p className="text-xs text-text-muted text-center leading-[1.6]">{tPanel('timeline.noFailures')}</p>
       </div>
     );
   }
@@ -685,7 +685,7 @@ export default function TimelinePanel() {
       <div className={clsx('min-h-0 flex flex-col', selectedEntry ? 'flex-1 min-w-0' : 'w-full')}>
         <div className="px-2 pt-1.5 pb-2 border-b border-border-dim shrink-0 flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-text-muted shrink-0">轨迹</span>
+            <span className="text-xs font-semibold text-text-muted shrink-0">{tPanel('tl.track')}</span>
             <div className="relative flex items-center flex-1 min-w-0 max-w-[260px]">
               <MagnifyingGlass size={12} className="absolute left-2 text-text-faint pointer-events-none" />
               <input
@@ -727,12 +727,12 @@ export default function TimelinePanel() {
                   if (turns.length > 0) scrollToRow(`turn-${turns[turns.length - 1].iteration}`);
                 }}
               >
-                定位当前
+                {tPanel('tl.locateCurrent')}
               </button>
             </div>
           </div>
           <div className="flex items-center gap-1 flex-wrap">
-            {([['all', '全部'], ['running', '运行中'], ['failed', '失败'], ['done', '完成']] as const).map(([key, label]) => (
+            {([['all', tPanel('tl.filterAll')], ['running', tPanel('tl.filterRunning')], ['failed', tPanel('tl.filterFailed')], ['done', tPanel('tl.filterDone')]] as const).map(([key, label]) => (
               <button
                 key={key}
                 type="button"
@@ -750,7 +750,7 @@ export default function TimelinePanel() {
               value={toolFilter ?? ''}
               onChange={(e) => setToolFilter(e.target.value || null)}
             >
-              <option value="">全部工具</option>
+              <option value="">{tPanel('tl.allTools')}</option>
               {toolNames.map((name) => (
                 <option key={name} value={name}>{name}</option>
               ))}
@@ -759,10 +759,10 @@ export default function TimelinePanel() {
               trigger={['click']}
               menu={{
                 items: [
-                  { key: 'json', label: '导出 JSON', onClick: exportTrajectory },
-                  { key: 'md', label: '导出 Markdown', onClick: exportTrajectoryMarkdown },
+                  { key: 'json', label: tPanel('tl.exportJson'), onClick: exportTrajectory },
+                  { key: 'md', label: tPanel('tl.exportMd'), onClick: exportTrajectoryMarkdown },
                   { type: 'divider' as const },
-                  { key: 'raw', label: '原始日志', onClick: () => useAppStore.getState().requestAgentRawLog() },
+                  { key: 'raw', label: tPanel('tl.rawLog'), onClick: () => useAppStore.getState().requestAgentRawLog() },
                 ],
               }}
             >
@@ -770,7 +770,7 @@ export default function TimelinePanel() {
                 type="button"
                 className="h-6 px-2 rounded-md text-xs font-medium text-text-muted border-none bg-transparent cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-secondary"
               >
-                更多
+                {tPanel('tl.more')}
               </button>
             </Dropdown>
           </div>
@@ -781,9 +781,9 @@ export default function TimelinePanel() {
           <thead>
             <tr className="sticky top-0 z-10 bg-[var(--color-bg-elevated)]">
               <th className="w-8 pl-5 h-8 text-left font-medium text-text-muted">#</th>
-              <th className="w-20 px-1 h-8 text-left font-medium text-text-muted">类型</th>
-              <th className="px-2 h-8 text-left font-medium text-text-muted">内容</th>
-              <th className="w-[71px] pr-2 h-8 text-right font-medium text-text-muted">耗时</th>
+              <th className="w-20 px-1 h-8 text-left font-medium text-text-muted">{tPanel('tl.colType')}</th>
+              <th className="px-2 h-8 text-left font-medium text-text-muted">{tPanel('tl.colContent')}</th>
+              <th className="w-[71px] pr-2 h-8 text-right font-medium text-text-muted">{tPanel('tl.colDuration')}</th>
             </tr>
           </thead>
           <tbody>
@@ -795,7 +795,7 @@ export default function TimelinePanel() {
             {flatRows.rows.length === 0 && (
               <tr style={{ height: ROW_H }}>
                 <td colSpan={4} className="px-2 py-1.5 text-xs text-text-faint text-center">
-                  没有匹配的事件
+                  {tPanel('tl.noMatchingEvents')}
                 </td>
               </tr>
             )}
@@ -884,11 +884,11 @@ export default function TimelinePanel() {
         ) : (
           <div className="px-3 py-2 min-h-full">
             {timelineRows.length === 0 ? (
-              <p className="text-xs text-text-faint text-center py-8">没有匹配的事件</p>
+              <p className="text-xs text-text-faint text-center py-8">{tPanel('tl.noMatchingEvents')}</p>
             ) : (
               <>
                 <div className="flex items-center justify-between text-2xs text-text-faint mb-2 px-14">
-                  <span>块宽 ∝ 实际耗时</span>
+                  <span>{tPanel('tl.blockWidthHint')}</span>
                 </div>
                 {timelineRows.map(({ turn, items, total }) => (
                   <div key={turn.iteration} className="flex items-center gap-2 py-[3px]">
@@ -938,7 +938,7 @@ export default function TimelinePanel() {
               type="button"
               className="flex items-center justify-center w-6 h-6 rounded-md text-text-muted border-none bg-transparent cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
               onClick={() => setSelectedKey(null)}
-              aria-label="关闭详情"
+              aria-label={tPanel('tl.closeDetail')}
             >
               <X size={13} />
             </button>
@@ -954,7 +954,7 @@ export default function TimelinePanel() {
                 )}
                 onClick={() => setDetailTab(tab)}
               >
-                {tab === 'overview' ? '概览' : tab === 'input' ? '输入' : tab === 'output' ? '输出' : '耗时'}
+                {tab === 'overview' ? tPanel('tl.detailOverview') : tab === 'input' ? tPanel('tl.detailInput') : tab === 'output' ? tPanel('tl.detailOutput') : tPanel('tl.detailTiming')}
               </button>
             ))}
           </div>
@@ -962,20 +962,20 @@ export default function TimelinePanel() {
             {detailTab === 'overview' && (
               <div className="flex flex-col gap-2 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-text-muted">状态</span>
+                  <span className="text-text-muted">{tPanel('tl.status')}</span>
                   <span className={clsx(
                     'font-medium',
                     selectedEntry.type === 'tool_error' ? 'text-danger' : selectedEntry.type === 'tool_start' ? 'text-primary' : 'text-success',
                   )}>
-                    {selectedEntry.type === 'tool_error' ? '失败' : selectedEntry.type === 'tool_start' ? '运行中' : '完成'}
+                    {selectedEntry.type === 'tool_error' ? tPanel('tl.statusFailed') : selectedEntry.type === 'tool_start' ? tPanel('tl.statusRunning') : tPanel('tl.statusDone')}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-text-muted">开始</span>
+                  <span className="text-text-muted">{tPanel('tl.start')}</span>
                   <span className="text-text-secondary tabular-nums">{fmtTime(selectedEntry.timestamp)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-text-muted">耗时</span>
+                  <span className="text-text-muted">{tPanel('tl.detailTiming')}</span>
                   <span className="text-text-secondary tabular-nums">{fmtDuration(selectedEntry.durationMs)}</span>
                 </div>
                 {selectedEntry.error && (
@@ -994,29 +994,29 @@ export default function TimelinePanel() {
             {detailTab === 'timing' && (
               <div className="flex flex-col gap-2 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-text-muted">开始</span>
+                  <span className="text-text-muted">{tPanel('tl.start')}</span>
                   <span className="text-text-secondary tabular-nums">{fmtTime(selectedEntry.timestamp)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-text-muted">结束（估算）</span>
+                  <span className="text-text-muted">{tPanel('tl.endEstimated')}</span>
                   <span className="text-text-secondary tabular-nums">{fmtTime(selectedEntry.timestamp + (selectedEntry.durationMs ?? 0))}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-text-muted">耗时</span>
+                  <span className="text-text-muted">{tPanel('tl.detailTiming')}</span>
                   <span className="text-text-secondary tabular-nums">{fmtDuration(selectedEntry.durationMs)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-text-muted">状态</span>
+                  <span className="text-text-muted">{tPanel('tl.status')}</span>
                   <span className={clsx(
                     'font-medium',
                     selectedEntry.type === 'tool_error' ? 'text-danger' : selectedEntry.type === 'tool_start' ? 'text-primary' : 'text-success',
                   )}>
-                    {selectedEntry.type === 'tool_error' ? '失败' : selectedEntry.type === 'tool_start' ? '运行中' : '完成'}
+                    {selectedEntry.type === 'tool_error' ? tPanel('tl.statusFailed') : selectedEntry.type === 'tool_start' ? tPanel('tl.statusRunning') : tPanel('tl.statusDone')}
                   </span>
                 </div>
                 {selectedEntry.stepGroupId && (
                   <div className="flex items-center justify-between">
-                    <span className="text-text-muted">分组</span>
+                    <span className="text-text-muted">{tPanel('tl.group')}</span>
                     <span className="text-text-secondary font-mono text-xs">{selectedEntry.stepGroupId.slice(0, 12)}</span>
                   </div>
                 )}

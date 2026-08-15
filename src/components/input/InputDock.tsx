@@ -153,10 +153,10 @@ function QueueRow({
           onBlur={onSaveEdit}
           className="!text-xs"
         />
-        <button type="button" className="ax-icon-button !w-6 !h-6 !text-xs" onClick={onSaveEdit} aria-label="保存排队消息">
+        <button type="button" className="ax-icon-button !w-6 !h-6 !text-xs" onClick={onSaveEdit} aria-label={t('dock.saveQueue')} title={t('dock.saveQueue')}>
           <CheckIcon />
         </button>
-        <button type="button" className="ax-icon-button !w-6 !h-6 !text-xs" onClick={onCancelEdit} aria-label="取消编辑">
+        <button type="button" className="ax-icon-button !w-6 !h-6 !text-xs" onClick={onCancelEdit} aria-label={t('dock.cancelEdit')} title={t('dock.cancelEdit')}>
           <X />
         </button>
       </div>
@@ -169,13 +169,13 @@ function QueueRow({
         {item.text}
       </span>
       <span className="shrink-0 flex items-center gap-0.5">
-        <TooltipButton label="编辑" onClick={onStartEdit}>
+        <TooltipButton label={t('dock.edit')} onClick={onStartEdit}>
           <PencilSimple />
         </TooltipButton>
-        <TooltipButton label="立即发送（打断当前任务）" onClick={onSendNow}>
+        <TooltipButton label={t('dock.sendNow')} onClick={onSendNow}>
           <ArrowRight />
         </TooltipButton>
-        <TooltipButton label="删除" onClick={onDelete}>
+        <TooltipButton label={t('dock.delete')} onClick={onDelete}>
           <X />
         </TooltipButton>
       </span>

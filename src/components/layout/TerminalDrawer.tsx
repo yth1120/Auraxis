@@ -45,7 +45,7 @@ export default function TerminalDrawer({
       style={{ height }}
     >
       <div
-        className="group h-5 shrink-0 flex items-center justify-center cursor-row-resize select-none"
+        className="group h-4 shrink-0 flex items-center justify-center cursor-row-resize select-none"
         onPointerDown={onPointerDown}
         title={t('terminal.dragHint')}
         aria-label={t('terminal.dragHint')}

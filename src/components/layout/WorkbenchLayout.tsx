@@ -34,7 +34,7 @@ import { useNotificationStore } from '../../stores/useNotificationStore';
 import { useTerminalTasksStore } from '../../stores/useTerminalTasksStore';
 import { useSettingsStore } from '../../stores/useSettingsStore';
 import { getContentText } from '../../types/chat';
-import { useT, type I18nKey } from '../../i18n';
+import { t, useI18nStore, useT, type I18nKey } from '../../i18n';
 import { openWorkbenchTab } from '../../utils/workbenchTabs';
 
 import SiderNav from './SiderNav';
@@ -54,11 +54,11 @@ const { Header } = Layout;
 
 function relativeSearchTime(ts: number): string {
   const diff = Date.now() - ts;
-  if (diff < 60_000) return '刚刚';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}分钟前`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}小时前`;
+  if (diff < 60_000) return t('time.justNow');
+  if (diff < 3_600_000) return t('time.minutesAgo', { n: Math.floor(diff / 60_000) });
+  if (diff < 86_400_000) return t('time.hoursAgo', { n: Math.floor(diff / 3_600_000) });
   const d = new Date(ts);
-  return `${d.getMonth() + 1}月${d.getDate()}日`;
+  return new Intl.DateTimeFormat(useI18nStore.getState().locale === 'en-US' ? 'en-US' : 'zh-CN', { month: 'numeric', day: 'numeric' }).format(d);
 }
 
 const PANEL_LABELS: Record<string, I18nKey> = {
@@ -177,7 +177,7 @@ export default function WorkbenchLayout() {
   const fileMenuItems: MenuProps['items'] = [
     {
       key: 'new-chat',
-      label: '新建对话',
+      label: t('menu.newChat'),
       onClick: () => {
         const appState = useAppStore.getState();
         if (appState.sidebarMode === 'code') {
@@ -193,13 +193,13 @@ export default function WorkbenchLayout() {
     },
     {
       key: 'clear-chat',
-      label: '清空对话',
+      label: t('menu.clearChat'),
       onClick: () => useChatStore.getState().clearMessages(),
     },
     { type: 'divider' },
     {
       key: 'settings',
-      label: '设置',
+      label: t('menu.settings'),
       onClick: () => {
         useAppStore.getState().setSettingsInitialKey('general');
         useAppStore.getState().setShowSettings(true);
@@ -210,7 +210,7 @@ export default function WorkbenchLayout() {
   const editMenuItems: MenuProps['items'] = [
     {
       key: 'undo',
-      label: '撤销',
+      label: t('menu.undo'),
       onClick: () => {
         const { undoLast, undos } = useUndoStore.getState();
         if (undos.length > 0) undoLast();
@@ -221,18 +221,18 @@ export default function WorkbenchLayout() {
   const viewMenuItems: MenuProps['items'] = [
     {
       key: 'toggle-sidebar',
-      label: '切换侧边栏',
+      label: t('menu.toggleSidebar'),
       onClick: () => useAppStore.getState().toggleSidebar(),
     },
     {
       key: 'toggle-right-panel',
-      label: '切换右侧面板',
+      label: t('menu.toggleRightPanel'),
       onClick: () => useAppStore.getState().toggleRightPanel(),
     },
     { type: 'divider' },
     {
       key: 'toggle-theme',
-      label: '切换主题',
+      label: t('menu.toggleTheme'),
       onClick: () => useAppStore.getState().toggleTheme(),
     },
   ];
@@ -240,7 +240,7 @@ export default function WorkbenchLayout() {
   const helpMenuItems: MenuProps['items'] = [
     {
       key: 'about',
-      label: '关于 Auraxis',
+      label: t('menu.about'),
       onClick: () => message.info('Auraxis v2.0.0'),
     },
   ];
@@ -435,7 +435,7 @@ export default function WorkbenchLayout() {
               "ax-header-action text-sm",
               !canGoBack() && "ax-header-action:disabled"
             )}
-            onClick={goBack} disabled={!canGoBack()} title="返回"
+            onClick={goBack} disabled={!canGoBack()} title={t('header.back')}
           >
             <ArrowLeft weight="bold" />
           </button>
@@ -444,7 +444,7 @@ export default function WorkbenchLayout() {
               "ax-header-action text-sm",
               !canGoForward() && "ax-header-action:disabled"
             )}
-            onClick={goForward} disabled={!canGoForward()} title="前进"
+            onClick={goForward} disabled={!canGoForward()} title={t('header.forward')}
           >
             <ArrowRight weight="bold" />
           </button>
@@ -453,22 +453,22 @@ export default function WorkbenchLayout() {
         <div className="ax-header-group shrink-0">
           <Dropdown menu={{ items: fileMenuItems }} trigger={['click']} placement="bottomLeft" overlayClassName="ax-top-menu-popup" transitionName="">
             <button className="ax-header-action !w-auto !px-2 text-sm">
-              文件 <CaretDown className="text-xs" />
+              {t('menu.file')} <CaretDown className="text-xs" />
             </button>
           </Dropdown>
           <Dropdown menu={{ items: editMenuItems }} trigger={['click']} placement="bottomLeft" overlayClassName="ax-top-menu-popup" transitionName="">
             <button className="ax-header-action !w-auto !px-2 text-sm">
-              编辑 <CaretDown className="text-xs" />
+              {t('menu.edit')} <CaretDown className="text-xs" />
             </button>
           </Dropdown>
           <Dropdown menu={{ items: viewMenuItems }} trigger={['click']} placement="bottomLeft" overlayClassName="ax-top-menu-popup" transitionName="">
             <button className="ax-header-action !w-auto !px-2 text-sm">
-              视图 <CaretDown className="text-xs" />
+              {t('menu.view')} <CaretDown className="text-xs" />
             </button>
           </Dropdown>
           <Dropdown menu={{ items: helpMenuItems }} trigger={['click']} placement="bottomLeft" overlayClassName="ax-top-menu-popup" transitionName="">
             <button className="ax-header-action !w-auto !px-2 text-sm">
-              帮助 <CaretDown className="text-xs" />
+              {t('menu.help')} <CaretDown className="text-xs" />
             </button>
           </Dropdown>
         </div>
@@ -556,7 +556,7 @@ export default function WorkbenchLayout() {
           {searchQuery && (
             <button
               type="button"
-              aria-label="清空搜索"
+              aria-label={t('search.clear')}
               className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-5 h-5 rounded-full text-text-muted hover:text-text-primary hover:bg-[var(--color-hover)]"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
@@ -578,10 +578,10 @@ export default function WorkbenchLayout() {
               <div className="flex items-center gap-2 px-3 h-10 border-b border-[var(--color-border-dim)]">
                 <MagnifyingGlass size={14} className="shrink-0 text-text-muted" />
                 <span className="min-w-0 flex-1 truncate text-xs font-medium text-text-secondary">
-                  {searchQuery.trim() ? `搜索 “${searchQuery.trim()}”` : t('search.placeholder')}
+                  {searchQuery.trim() ? t('search.query', { q: searchQuery.trim() }) : t('search.placeholder')}
                 </span>
                 {searchQuery.trim() && (
-                  <span className="shrink-0 text-2xs text-text-faint tabular-nums">{searchResults.length} 条结果</span>
+                  <span className="shrink-0 text-2xs text-text-faint tabular-nums">{t('search.results', { n: searchResults.length })}</span>
                 )}
               </div>
 
@@ -590,23 +590,23 @@ export default function WorkbenchLayout() {
                   <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-[var(--color-bg-inset)] text-text-faint">
                     <MagnifyingGlass size={18} />
                   </span>
-                  <span className="text-sm font-medium text-text-secondary">输入关键词开始搜索</span>
-                  <span className="text-2xs text-text-faint leading-[1.5]">会话、对话与 Agent 记录</span>
+                  <span className="text-sm font-medium text-text-secondary">{t('search.start')}</span>
+                  <span className="text-2xs text-text-faint leading-[1.5]">{t('search.scope')}</span>
                 </div>
               ) : searchResults.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 px-4 py-6 text-center">
                   <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-[var(--color-bg-inset)] text-text-faint">
                     <MagnifyingGlass size={18} />
                   </span>
-                  <span className="text-sm font-medium text-text-secondary">没有匹配结果</span>
-                  <span className="text-2xs text-text-faint leading-[1.5]">换个关键词试试</span>
+                  <span className="text-sm font-medium text-text-secondary">{t('search.noResults')}</span>
+                  <span className="text-2xs text-text-faint leading-[1.5]">{t('search.tryAgain')}</span>
                 </div>
               ) : (
                 <div className="max-h-[340px] overflow-y-auto p-1">
                   {(['session', 'chat', 'agent'] as const).map((group) => {
                     const groupItems = searchResults.filter((r) => r.type === group);
                     if (groupItems.length === 0) return null;
-                    const groupLabel = group === 'session' ? '会话' : group === 'chat' ? '对话' : 'Agent';
+                    const groupLabel = group === 'session' ? t('search.groupSession') : group === 'chat' ? t('search.groupChat') : 'Agent';
                     return (
                       <div key={group}>
                         <div className="flex items-center gap-1.5 px-2.5 pt-2 pb-1">
@@ -654,16 +654,16 @@ export default function WorkbenchLayout() {
               )}
 
               <div className="flex items-center gap-3 px-3 h-8 border-t border-[var(--color-border-dim)] text-2xs text-text-faint">
-                <span>↑↓ 选择</span>
-                <span>Enter 打开</span>
-                <span>Esc 关闭</span>
+                <span>{t('search.upDown')}</span>
+                <span>{t('search.enter')}</span>
+                <span>{t('search.esc')}</span>
               </div>
             </div>
           )}
         </div>
 
           {worktreeActive && (
-            <span className="ax-badge" title={`沙箱: ${worktreeTaskId || 'active'}`}>
+            <span className="ax-badge" title={t('header.sandbox', { id: worktreeTaskId || 'active' })}>
               <Cube weight="bold" />
               Sandbox {worktreeTaskId?.slice(0, 16) || 'Active'}
             </span>
@@ -705,17 +705,17 @@ export default function WorkbenchLayout() {
         <div className="ax-header-group">
           {isElectron && (
             <>
-              <button className="ax-header-action text-sm" onClick={() => window.electronAPI?.minimize()} title="最小化">
+              <button className="ax-header-action text-sm" onClick={() => window.electronAPI?.minimize()} title={t('header.minimize')}>
                 <Minus size={12} weight="bold" />
               </button>
-              <button className="ax-header-action text-sm" onClick={() => window.electronAPI?.maximize()} title={isMaximized ? '还原' : '最大化'}>
+              <button className="ax-header-action text-sm" onClick={() => window.electronAPI?.maximize()} title={isMaximized ? t('header.restore') : t('header.maximize')}>
                 {isMaximized ? (
                   <Copy size={12} />
                 ) : (
                   <Square size={12} />
                 )}
               </button>
-              <button className="ax-header-action text-sm hover:!bg-danger-soft hover:!text-text-secondary" onClick={() => window.electronAPI?.close()} title="关闭">
+              <button className="ax-header-action text-sm hover:!bg-danger-soft hover:!text-text-secondary" onClick={() => window.electronAPI?.close()} title={t('header.close')}>
                 <X size={12} weight="bold" />
               </button>
             </>
@@ -743,7 +743,7 @@ export default function WorkbenchLayout() {
             <div
               role="separator"
               aria-orientation="vertical"
-              aria-label="调整侧边栏宽度"
+              aria-label={t('sidebar.resize')}
               className={clsx('panel-resize-handle panel-resize-handle--sider', isResizingSider && 'is-resizing')}
               onPointerDown={startSiderResize}
               onPointerMove={moveSiderResize}
@@ -781,7 +781,7 @@ export default function WorkbenchLayout() {
                   <div
                     role="separator"
                     aria-orientation="vertical"
-                    aria-label="调整面板宽度"
+                    aria-label={t('panel.resize')}
                     className={clsx('panel-resize-handle panel-resize-handle--right', isResizingRight && 'is-resizing')}
                     onPointerDown={startRightResize}
                     onPointerMove={moveRightResize}
@@ -790,7 +790,7 @@ export default function WorkbenchLayout() {
                     onDoubleClick={() => setRightPanelWidth(360)}
                   />
                   <div className="flex items-center justify-between shrink-0 h-10 px-2 gap-2 border-b border-[var(--color-border-dim)]">
-                    <div className="ax-panel-tabs overflow-x-auto [scrollbar-width:none]" role="tablist" aria-label="工作台面板">
+                    <div className="ax-panel-tabs overflow-x-auto [scrollbar-width:none]" role="tablist" aria-label={t('workbench.tablist')}>
                       {COCKPIT_TABS.map((tab) => (
                         <button
                           key={tab.key}
@@ -809,7 +809,7 @@ export default function WorkbenchLayout() {
                     <button
                       className="ax-header-action shrink-0"
                       onClick={toggleRightPanel}
-                      title="关闭面板"
+                      title={t('header.closePanel')}
                     >
                       <X size={14} />
                     </button>

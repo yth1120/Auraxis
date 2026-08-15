@@ -48,7 +48,7 @@ export default memo(function ThinkingBlock({ blocks, isStreaming }: ThinkingBloc
               </>
             )}
         </span>
-        <span className="ax-tool-row-title">思考</span>
+        <span className="ax-tool-row-title">{t('thinking.title')}</span>
         <span className="ax-tool-row-sep" aria-hidden />
         <span className={clsx('ax-tool-row-summary', isStreaming && '[text-overflow:clip]')}>{summary}</span>
       </button>

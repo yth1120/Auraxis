@@ -10,7 +10,7 @@ import {
   ArrowUUpLeft as UndoOutlined,
 } from '@/components/common/icons'
 import clsx from 'clsx';
-import { useT } from '../../i18n';
+import { useT, slashCommandDescKey } from '../../i18n';
 import { useChatStore } from '../../stores/useChatStore';
 import { useAppStore } from '../../stores/useAppStore';
 import { useAgentStore } from '../../stores/useAgentStore';
@@ -73,8 +73,8 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         id: `cmd-${cmd.name}`,
         icon: <ThunderboltOutlined />,
         title: `/${cmd.name}`,
-        description: cmd.description,
-        searchText: `${cmd.name} ${cmd.description}`,
+        description: t(slashCommandDescKey(cmd.name)),
+        searchText: `${cmd.name} ${t(slashCommandDescKey(cmd.name))}`,
         action: () => {
           const execCtx = {
             clearMessages: () => useChatStore.getState().clearMessages(),
@@ -100,22 +100,22 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     // ── Agent actions (hidden in chat mode — pure conversation surface) ──
     if (useAppStore.getState().sidebarMode !== 'chat') {
       all.push(
-        { id: 'agent-create-explore', icon: <PlusCircleOutlined />, title: '创建 Agent (Explore)', description: '浏览和搜索代码', searchText: 'agent 创建 explore 探索 搜索', action: () => { void createAgent({ name: 'Explore Agent', type: 'Explore' }).then((id) => { if (id) useAgentStore.getState().setCurrentAgent(id); }); onClose(); } },
-        { id: 'agent-create-plan', icon: <PlusCircleOutlined />, title: '创建 Agent (Plan)', description: '设计实现方案', searchText: 'agent 创建 plan 计划 方案', action: () => { void createAgent({ name: 'Plan Agent', type: 'Plan' }).then((id) => { if (id) useAgentStore.getState().setCurrentAgent(id); }); onClose(); } },
-        { id: 'agent-create-gp', icon: <PlusCircleOutlined />, title: '创建 Agent (General)', description: '全功能执行', searchText: 'agent 创建 general 通用', action: () => { void createAgent({ name: 'General Agent', type: 'general-purpose' }).then((id) => { if (id) useAgentStore.getState().setCurrentAgent(id); }); onClose(); } },
+        { id: 'agent-create-explore', icon: <PlusCircleOutlined />, title: t('palette.createExplore'), description: t('palette.createExplore.desc'), searchText: t('palette.createExplore.search'), action: () => { void createAgent({ name: 'Explore Agent', type: 'Explore' }).then((id) => { if (id) useAgentStore.getState().setCurrentAgent(id); }); onClose(); } },
+        { id: 'agent-create-plan', icon: <PlusCircleOutlined />, title: t('palette.createPlan'), description: t('palette.createPlan.desc'), searchText: t('palette.createPlan.search'), action: () => { void createAgent({ name: 'Plan Agent', type: 'Plan' }).then((id) => { if (id) useAgentStore.getState().setCurrentAgent(id); }); onClose(); } },
+        { id: 'agent-create-gp', icon: <PlusCircleOutlined />, title: t('palette.createGeneral'), description: t('palette.createGeneral.desc'), searchText: t('palette.createGeneral.search'), action: () => { void createAgent({ name: 'General Agent', type: 'general-purpose' }).then((id) => { if (id) useAgentStore.getState().setCurrentAgent(id); }); onClose(); } },
       );
     }
 
     // ── Keyboard shortcuts ──
     all.push(
-      { id: 'shortcut-clear', icon: <ThunderboltOutlined />, title: '清空对话', description: '清除所有消息', shortcut: 'Ctrl+L', searchText: '清空 对话 清除', action: () => { useChatStore.getState().clearMessages(); onClose(); } },
-      { id: 'shortcut-sidebar', icon: <MenuFoldOutlined />, title: '切换侧边栏', description: '展开/收起侧边栏', shortcut: 'Ctrl+B', searchText: '侧边栏 切换 展开', action: () => { useAppStore.getState().toggleSidebar(); onClose(); } },
-      { id: 'shortcut-undo', icon: <UndoOutlined />, title: '撤销操作', description: '撤销最近一次文件修改或消息删除', shortcut: 'Ctrl+Z', searchText: '撤销 undo 恢复', action: () => { const { undoLast, undos } = useUndoStore.getState(); if (undos.length > 0) undoLast(); onClose(); } },
-      { id: 'shortcut-stop', icon: <StopOutlined />, title: '停止生成', description: '中止当前流式输出', shortcut: 'Esc', searchText: '停止 中止 生成', action: () => { useChatStore.getState().stopStreaming(); onClose(); } },
+      { id: 'shortcut-clear', icon: <ThunderboltOutlined />, title: t('palette.clearChat'), description: t('palette.clearChat.desc'), shortcut: 'Ctrl+L', searchText: t('palette.clearChat.search'), action: () => { useChatStore.getState().clearMessages(); onClose(); } },
+      { id: 'shortcut-sidebar', icon: <MenuFoldOutlined />, title: t('palette.toggleSidebar'), description: t('palette.toggleSidebar.desc'), shortcut: 'Ctrl+B', searchText: t('palette.toggleSidebar.search'), action: () => { useAppStore.getState().toggleSidebar(); onClose(); } },
+      { id: 'shortcut-undo', icon: <UndoOutlined />, title: t('palette.undo'), description: t('palette.undo.desc'), shortcut: 'Ctrl+Z', searchText: t('palette.undo.search'), action: () => { const { undoLast, undos } = useUndoStore.getState(); if (undos.length > 0) undoLast(); onClose(); } },
+      { id: 'shortcut-stop', icon: <StopOutlined />, title: t('palette.stop'), description: t('palette.stop.desc'), shortcut: 'Esc', searchText: t('palette.stop.search'), action: () => { useChatStore.getState().stopStreaming(); onClose(); } },
     );
 
     return all;
-  }, [onClose]);
+  }, [onClose, t]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return items;
@@ -218,9 +218,9 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         )}
       </div>
       <div className="border-t border-dim p-2 px-4 flex gap-4 text-2xs text-muted">
-        <span><kbd className="bg-primary-soft px-1.5 py-0.5 rounded-md">↑↓</kbd> 导航</span>
-        <span><kbd className="bg-primary-soft px-1.5 py-0.5 rounded-md">Enter</kbd> 选择</span>
-        <span><kbd className="bg-primary-soft px-1.5 py-0.5 rounded-md">Esc</kbd> 关闭</span>
+        <span><kbd className="bg-primary-soft px-1.5 py-0.5 rounded-md">↑↓</kbd> {t('palette.nav')}</span>
+        <span><kbd className="bg-primary-soft px-1.5 py-0.5 rounded-md">Enter</kbd> {t('palette.select')}</span>
+        <span><kbd className="bg-primary-soft px-1.5 py-0.5 rounded-md">Esc</kbd> {t('palette.close')}</span>
       </div>
     </Modal>
   );
