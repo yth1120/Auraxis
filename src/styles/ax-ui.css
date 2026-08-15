@@ -1,0 +1,965 @@
+/* ================================================================
+   Auraxis UI — design system layer
+
+   Semantic primitives for the header, sidebar, hero/composer, messages,
+   tool cards, reasoning cards, and right-panel tabs. Feature components
+   consume these classes instead of re-deciding layout/color in JSX.
+   ================================================================ */
+
+body {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── App chrome ─────────────────────────────────────────── */
+.ax-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border-dim);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.ax-header-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Keep interactive header children clickable while the surrounding
+   header surface remains a frameless-window drag region. */
+.ax-header button,
+.ax-header input,
+.ax-header a,
+.ax-header [role='button'] {
+  -webkit-app-region: no-drag;
+}
+
+.ax-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 6px;
+  border-radius: 8px;
+}
+
+.ax-logo img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.ax-wordmark {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  background: linear-gradient(135deg, var(--color-brand-from), var(--color-brand-to));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.ax-header-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 150ms ease-out, color 150ms ease-out;
+}
+
+.ax-header-action:hover {
+  background: var(--color-border-dim);
+  color: var(--color-text-primary);
+}
+
+.ax-header-action:disabled {
+  color: var(--color-text-faint);
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.ax-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--color-warning-soft);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-warning);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* ── Shared panel resize handle (left sidebar + right panel) ── */
+.panel-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-app-region: no-drag;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel-resize-handle--sider {
+  right: 0;
+}
+
+.panel-resize-handle--right {
+  left: 0;
+}
+
+.panel-resize-handle::before {
+  content: '';
+  width: 2px;
+  height: 28px;
+  border-radius: 9999px;
+  background: transparent;
+  transition: background-color 150ms ease-out;
+}
+
+.panel-resize-handle:hover::before,
+.panel-resize-handle.is-resizing::before {
+  background: var(--color-border-strong);
+}
+
+/* Hide Allotment's built-in sash — both sides use the shared custom handle. */
+[class*='sash-module_sash__'] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* ── Terminal block (命令卡片) ──────────────── */
+/* Geometry mirrors the terminal block: a 30px left gutter holds the
+   run-state dot, the prompt banner spans the full surface above the output,
+   and the output scrolls inside its own area (banner stays pinned). */
+.terminal-block {
+  --terminal-line-height: 18px;
+  position: relative;
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  background: var(--color-code-bg);
+  overflow: hidden;
+}
+
+/* 运行流光：柔和的亮带 glides across the surface while the
+   command is still executing — no bounce, no glow, just a slow pass. */
+.terminal-block[data-running]::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -300px;
+  width: 300px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-bg-primary) 60%, transparent) 55%,
+    transparent 100%
+  );
+  animation: ax-tool-row-sweep 2.6s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes ax-tool-row-sweep {
+  0% { left: -300px; }
+  90%, 100% { left: 100%; }
+}
+
+.terminal-block-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-left: -30px;
+  padding: 9px 14px 9px 30px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.terminal-block:not([data-running]) .terminal-block-header {
+  border-bottom: 1px solid var(--color-border-dim);
+}
+
+.terminal-block-run-state {
+  position: absolute;
+  left: calc(-1 * 30px + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.terminal-block-prompt {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.terminal-block-prompt-line {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  line-height: var(--terminal-line-height);
+}
+
+.terminal-block-cwd {
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.terminal-block-command {
+  min-width: 0;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+
+.terminal-block-pill {
+  flex: none;
+  position: sticky;
+  top: 0;
+  height: var(--terminal-line-height);
+  color: var(--color-danger);
+  white-space: nowrap;
+}
+
+.terminal-block-copy {
+  flex: none;
+  position: sticky;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: var(--terminal-line-height);
+  white-space: nowrap;
+}
+
+.terminal-block-copy:hover {
+  color: var(--color-text-secondary);
+}
+
+.terminal-block-output {
+  max-height: 224px;
+  padding: 12px 14px 12px 30px;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.terminal-block-line {
+  min-height: var(--terminal-line-height);
+  white-space: pre;
+}
+
+.terminal-block-empty {
+  padding: 12px 14px 12px 30px;
+  color: var(--color-text-muted);
+}
+
+.terminal-block-expand {
+  display: block;
+  width: 100%;
+  padding: 0 0 0 30px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.terminal-block-expand:hover {
+  color: var(--color-text-secondary);
+}
+
+/* ── Sidebar ───────────────────────────────────────────── */
+.ax-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  padding: 8px 6px;
+  overflow: hidden;
+  background: var(--color-bg-secondary);
+}
+
+.ax-sidebar-section {
+  padding: 2px 8px 6px;
+}
+
+.ax-sidebar-label {
+  padding: 0 10px 4px;
+  color: var(--color-text-faint);
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ax-sidebar-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 150ms ease-out, color 150ms ease-out;
+}
+
+.ax-sidebar-item:hover {
+  background: var(--color-border-dim);
+  color: var(--color-text-primary);
+}
+
+.ax-sidebar-item:hover .ax-sidebar-icon {
+  color: var(--color-text-primary);
+}
+
+.ax-sidebar-item-active,
+.ax-sidebar-item[data-active="true"] {
+  background: var(--color-primary-soft);
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.ax-sidebar-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.ax-sidebar-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.ax-sidebar-item-active .ax-sidebar-icon,
+.ax-sidebar-item[data-active="true"] .ax-sidebar-icon {
+  color: var(--color-primary);
+}
+
+/* Project folder headers (工作区浏览): the folder itself never
+   paints the full active background, otherwise the highlighted project row
+   and its highlighted child session rows merge into one solid block. */
+.ax-project-folder.ax-sidebar-item-active,
+.ax-project-folder[data-active="true"] {
+  background: transparent;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.ax-project-folder.ax-sidebar-item-active .ax-sidebar-icon,
+.ax-project-folder[data-active="true"] .ax-sidebar-icon {
+  color: var(--color-primary);
+}
+
+.ax-sidebar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ax-sidebar-row:hover {
+  background: var(--color-border-dim);
+}
+
+.ax-sidebar-search {
+  margin: 0 8px 8px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: var(--color-bg-inset);
+  border: 1px solid transparent;
+  transition: border-color 150ms ease-out, box-shadow 150ms ease-out, background 150ms ease-out;
+}
+
+.ax-sidebar-group {
+  margin-bottom: 8px;
+  border-radius: 12px;
+  background: transparent;
+  border: none;
+  overflow: hidden;
+}
+
+/* ── Hero ──────────────────────────────────────────────── */
+.ax-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  width: 100%;
+  max-width: 760px;
+  padding: 32px 24px;
+}
+
+.ax-hero-glow {
+  position: absolute;
+  left: 50%;
+  bottom: 88px;
+  transform: translate(-50%, 50%);
+  width: calc(100% * 1051 / 776);
+  aspect-ratio: 1051 / 468;
+  border-radius: 50%;
+  /* 品牌光晕: a soft blurred ellipse at 8% brand colour. */
+  background: var(--color-violet);
+  filter: blur(50px);
+  opacity: 0.08;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ax-hero-headline {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-heading);
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-align: left;
+  text-wrap: balance;
+  color: var(--color-text-primary);
+}
+
+.ax-hero-status {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+/* ── Composer ──────────────────────────────────────────── */
+.ax-composer {
+  position: relative;
+  width: 100%;
+  padding-top: 10px;
+  gap: 12px;
+  border-radius: 22px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-default);
+  box-shadow: var(--shadow-md);
+  transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
+}
+
+.dark .ax-composer {
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border-default);
+  box-shadow: var(--shadow-md);
+}
+
+.ax-composer-textarea {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 24px;
+  resize: none;
+  /* Auraxis graphite caret, matching the primary token. */
+  caret-color: var(--color-primary);
+}
+
+.ax-composer-textarea::placeholder {
+  color: var(--color-text-muted);
+  opacity: 0.72;
+}
+
+.ax-composer-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  row-gap: 8px;
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
+  padding: 2px 8px 6px;
+}
+
+.ax-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 150ms ease-out, color 150ms ease-out;
+}
+
+.ax-icon-button:hover {
+  background: var(--color-hover);
+  color: var(--color-text-primary);
+}
+
+
+.ax-send-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-text-on-accent);
+  cursor: pointer;
+  box-shadow: 0 1px 4px var(--color-primary-strong);
+  transition: filter 150ms ease-out, box-shadow 150ms ease-out;
+}
+
+.ax-send-button:hover {
+  filter: brightness(1.08);
+}
+
+.ax-send-button:disabled {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* ── Conversation ──────────────────────────────────────── */
+.ax-conversation-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.ax-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 16px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-dim);
+}
+
+.ax-compression {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 16px 0;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: var(--color-bg-inset);
+  border: 1px solid var(--color-border-dim);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 14px;
+  font-family: var(--font-mono);
+}
+
+.ax-back-to-bottom {
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--color-border-dim);
+  border-radius: 999px;
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transition: background 150ms ease-out, color 150ms ease-out;
+}
+
+.ax-back-to-bottom:hover {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+/* ── Messages ──────────────────────────────────────────── */
+.ax-message-user {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  padding: 16px 24px 2px;
+}
+
+.ax-bubble-user {
+  /* 用户气泡：22px 圆角, 10/16 padding, 525px cap. */
+  max-width: min(72%, 525px);
+  padding: 10px 16px;
+  border-radius: 22px;
+  background: var(--color-bg-secondary);
+}
+
+.ax-message-user .ax-bubble-user p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--color-text-primary);
+  font-size: 16px;
+  line-height: 24px;
+  text-wrap: pretty;
+}
+
+.ax-message-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+}
+
+.ax-message-user:hover .ax-message-actions,
+.ax-assistant:hover .ax-message-actions {
+  opacity: 1;
+}
+
+/* 助手操作常显；仅用户编辑操作在悬停时显示。 */
+.ax-assistant .ax-message-actions {
+  opacity: 1;
+}
+
+.ax-message-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 130ms ease-out, color 130ms ease-out;
+}
+
+.ax-message-action:hover {
+  background: var(--color-border-dim);
+  color: var(--color-text-primary);
+}
+
+.ax-message-action svg {
+  width: 16px;
+  height: 16px;
+}
+
+.ax-assistant {
+  width: 100%;
+  padding: 16px 24px 4px;
+}
+
+.ax-message-time {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 24px;
+}
+
+/* Reference chips inside a user bubble (`/skill` / `@agent`). */
+.ax-ref-chip {
+  display: inline-block;
+  margin: 0 2px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--color-primary-soft);
+  color: var(--color-text-primary);
+  font-size: 0.85em;
+  line-height: 1.6;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+/* 回合状态：执行 GIF + shimmering brand-gradient label. No pill —
+   the 26px one-line footprint is the whole chrome. */
+.ax-deep-dive-status {
+  align-self: flex-start;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 26px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.ax-deep-dive-status .executing-indicator {
+  flex: none;
+}
+
+.ax-deep-dive-text {
+  background: linear-gradient(
+    90deg,
+    var(--color-brand-from) 0%,
+    var(--color-brand-from) 40%,
+    var(--color-brand-to) 50%,
+    var(--color-brand-from) 60%,
+    var(--color-brand-from) 100%
+  );
+  background-position: 100% 0;
+  background-size: 250% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: deepDiveShimmer 1.8s linear infinite;
+}
+
+.ax-deep-dive-clock {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+  -webkit-text-fill-color: var(--color-text-muted);
+}
+
+@keyframes deepDiveShimmer {
+  to { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ax-deep-dive-text {
+    background-position: 0 0;
+    background-size: 100% 100%;
+    animation: none;
+  }
+}
+
+/* ── Tool / reasoning cards ────────────────────────────── */
+.ax-tool-group {
+  margin: 8px 0;
+}
+
+.ax-tool-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 6px;
+  margin: 0 -6px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ax-tool-group-header:hover {
+  background: var(--color-bg-inset);
+}
+
+.ax-status-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 999px;
+}
+
+.ax-tool-group-header[data-status="running"] .ax-status-dot {
+  background: var(--color-primary);
+}
+
+.ax-tool-group-header[data-status="done"] .ax-status-dot {
+  background: var(--color-success);
+}
+
+.ax-tool-group-header[data-status="error"] .ax-status-dot {
+  background: var(--color-danger);
+}
+
+.ax-thinking {
+  margin: 0;
+}
+
+.ax-thinking-body {
+  padding: 4px 0 4px 22px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 24px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ── Right panel ───────────────────────────────────────── */
+.ax-panel-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--color-bg-inset);
+}
+
+.ax-panel-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 130ms ease-out, color 130ms ease-out;
+}
+
+.ax-panel-tab:hover {
+  background: var(--color-border-dim);
+  color: var(--color-text-primary);
+}
+
+.ax-panel-tab[data-active="true"] {
+  background: var(--color-bg-elevated);
+  color: var(--color-primary);
+  font-weight: 500;
+  box-shadow: var(--shadow-xs);
+}
+
+@keyframes axPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* ── StateDot — 状态指示（光环） ── */
+.ax-state-dot {
+  position: relative;
+  display: inline-block;
+  flex: none;
+}
+
+.ax-state-dot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.1;
+}
+
+.ax-state-dot::after {
+  content: '';
+  position: absolute;
+  inset: 20%;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.ax-state-dot[data-state='done'] {
+  color: var(--color-success);
+}
+
+.ax-state-dot[data-state='warning'] {
+  color: var(--color-warning);
+}
+
+.ax-state-dot[data-state='error'] {
+  color: var(--color-danger);
+}
+
+.ax-state-dot-matrix {
+  flex: none;
+  color: var(--color-accent, var(--color-primary));
+}
+
+.ax-state-dot-cell {
+  fill: currentColor;
+  opacity: 0.15;
+  animation: stateDotChase 1s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ax-tool-group-header[data-status="running"] .ax-status-dot {
+    animation: none;
+  }
+  .ax-state-dot-cell {
+    animation: none;
+  }
+}

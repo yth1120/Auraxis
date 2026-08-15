@@ -1,0 +1,497 @@
+/* ================================================================
+   Auraxis — Third-party library overrides
+   These target Ant Design, Allotment, and other library internals
+   that cannot be expressed as Tailwind utility classes.
+   Scoped via component root class names where possible.
+   ================================================================ */
+
+/* ── Global Ant Design: borderless, shadow-based elevation ── */
+/* Replace all hard-line borders on popups/modals with layered shadows. */
+
+.ant-modal-content {
+  border: none !important;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.08),
+    0 4px 16px rgba(0,0,0,0.10),
+    0 12px 36px rgba(0,0,0,0.14) !important;
+}
+.dark .ant-modal-content {
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.08),
+    0 4px 16px rgba(0,0,0,0.35),
+    0 12px 40px rgba(0,0,0,0.50) !important;
+}
+
+.ant-modal-header {
+  border-bottom: none !important;
+  padding: 16px 24px 8px;
+}
+
+.ant-modal-title {
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.ant-modal-body {
+  padding: 20px 24px 24px;
+}
+
+.ant-modal-footer {
+  margin-top: 0;
+  padding: 8px 24px 16px;
+}
+
+/* Modal action buttons — pill chrome matching the app's custom buttons. */
+.ant-modal .ant-btn {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 999px !important;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ant-modal .ant-btn-default {
+  background: var(--color-bg-primary);
+  border-color: var(--color-border-default);
+  color: var(--color-text-primary);
+}
+
+.ant-modal .ant-btn-default:hover {
+  background: var(--color-hover) !important;
+  border-color: var(--color-border-strong) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.ant-modal .ant-btn-primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.ant-modal .ant-btn-primary:hover {
+  background: var(--color-primary-hover) !important;
+  border-color: var(--color-primary-hover) !important;
+}
+
+.ant-empty {
+  margin-inline: auto;
+}
+
+.ant-empty-image {
+  height: 48px;
+  margin-bottom: 8px;
+  opacity: 0.72;
+}
+
+.ant-empty-description {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.ant-dropdown-menu {
+  border: none !important;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.08),
+    0 4px 16px rgba(0,0,0,0.10),
+    0 12px 28px rgba(0,0,0,0.14) !important;
+}
+.dark .ant-dropdown-menu {
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.08),
+    0 4px 16px rgba(0,0,0,0.35),
+    0 12px 28px rgba(0,0,0,0.50) !important;
+}
+
+.ant-dropdown-menu {
+  padding: 4px !important;
+}
+
+.ant-dropdown-menu-item {
+  border-radius: 6px !important;
+  margin: 1px 0;
+}
+
+.ant-popover-inner,
+.ant-popconfirm .ant-popover-inner {
+  border: none !important;
+  border-radius: 12px !important;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.08),
+    0 4px 12px rgba(0,0,0,0.10),
+    0 8px 24px rgba(0,0,0,0.14) !important;
+}
+.dark .ant-popover-inner,
+.dark .ant-popconfirm .ant-popover-inner {
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.08),
+    0 4px 12px rgba(0,0,0,0.35),
+    0 8px 24px rgba(0,0,0,0.50) !important;
+}
+
+.ant-popconfirm .ant-btn {
+  border-radius: 999px !important;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ant-tooltip-inner {
+  border: none !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18) !important;
+}
+.dark .ant-tooltip-inner {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.55) !important;
+}
+
+.ant-card {
+  border: none !important;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.06), var(--shadow-sm);
+}
+.dark .ant-card {
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08), var(--shadow-sm);
+}
+
+.ant-notification-notice {
+  border: none !important;
+  border-radius: 12px !important;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.08),
+    0 4px 16px rgba(0,0,0,0.10),
+    0 12px 28px rgba(0,0,0,0.14) !important;
+}
+
+.ant-message .ant-message-notice-content {
+  border-radius: 12px !important;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.06),
+    0 4px 12px rgba(0,0,0,0.10) !important;
+}
+
+.dark .ant-message .ant-message-notice-content {
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.08),
+    0 4px 12px rgba(0,0,0,0.35) !important;
+}
+
+/* ── Input focus/hover: quiet hover, primary activation ring ── */
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-input-number,
+.ant-picker,
+.ant-select-selector,
+.ant-mentions,
+.ant-cascader-picker,
+.ant-input-group-addon {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.ant-input:hover,
+.ant-input-affix-wrapper:hover,
+.ant-input-number:hover,
+.ant-picker:hover,
+.ant-select-selector:hover,
+.ant-mentions:hover,
+textarea:hover,
+select:hover {
+  border-color: var(--color-border-default) !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+input,
+textarea,
+select {
+  outline: none !important;
+}
+
+input:hover,
+input:focus,
+input:focus-visible,
+textarea:hover,
+textarea:focus,
+textarea:focus-visible,
+select:hover,
+select:focus,
+select:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Mouse-click focus on inputs must not produce any visual feedback;
+   keyboard focus-visible is the only focus state allowed to remain. */
+input:focus:not(:focus-visible),
+textarea:focus:not(:focus-visible),
+select:focus:not(:focus-visible),
+[contenteditable='true']:focus:not(:focus-visible) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Global search input: keep the pill shape and depth on hover/focus. */
+#global-search-input,
+#global-search-input:hover,
+#global-search-input:focus,
+#global-search-input:focus-visible {
+  border-radius: 9999px !important;
+  box-shadow: 0 1px 3px rgba(17, 20, 24, 0.12) !important;
+  outline: none !important;
+}
+
+.dark #global-search-input,
+.dark #global-search-input:hover,
+.dark #global-search-input:focus,
+.dark #global-search-input:focus-visible {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* ── ChatArea ──────────────────────────────────────────── */
+.chat-area .stats-home-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.chat-area .stats-home-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+.chat-area .stats-home-scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--color-border-dim);
+}
+
+/* ── FileTree ──────────────────────────────────────────── */
+.file-tree .tree-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.file-tree .tree-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.file-tree .tree-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-border-dim);
+  border-radius: 2px;
+}
+
+/* ── TabBar ────────────────────────────────────────────── */
+.tab-bar .ant-tabs-nav {
+  margin: 0;
+  padding: 0;
+  border-bottom: none;
+}
+.tab-bar .ant-tabs-tab {
+  border-radius: 6px 6px 0 0 !important;
+  margin: 4px 2px 0 0 !important;
+  padding: 6px 12px !important;
+  font-size: 13px;
+}
+
+/* ── WorkbenchLayout ──────────────────────────────────── */
+.workbench-layout .top-bar-left-group button {
+  -webkit-app-region: no-drag;
+}
+
+/* Top menu dropdowns (文件/编辑/视图/帮助) — no popup motion */
+.ax-top-menu-popup,
+.ax-top-menu-popup.ant-slide-up-enter,
+.ax-top-menu-popup.ant-slide-up-appear,
+.ax-top-menu-popup.ant-slide-up-enter-active,
+.ax-top-menu-popup.ant-slide-up-appear-active,
+.ax-top-menu-popup.ant-slide-up-leave,
+.ax-top-menu-popup.ant-slide-up-leave-active {
+  animation: none !important;
+}
+
+/* Brand wordmark — solid ink, premium monochrome */
+.ax-wordmark,
+.workbench-layout .brand-wordmark,
+.chat-input .brand-wordmark,
+.auraxis-wordmark {
+  color: var(--color-primary);
+}
+
+/* Allotment: separator transparency */
+.workbench-layout .split-view-view {
+  --separator-border: transparent;
+  background: transparent;
+}
+
+.workbench-layout .split-view-view::before {
+  background: transparent !important;
+}
+
+/* Allotment: sash drag handles — small centered pill */
+.workbench-layout .sash {
+  --sash-size: 6px;
+  --sash-hover-size: 6px;
+  --separator-border: transparent;
+  --focus-border: transparent;
+}
+
+/* Kill library hover bar */
+.workbench-layout .sash::before {
+  background: transparent !important;
+}
+
+/* Small centered grabber pill */
+.workbench-layout .sash::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 28px;
+  border-radius: 2px;
+  background: var(--color-border-default);
+  transition: background 0.15s ease, height 0.15s ease;
+}
+
+.workbench-layout .sash:hover::after {
+  background: var(--color-primary);
+  height: 36px;
+}
+
+/* Cockpit tabs hide scrollbar */
+.workbench-layout .cockpit-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── SettingsModal ────────────────────────────────────── */
+.settings-modal .ant-modal-content {
+  background: var(--color-bg-primary);
+  border: none;
+  border-radius: 14px;
+  overflow: hidden;
+  padding: 0;
+}
+
+.settings-modal .ant-modal-header {
+  background: transparent;
+  border-bottom: none;
+  padding: 16px 24px;
+  margin-bottom: 0;
+}
+
+.settings-modal .ant-modal-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.settings-modal .ant-modal-body {
+  padding: 0;
+}
+
+.settings-modal .ant-modal-close {
+  color: var(--color-text-muted);
+}
+
+.settings-modal .ant-modal-close:hover {
+  color: var(--color-text-primary);
+  background: var(--color-border-dim);
+  border-radius: 6px;
+}
+
+/* Pane custom scrollbar */
+.settings-modal .pane-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.settings-modal .pane-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.settings-modal .pane-scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+}
+
+/* ================================================================
+   ChatInput — Tailwind supplementals (complex shadows, animations,
+   textarea reset, brand gradient, and third-party overrides).
+   ================================================================ */
+
+/* Kill global blue focus ring on the chat textarea */
+.chat-input textarea:focus-visible {
+  outline: none;
+}
+
+/* SVG block centering (removes baseline gap on inline SVGs) */
+.chat-input .svg-center svg {
+  display: block;
+  line-height: 0;
+}
+
+/* Stop button pulse + hover/active */
+.chat-input .send-btn-stop {
+  background: var(--color-text-primary);
+  color: #fff;
+}
+.chat-input .send-btn-stop:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+.dark .chat-input .send-btn-stop {
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+}
+
+/* Responsive */
+@media (max-width: 500px) {
+  .chat-input .ant-select {
+    max-width: 80px;
+  }
+}
+
+/* ================================================================
+   SiderNav — Tailwind supplementals (scrollbar, collapsed states,
+   ant-input overrides, and accent bar pseudo-elements).
+   ================================================================ */
+
+/* Custom scrollbar */
+.sider-nav .scroll-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 0;
+}
+.sider-nav .scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sider-nav .scroll-thin::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 2px;
+}
+.sider-nav .scroll-thin:hover::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+}
+
+/* Code mode — hide scrollArea overflow (FileTree owns its own scroll) */
+.sider-nav.code-mode .scroll-thin {
+  overflow: hidden !important;
+}
+
+/* Search input transparent background override */
+.sider-nav .ant-input {
+  background: transparent !important;
+}
+
+/* Collapsed / hidden parent-driven cascade */
+.sider-nav-collapsed .sider-search-box {
+  display: none;
+}
+.sider-nav-collapsed .sider-scroll-area-inner {
+  padding: 0;
+}
+
+.sider-nav-hidden .sider-scroll-area-inner {
+  overflow: hidden;
+  opacity: 0;
+}
+.sider-nav-hidden .sider-tree,
+.sider-nav-hidden .sider-code-panel {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Sidebar collapse/expand ──────────────────────────── */
+
+/* Label transition for collapsed nav */
+.sider-nav .label-collapsible {
+  overflow: hidden;
+  white-space: nowrap;
+  line-height: 1.35;
+}

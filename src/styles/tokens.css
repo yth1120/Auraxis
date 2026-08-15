@@ -1,0 +1,344 @@
+/* ================================================================
+   Auraxis — Design Token System
+   Dark Intelligence · Precise Motion · Central Control
+   Black is order, white is structure, Aura is intelligence, Axis is control.
+   ================================================================ */
+
+/* ── Color Palette — Light (default) ─────────────────────── */
+/* Aura Purple is an accent only (~3% of the UI). The action color is
+   brand black; surfaces are paper with ivory layers. */
+:root {
+  --color-primary: #111216;
+  --color-primary-hover: #292C32;
+  --color-primary-active: #3A3E45;
+  --color-primary-soft: rgba(17, 18, 22, 0.06);
+  --color-primary-strong: rgba(17, 18, 22, 0.10);
+  --color-primary-border: rgba(17, 18, 22, 0.16);
+  --color-accent: #6A6884;
+  --color-accent-hover: #5B5975;
+  --color-accent-active: #4D4B66;
+  --color-accent-soft: rgba(106, 104, 132, 0.10);
+  --color-accent-strong: rgba(106, 104, 132, 0.16);
+  --color-accent-border: rgba(106, 104, 132, 0.24);
+
+  /* Subtle graphite → aura gradient — wordmark / logo accents only. */
+  --color-brand-from: #292C32;
+  --color-brand-to: #6A6884;
+
+  /* Alias kept for focus, selection and links. */
+  --color-violet: #6A6884;
+  --color-violet-hover: #5B5975;
+  --color-violet-active: #4D4B66;
+  --color-violet-soft: rgba(106, 104, 132, 0.10);
+  --color-violet-strong: rgba(106, 104, 132, 0.16);
+  --color-violet-border: rgba(106, 104, 132, 0.24);
+
+  --color-bg-primary: #FFFFFF;
+  --color-bg-secondary: #F4F4F1;
+  --color-bg-tertiary: #E9E9E6;
+  --color-bg-elevated: #FFFFFF;
+  --color-bg-inset: rgba(17, 18, 22, 0.04);
+
+  --color-text-primary: #111216;
+  --color-text-secondary: #3E424A;
+  --color-text-muted: #6F727A;
+  --color-text-faint: #8A8D95;
+  --color-text-on-accent: #FFFFFF;
+
+  --color-border-dim: rgba(17, 18, 22, 0.07);
+  --color-border-default: rgba(17, 18, 22, 0.11);
+  --color-border-strong: rgba(17, 18, 22, 0.17);
+  --color-hover: rgba(17, 18, 22, 0.055);
+
+  --color-success: #15803D;
+  --color-success-soft: rgba(21, 128, 61, 0.08);
+  --color-danger: #A25B60;
+  --color-danger-soft: rgba(162, 91, 96, 0.08);
+  --color-danger-border: rgba(162, 91, 96, 0.22);
+  --color-danger-lighter: #B06F74;
+  --color-warning: #B45309;
+  --color-warning-soft: rgba(180, 83, 9, 0.08);
+  --color-warning-border: rgba(180, 83, 9, 0.22);
+
+  --color-code-bg: #F4F4F1;
+  --color-surface: #FFFFFF;
+  --color-surface-hover: #ECECE9;
+  --color-tooltip-bg: #FFFFFF;
+  --glass-switcher-thumb: rgba(255, 255, 255, 0.70);
+}
+
+/* ── Dark theme overrides ────────────────────────────────── */
+/* Dark First: brand black base, graphite layers, ivory text. Aura Purple
+   appears only in focus rings, selection and tiny status accents. */
+.dark {
+  --color-primary: #F1F1EE;
+  --color-primary-hover: #D9D9D6;
+  --color-primary-active: #C8C8C4;
+  --color-primary-soft: rgba(241, 241, 238, 0.08);
+  --color-primary-strong: rgba(241, 241, 238, 0.14);
+  --color-primary-border: rgba(241, 241, 238, 0.22);
+  --color-accent: #8C8AA8;
+  --color-accent-hover: #A6A4C2;
+  --color-accent-active: #6F6D8E;
+  --color-accent-soft: rgba(140, 138, 168, 0.14);
+  --color-accent-strong: rgba(140, 138, 168, 0.22);
+  --color-accent-border: rgba(140, 138, 168, 0.30);
+
+  --color-brand-from: #8C8AA8;
+  --color-brand-to: #D9D7E8;
+
+  --color-violet: #8C8AA8;
+  --color-violet-hover: #A6A4C2;
+  --color-violet-active: #6F6D8E;
+  --color-violet-soft: rgba(140, 138, 168, 0.14);
+  --color-violet-strong: rgba(140, 138, 168, 0.20);
+  --color-violet-border: rgba(140, 138, 168, 0.30);
+
+  --color-bg-primary: #111216;
+  --color-bg-secondary: #1B1D21;
+  --color-bg-tertiary: #23262B;
+  --color-bg-elevated: #2C3037;
+  --color-bg-inset: rgba(0, 0, 0, 0.30);
+
+  --color-text-primary: #F1F1EE;
+  --color-text-secondary: #CFD3D6;
+  --color-text-muted: #ADB2B8;
+  --color-text-faint: #81858C;
+  --color-text-on-accent: #111216;
+
+  --color-border-dim: rgba(41, 44, 50, 0.72);
+  --color-border-default: #292C32;
+  --color-border-strong: #3A3E45;
+  --color-hover: rgba(241, 241, 238, 0.06);
+
+  --color-success: #34D399;
+  --color-success-soft: rgba(52, 211, 153, 0.12);
+  --color-danger: #B06F74;
+  --color-danger-soft: rgba(176, 111, 116, 0.12);
+  --color-danger-border: rgba(176, 111, 116, 0.26);
+  --color-danger-lighter: #C98E92;
+  --color-warning: #C9A15C;
+  --color-warning-soft: rgba(201, 161, 92, 0.12);
+  --color-warning-border: rgba(201, 161, 92, 0.26);
+
+  --color-code-bg: #1B1D21;
+  --color-surface: #1B1D21;
+  --color-surface-hover: #23262B;
+  --color-tooltip-bg: #23262B;
+  --glass-switcher-thumb: rgba(255, 255, 255, 0.18);
+}
+
+/* ── Frosted Glass Surfaces ──────────────────────────────── */
+:root {
+  --color-glass-header: #FFFFFF;
+  --color-glass-panel: #F5F5F2;
+}
+.dark {
+  --color-glass-header: #111216;
+  --color-glass-panel: #1B1D21;
+}
+
+/* ── Content Width ───────────────────────────────────────── */
+:root { --content-max-width: 748px; }
+
+/* ── Spacing ─────────────────────────────────────────────── */
+:root {
+  --space-1: 4px; --space-2: 8px; --space-3: 12px;
+  --space-4: 16px; --space-5: 20px; --space-6: 24px;
+  --space-8: 32px; --space-10: 40px; --space-12: 48px;
+  --space-16: 64px;
+}
+
+/* ── Typography ──────────────────────────────────────────── */
+:root {
+  /* 系统 UI 字体栈（与主流桌面应用一致）。 */
+  --font-heading: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  /* Code stack deliberately omits a bare `monospace` tail so Windows CJK
+     falls back to YaHei instead of SimSun. */
+  --font-mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas,
+    'Liberation Mono', Menlo, Courier, 'PingFang SC', 'Microsoft YaHei';
+
+  /* 排版字号刻度。 */
+  --ax-font-markdown-h1: 700 24px/34px var(--font-heading);
+  --ax-font-markdown-h2: 700 22px/32px var(--font-heading);
+  --ax-font-markdown-h3: 700 20px/30px var(--font-heading);
+  --ax-font-markdown-h4: 600 16px/28px var(--font-heading);
+  --ax-font-markdown-base: 16px/28px var(--font-heading);
+  --ax-font-markdown-small: 14px/24px var(--font-heading);
+  --ax-font-markdown-code: 14px/22px var(--font-mono);
+  --ax-font-markdown-code-block: 13px/22px var(--font-mono);
+  --ax-font-markdown-code-block-small: 12px/18px var(--font-mono);
+  --ax-font-xl-24: 600 24px/32px var(--font-heading);
+  --ax-font-l-20: 500 20px/28px var(--font-heading);
+  --ax-font-m-18: 500 16px/28px var(--font-heading);
+  --ax-font-base-16: 16px/24px var(--font-heading);
+  --ax-font-base-strong-16: 500 16px/24px var(--font-heading);
+  --ax-font-s-14: 14px/22px var(--font-heading);
+  --ax-font-s-strong-14: 500 14px/22px var(--font-heading);
+  --ax-font-xs-13: 13px/20px var(--font-heading);
+  --ax-font-xs-strong-13: 500 13px/20px var(--font-heading);
+  --ax-font-xxs-12: 12px/18px var(--font-heading);
+  --ax-font-xxs-strong-12: 500 12px/18px var(--font-heading);
+  --ax-font-xxxs-11: 11px/14px var(--font-heading);
+  --ax-font-xxxs-strong-11: 500 11px/14px var(--font-heading);
+
+  --text-4xs: 9px; --text-3xs: 10px;
+  --text-2xs: 11px; --text-xs: 12px; --text-sm: 13px;
+  --text-base: 14px; --text-md: 15px; --text-lg: 16px;
+  --text-xl: 20px; --text-2xl: 24px; --text-3xl: 24px;
+
+  --weight-normal: 400; --weight-medium: 500;
+  --weight-semibold: 600; --weight-bold: 700;
+
+  --leading-tight: 1.25; --leading-normal: 1.5; --leading-relaxed: 1.6;
+  --leading-comfortable: 1.75;
+  --tracking-tight: -0.02em; --tracking-normal: 0; --tracking-wide: 0.02em;
+  --tracking-wider: 0.04em;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-kerning: normal;
+  font-feature-settings: 'kern' 1;
+  font-synthesis-weight: none;
+}
+
+/* ── Border Radius — refined scale ──────────────────────── */
+:root {
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-card: 8px;
+  --radius-full: 9999px;
+}
+
+/* ── Shadow System — 分层柔和阴影 ───────────── */
+:root {
+  --shadow-xs: 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 4px 12px 0 rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 4px 12px 0 rgba(0, 0, 0, 0.02), 0 2px 8px 0 rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 0 1px 0 rgba(0, 0, 0, 0.20), 0 0 4px 0 rgba(0, 0, 0, 0.02), 0 12px 32px 0 rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 0 1px 0 rgba(0, 0, 0, 0.24), 0 0 4px 0 rgba(0, 0, 0, 0.03), 0 20px 48px 0 rgba(0, 0, 0, 0.12);
+  --shadow-card: 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+  --shadow-card-hover: 0 4px 12px 0 rgba(0, 0, 0, 0.02), 0 2px 8px 0 rgba(0, 0, 0, 0.05);
+}
+
+.dark {
+  --shadow-xs: 0 2px 4px 0 rgba(0, 0, 0, 0.30);
+  --shadow-sm: 0 4px 12px 0 rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 4px 12px 0 rgba(0, 0, 0, 0.28), 0 2px 8px 0 rgba(0, 0, 0, 0.32);
+  --shadow-lg: 0 0 1px 0 rgba(0, 0, 0, 0.60), 0 0 4px 0 rgba(0, 0, 0, 0.25), 0 12px 32px 0 rgba(0, 0, 0, 0.45);
+  --shadow-xl: 0 0 1px 0 rgba(0, 0, 0, 0.65), 0 0 4px 0 rgba(0, 0, 0, 0.30), 0 20px 48px 0 rgba(0, 0, 0, 0.55);
+  --shadow-card: 0 2px 4px 0 rgba(0, 0, 0, 0.30);
+  --shadow-card-hover: 0 4px 12px 0 rgba(0, 0, 0, 0.28), 0 2px 8px 0 rgba(0, 0, 0, 0.32);
+}
+
+/* ── Animation ───────────────────────────────────────────── */
+:root {
+  --duration-instant: 80ms; --duration-fast: 150ms;
+  --duration-normal: 200ms; --duration-slow: 350ms;
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --stagger-delay: 50ms;
+}
+
+/* ── Scrollbar — 8px 滑块、4px 圆角 ──────────────── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.25); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+.dark * {
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+.dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); }
+.dark ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.28); }
+
+/* ── Reduced motion — performance & accessibility ────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Selection ───────────────────────────────────────────── */
+::selection {
+  background: var(--color-violet-strong);
+  color: var(--color-text-primary);
+}
+
+/* ── Focus ring ──────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-violet);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ── Clean background (no noise in light mode) ───────────── */
+body {
+  background: var(--color-bg-primary);
+}
+
+/* ── Back-compat aliases ─────────────────────────────────── */
+:root {
+  --bg-primary: var(--color-bg-primary);
+  --bg-secondary: var(--color-bg-secondary);
+  --bg-tertiary: var(--color-bg-tertiary);
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-muted: var(--color-text-muted);
+  --text-faint: var(--color-text-faint);
+  --accent: var(--color-primary);
+  --accent-soft: var(--color-primary-soft);
+  --accent-border: var(--color-primary-border);
+  --primary: var(--color-primary);
+  --primary-container: var(--color-primary);
+  --primary-soft: var(--color-primary-soft);
+  --danger: var(--color-danger);
+  --danger-soft: var(--color-danger-soft);
+  --danger-border: var(--color-danger-border);
+  --success: var(--color-success);
+  --success-soft: var(--color-success-soft);
+  --warning: var(--color-warning);
+  --border-dim: var(--color-border-dim);
+  --border-hairline: var(--color-border-dim);
+  --border-strong: var(--color-border-strong);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
+  --code-bg: var(--color-code-bg);
+  --surface: var(--color-surface);
+  --surface-highlight: var(--color-primary-soft);
+  --surface-inset: var(--color-bg-inset);
+  --surface-tint: var(--color-primary-soft);
+  --surface-container: var(--color-bg-tertiary);
+  --surface-container-low: var(--color-bg-inset);
+  --tooltip-bg: var(--color-tooltip-bg);
+  --msg-bg: var(--color-bg-secondary);
+  --font-sans: var(--font-body);
+  --on-primary: var(--color-text-on-accent);
+  --secondary: var(--color-text-secondary);
+  --tertiary: var(--color-text-muted);
+  --secondary-container: var(--color-bg-tertiary);
+}
+
+.dark {
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.28);
+}

@@ -1,0 +1,578 @@
+/* ================================================================
+   Auraxis — Tailwind CSS v4 Entry Point
+   Design tokens are defined via @theme so Tailwind generates utility
+   classes (bg-primary, text-muted, gap-4, etc.) that mirror the
+   existing tokens.css custom properties.
+   ================================================================ */
+
+@import "tailwindcss";
+
+/* 工具行：运行中的行带流光扫过 (keyframes in
+   keyframes.css). The row must be position:relative for the overlay. */
+.ax-tool-row {
+  position: relative;
+}
+
+.ax-tool-row-running::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -300px;
+  width: 300px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-bg-primary) 60%, transparent) 55%,
+    transparent 100%
+  );
+  animation: toolRowSweep 2.6s ease-out infinite;
+  pointer-events: none;
+}
+
+/* 工具行头部：24px 单行, no fill, icon→chevron hover preview. */
+.ax-tool-row-head {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  height: 24px;
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ax-tool-row-head:focus-visible {
+  outline: none;
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px var(--color-primary-border);
+}
+
+.ax-tool-row-leading {
+  position: relative;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
+  color: var(--color-text-muted);
+}
+
+.ax-tool-row-icon {
+  display: inline-flex;
+  align-items: center;
+  opacity: 1;
+  transition: opacity 100ms ease;
+}
+
+.ax-tool-row-chevron {
+  color: var(--color-text-secondary);
+}
+
+.ax-tool-row-chevron-hover {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.ax-tool-row-head:hover .ax-tool-row-icon {
+  opacity: 0;
+}
+
+.ax-tool-row-head:hover .ax-tool-row-chevron-hover {
+  opacity: 1;
+}
+
+.ax-tool-row-title {
+  flex: none;
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--color-text-secondary);
+}
+
+.ax-tool-row-sep {
+  flex: none;
+  width: 2px;
+  height: 2px;
+  border-radius: 1px;
+  margin: 0 8px;
+  background: var(--color-text-faint);
+}
+
+.ax-tool-row-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--color-text-muted);
+}
+
+/* 尾部常量片段（summarySuffix）不参与省略号截断，行变窄时仍可见。 */
+.ax-tool-row-summary-suffix {
+  flex: none;
+  margin-left: 4px;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--color-text-muted);
+}
+
+.ax-tool-row-error {
+  color: var(--color-danger);
+}
+
+.ax-tool-row-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  text-decoration-color: var(--color-text-faint);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.ax-tool-row-link:hover {
+  color: var(--color-text-primary);
+  text-decoration-color: currentColor;
+}
+
+/* Hover-revealed row actions (stop/retry) — kept out of the row chrome
+   unless the pointer is over the row. */
+.ax-tool-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  margin-left: 6px;
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.ax-tool-row-head:hover .ax-tool-row-actions,
+.ax-tool-row-actions:focus-within {
+  opacity: 1;
+}
+
+/* Expanded tool body: 4px indent (工具行几何). */
+.ax-tool-card-surface {
+  margin: 4px 0 4px 4px;
+}
+
+.ax-tool-inspect {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 0 2px 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 999px;
+  background: var(--color-bg-primary);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.ax-tool-row:hover .ax-tool-inspect,
+.ax-tool-inspect:focus-visible {
+  opacity: 1;
+}
+
+.ax-tool-inspect:hover {
+  background: var(--color-hover);
+  color: var(--color-text-primary);
+}
+
+/* 消息区：28px 操作行 under user bubbles / turn tails.
+   Copy stays visible once mounted; the time label fades in on hover (or
+   keyboard focus) without shifting layout. */
+.ax-flow-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 28px;
+  margin-left: -6px;
+}
+
+.ax-flow-actions[data-align='end'] {
+  justify-content: flex-end;
+  margin-left: 0;
+}
+
+.ax-flow-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border: none;
+  border-radius: 28px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background-color 80ms ease, color 80ms ease;
+}
+
+.ax-flow-action:hover {
+  background: var(--color-hover);
+  color: var(--color-text-secondary);
+}
+
+.ax-flow-action:focus-visible {
+  outline: none;
+  background: var(--color-hover);
+  color: var(--color-text-secondary);
+}
+
+.ax-flow-time {
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.ax-flow-time[data-side='start'] {
+  padding-right: 12px;
+}
+
+.ax-flow-time[data-side='end'] {
+  padding-left: 12px;
+}
+
+/* 运行状态点：10px 间隔 around the separator dot between readings. */
+.ax-flow-dot {
+  margin: 0 10px;
+}
+
+@media (hover: hover) {
+  [data-time-hover-root] .ax-flow-time {
+    opacity: 0;
+    transition: opacity 80ms ease;
+  }
+
+  [data-time-hover-root]:hover .ax-flow-time,
+  [data-time-hover-root]:focus-within .ax-flow-time {
+    opacity: 1;
+  }
+}
+
+/* 会话统计条: one dim, centered session stats strip under the flow,
+   with the handful of actions that have no right-panel home kept as quiet
+   text links. */
+.ax-session-tail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 32px 0;
+}
+
+.ax-session-stats {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--color-text-muted);
+}
+
+.ax-session-sep {
+  margin: 0 10px;
+  color: var(--color-border-default);
+}
+
+.ax-session-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.ax-session-action {
+  flex: none;
+  margin: 0;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+  transition: color 80ms ease, background-color 80ms ease;
+}
+
+.ax-session-action:hover {
+  background: var(--color-hover);
+  color: var(--color-text-secondary);
+}
+
+.ax-session-action:focus-visible {
+  outline: none;
+  background: var(--color-hover);
+  color: var(--color-text-secondary);
+}
+
+.ax-session-dot {
+  flex: none;
+  color: var(--color-text-faint);
+}
+
+/* ── Design Token System ─────────────────────────────────── */
+@theme {
+  /* Dark Intelligence — brand black actions, aura accent only (see tokens.css). */
+  --color-primary: #111216;
+  --color-primary-hover: #292C32;
+  --color-primary-active: #3A3E45;
+  --color-primary-soft: rgba(17, 18, 22, 0.06);
+  --color-primary-strong: rgba(17, 18, 22, 0.10);
+  --color-primary-border: rgba(17, 18, 22, 0.16);
+  --color-accent: #6A6884;
+  --color-accent-hover: #5B5975;
+  --color-accent-active: #4D4B66;
+  --color-accent-soft: rgba(106, 104, 132, 0.10);
+  --color-accent-strong: rgba(106, 104, 132, 0.16);
+  --color-accent-border: rgba(106, 104, 132, 0.24);
+  --color-brand-from: #292C32;
+  --color-brand-to: #6A6884;
+  --color-violet: #6A6884;
+  --color-violet-hover: #5B5975;
+  --color-violet-active: #4D4B66;
+  --color-violet-soft: rgba(106, 104, 132, 0.10);
+  --color-violet-strong: rgba(106, 104, 132, 0.16);
+  --color-violet-border: rgba(106, 104, 132, 0.24);
+
+  --color-bg-primary: #FFFFFF;
+  --color-bg-secondary: #F4F4F1;
+  --color-bg-tertiary: #E9E9E6;
+  --color-bg-elevated: #FFFFFF;
+  --color-bg-inset: rgba(17, 18, 22, 0.04);
+
+  --color-text-primary: #000000;
+  --color-text-secondary: #3E424A;
+  --color-text-muted: #6B7280;
+  --color-text-faint: #8E95A0;
+  --color-text-on-accent: #FFFFFF;
+
+  --color-border-dim: rgba(29, 33, 41, 0.05);
+  --color-border-default: rgba(29, 33, 41, 0.08);
+  --color-border-strong: rgba(29, 33, 41, 0.12);
+
+  --color-success: #16A34A;
+  --color-success-soft: rgba(22, 163, 74, 0.08);
+  --color-danger: #E5484D;
+  --color-danger-soft: rgba(229, 72, 77, 0.08);
+  --color-danger-border: rgba(229, 72, 77, 0.25);
+  --color-danger-lighter: #A25B60;
+  --color-warning: #D97706;
+  --color-warning-soft: rgba(217, 119, 6, 0.08);
+  --color-warning-border: rgba(217, 119, 6, 0.25);
+
+  --color-code-bg: #F6F7F9;
+  --color-surface: #FFFFFF;
+  --color-surface-hover: #ECECE9;
+  --color-surface-inset: rgba(29, 33, 41, 0.045);
+  --color-tooltip-bg: #FFFFFF;
+
+  /* Colors — back-compat aliases */
+  --color-bg-primary-alt: var(--color-bg-primary);
+  --color-bg-secondary-alt: var(--color-bg-secondary);
+  --color-bg-tertiary-alt: var(--color-bg-tertiary);
+  --color-text-primary-alt: var(--color-text-primary);
+  --color-text-secondary-alt: var(--color-text-secondary);
+  --color-text-muted-alt: var(--color-text-muted);
+  --color-text-faint-alt: var(--color-text-faint);
+  --color-border-dim-alt: var(--color-border-dim);
+  --color-border-strong-alt: var(--color-border-strong);
+  --color-danger-alt: var(--color-danger);
+  --color-success-alt: var(--color-success);
+  --color-warning-alt: var(--color-warning);
+
+  /* Typography */
+  --font-heading: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas,
+    'Liberation Mono', Menlo, Courier, 'PingFang SC', 'Microsoft YaHei';
+
+  --text-4xs: 0.5625rem;  /* 9px */
+  --text-4xs--line-height: 0.875rem;
+  --text-3xs: 0.625rem;   /* 10px */
+  --text-3xs--line-height: 0.875rem;
+  --text-2xs: 0.6875rem;  /* 11px */
+  --text-2xs--line-height: 0.875rem;
+  --text-xs: 0.75rem;     /* 12px */
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.8125rem;   /* 13px */
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;  /* 14px */
+  --text-base--line-height: 1.375rem;
+  --text-md: 0.9375rem;   /* 15px */
+  --text-md--line-height: 1.5625rem;
+  --text-lg: 1rem;        /* 16px */
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.25rem;     /* 20px */
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.5rem;     /* 24px */
+  --text-2xl--line-height: 2rem;
+  --text-3xl: 1.5rem;     /* 24px */
+  --text-3xl--line-height: 2rem;
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.6;
+  --leading-comfortable: 1.75;
+
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.02em;
+  --tracking-wider: 0.04em;
+
+  /* Spacing */
+  --spacing-1: 0.25rem;   /* 4px */
+  --spacing-2: 0.5rem;    /* 8px */
+  --spacing-3: 0.75rem;   /* 12px */
+  --spacing-4: 1rem;      /* 16px */
+  --spacing-5: 1.25rem;   /* 20px */
+  --spacing-6: 1.5rem;    /* 24px */
+  --spacing-8: 2rem;      /* 32px */
+  --spacing-10: 2.5rem;   /* 40px */
+  --spacing-12: 3rem;     /* 48px */
+  --spacing-16: 4rem;     /* 64px */
+
+  /* Border radius */
+  --radius-sm: 0.25rem;   /* 4px */
+  --radius-md: 0.375rem;  /* 6px */
+  --radius-lg: 0.5rem;    /* 8px */
+  --radius-xl: 0.75rem;   /* 12px */
+  --radius-card: 0.5rem;  /* 8px */
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(20, 24, 30, 0.05);
+  --shadow-sm: 0 1px 2px rgba(20, 24, 30, 0.04), 0 2px 8px rgba(20, 24, 30, 0.06);
+  --shadow-md: 0 2px 4px rgba(20, 24, 30, 0.04), 0 6px 16px rgba(20, 24, 30, 0.08);
+  --shadow-lg: 0 4px 8px rgba(20, 24, 30, 0.05), 0 10px 28px rgba(20, 24, 30, 0.10);
+  --shadow-xl: 0 6px 12px rgba(20, 24, 30, 0.06), 0 16px 40px rgba(20, 24, 30, 0.14);
+  --shadow-card: 0 1px 2px rgba(20, 24, 30, 0.05);
+  --shadow-card-hover: 0 2px 4px rgba(20, 24, 30, 0.05), 0 8px 20px rgba(20, 24, 30, 0.10);
+
+  /* Animation durations */
+  --duration-instant: 80ms;
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-slow: 350ms;
+
+  /* Easing */
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Dark theme variant ──────────────────────────────────── */
+@custom-variant dark (&:where(.dark, .dark *));
+/* Dark color tokens are defined in tokens.css (.dark { ... }) — loaded after app.css. */
+
+/* ── Global styles (replaces parts of reset.css handled by preflight) ── */
+/* Tailwind preflight already handles: box-sizing, margin/padding reset,
+   heading sizes, img/link defaults, form element font inheritance.
+   We only keep what preflight does NOT cover. */
+
+/* Electron frameless window drag region */
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+  color: var(--color-text-primary);
+}
+
+.title-bar-drag {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Scrollbar globals */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.25); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+.dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); }
+.dark ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.28); }
+
+/* Selection */
+::selection {
+  background: var(--color-violet-strong);
+  color: var(--color-text-primary);
+}
+
+/* Focus ring */
+:focus-visible {
+  outline: 2px solid var(--color-violet);
+  outline-offset: 2px;
+}
+
+body {
+  background: var(--color-bg-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Import existing global CSS files ────────────────────── */
+/* tokens.css is imported AFTER @theme so its values take precedence
+   for CSS custom properties. During migration this ensures both
+   Tailwind utilities and var() references work identically. */
+@import "./tokens.css";
+@import "./keyframes.css";
+@import "./highlight.css";
+@import "./icons.css";
+@import "./overrides.css";
+@import "./ax-ui.css";

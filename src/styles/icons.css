@@ -1,0 +1,19 @@
+/* ================================================================
+   Auraxis — Icon System
+   ================================================================ */
+
+/* Phosphor icons all render viewBox="0 0 256 256" (app SVGs use 0 0 24 24,
+   antd internals 0 0 1024 1024) — scope a rule to them to undo the global
+   `svg { display:block }` reset so inline icons sit on the text line + align. */
+svg[viewBox="0 0 256 256"] {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* Phosphor has no `spin` prop — this class drives rotation (replaces antd's
+   <Icon spin />). Reuses the `spin` keyframe defined in keyframes.css. */
+.ax-spin {
+  animation: spin 1s linear infinite;
+  transform-origin: center;
+}
