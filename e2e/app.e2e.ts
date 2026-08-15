@@ -77,12 +77,8 @@ test('对话模式发送消息并渲染用户气泡', async () => {
 });
 
 test('设置面板打开并切换主题', async () => {
-  // 侧边栏默认收起，且浮动输入层覆盖点击命中区：直接对元素派发 click 事件。
-  await page
-    .locator('nav button')
-    .filter({ hasText: '设置' })
-    .first()
-    .evaluate((el) => (el as HTMLElement).click());
+  // 回归：浮动输入 Dock 曾遮挡侧边栏底部，导致真实鼠标点击打不到设置按钮
+  await page.locator('nav button').filter({ hasText: '设置' }).first().click();
   await expect(page.locator('.ant-modal-content')).toBeVisible();
 
   await page.getByText('外观', { exact: true }).click();

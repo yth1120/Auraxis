@@ -731,7 +731,7 @@ export default function WorkbenchLayout() {
         <aside
           data-pane="sider"
           className={clsx(
-            'sider-drawer relative h-full shrink-0 overflow-hidden bg-[var(--color-glass-panel)] border-r border-border-dim transition-[width] duration-300 ease-out',
+            'sider-drawer relative z-30 h-full shrink-0 overflow-hidden bg-[var(--color-glass-panel)] border-r border-border-dim transition-[width] duration-300 ease-out',
             isResizingSider && '!transition-none',
           )}
           style={{ width: sidebarCollapsed ? 0 : Math.max(260, sidebarWidth) }}
