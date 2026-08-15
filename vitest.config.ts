@@ -12,8 +12,8 @@ export default defineConfig({
       // json-summary 输出 coverage/coverage-summary.json，设置面板的
       // 「测试覆盖率」页读取同一份文件展示真实数据。
       reporter: ['text', 'json-summary'],
-      // 校准后的「真实且会守住」门槛：当前实际 86.17% 行/语句、79.38% 分支、
-      // 84.30% 函数（补测 context-manager 摘要/截断链路与 Bash 内部执行后）。
+      // 校准后的「真实且会守住」门槛：当前实际 86.20% 行/语句、79.37% 分支、
+      // 84.32% 函数（补测 context-manager 摘要/截断链路与 Bash 内部执行后）。
       // 行/语句已达实际天花板区间，取整锁定；分支/函数留足余量。
       thresholds: { lines: 80, branches: 70, functions: 80, statements: 80 },
       include: ['electron/ipc/**/*.ts', 'src/stores/**/*.ts', 'src/core/**/*.ts'],

@@ -12,6 +12,11 @@ try {
   PTY = null;
 }
 
+/** 测试注入：单元测试用可控的假 PTY 替换 node-pty，避免依赖真实系统 shell。 */
+export function setPtyModuleForTests(ptyModule: unknown): void {
+  PTY = ptyModule;
+}
+
 interface TerminalSession {
   kind: 'pty' | 'pipe';
   proc?: any;

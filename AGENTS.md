@@ -64,7 +64,7 @@ npm run sdk:test         # SDK 测试
 ## 测试与验证
 
 - 新增/改动必须过：`npx tsc --noEmit`（渲染层）、`npm run electron:compile`（主进程）、`npx vitest run`（全量）、`npx vite build`（构建）。
-- 测试覆盖门槛：lines/statements ≥ 80%、branches ≥ 70%、functions ≥ 80%（`vitest.config.ts`，校准后的可守住水平；当前实际 86.17% 行/语句、79.38% 分支、84.30% 函数）；只允许有意上调、不允许跌破当前门槛。
+- 测试覆盖门槛：lines/statements ≥ 80%、branches ≥ 70%、functions ≥ 80%（`vitest.config.ts`，校准后的可守住水平；当前实际 86.20% 行/语句、79.37% 分支、84.32% 函数）；只允许有意上调、不允许跌破当前门槛。
 - 覆盖率报告：`npm run test:coverage` 同时输出 `coverage/coverage-summary.json`（gitignore，开发期产物），设置面板「测试覆盖率」页经 `coverage:get` IPC 实时读取该文件；README / AGENTS / docs 中的用例数与覆盖率数字以最近一次全量覆盖率为准，更新后必须同步。
 - 覆盖率统计范围：`electron/ipc/`、`src/stores/`、`src/core/`（不含 `src/components/` 与主进程入口）；UI 由组件级测试覆盖，桌面端到端链路由 `npm run test:smoke` 覆盖。
 - 端到端：`npm run test:e2e`（Playwright 启动真实 Electron，覆盖启动/模式切换/发消息/快捷卡片/设置主题）；改动渲染层或主进程启动链路后必须重跑。
