@@ -563,6 +563,15 @@ export default function ChatInput({ position }: ChatInputProps) {
     // In code mode the send button becomes a STOP control while the current
     // task is busy — this must win over slash commands / typing state.
     if (isCode && currentAgentRunning && currentAgentId) {
+      const text = inputValue.trim();
+      if (text) {
+        // 有输入时：排队续写，任务结束后自动跟进
+        useChatStore.getState().enqueueAgentMessage(text);
+        useChatStore.getState().setInputValue('');
+        setToastMsg(t('composer.toast.queued'));
+        setShowToast(true);
+        return;
+      }
       useAgentStore.getState().stopAgent(currentAgentId);
       return;
     }
@@ -1196,13 +1205,17 @@ export default function ChatInput({ position }: ChatInputProps) {
             )}
             onClick={handleSend}
             disabled={!hasInput && !isStreaming && !currentAgentRunning}
-            title={currentAgentRunning ? t('composer.stopTask') : isStreaming ? t('composer.stopGenerate') : isCode ? t('composer.startTask') : t('composer.send')}
-            aria-label={currentAgentRunning ? t('composer.stopTask') : isStreaming ? t('composer.stopGenerate') : isCode ? t('composer.startTask') : t('composer.send')}
+            title={currentAgentRunning ? (hasInput ? t('composer.queueSend') : t('composer.stopTask')) : isStreaming ? t('composer.stopGenerate') : isCode ? t('composer.startTask') : t('composer.send')}
+            aria-label={currentAgentRunning ? (hasInput ? t('composer.queueSend') : t('composer.stopTask')) : isStreaming ? t('composer.stopGenerate') : isCode ? t('composer.startTask') : t('composer.send')}
           >
             {(isStreaming || currentAgentRunning) ? (
-              <span className="inline-flex items-center justify-center w-[18px] h-[18px]">
-                <span className="inline-block w-[10px] h-[10px] bg-current rounded-md" />
-              </span>
+              hasInput ? (
+                <ArrowUp size={16} weight="bold" />
+              ) : (
+                <span className="inline-flex items-center justify-center w-[18px] h-[18px]">
+                  <span className="inline-block w-[10px] h-[10px] bg-current rounded-md" />
+                </span>
+              )
             ) : isCode ? (
               // Launch a parallel agent task — a "play/run" glyph
               <Play size={16} weight="fill" />

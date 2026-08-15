@@ -5,13 +5,12 @@ import {
   Copy as CopyOutlined,
   Check as CheckOutlined,
 } from '@/components/common/icons'
-import { Flex, Typography } from 'antd';
+import { Flex } from 'antd';
 import clsx from 'clsx';
 import { useT } from '../../i18n';
 import type { Message } from '../../types/chat';
 import { getContentText } from '../../types/chat';
 import { useChatStore } from '../../stores/useChatStore';
-import { formatTime } from '../../utils/time';
 import ImageGallery, { stripImageBlocks } from './ImageGallery';
 
 interface UserMessageProps {
@@ -128,7 +127,6 @@ export default memo(function UserMessage({ message }: UserMessageProps) {
               </button>
             </span>
           )}
-          <Typography.Text className="ax-message-time">{formatTime(message.timestamp)}</Typography.Text>
         </Flex>
       </div>
     </div>

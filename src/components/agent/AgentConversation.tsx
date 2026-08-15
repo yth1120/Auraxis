@@ -1031,11 +1031,6 @@ export default function AgentConversation({ headerInset = 0, bottomInset = 0 }: 
                   {projectUserText(agent.description)}
                 </div>
                 <div className="ax-flow-actions" data-align="end">
-                  {agent.startTime != null && (
-                    <span className="ax-flow-time" data-side="start">
-                      {formatTime(agent.startTime)}
-                    </span>
-                  )}
                   <button
                     type="button"
                     className="ax-flow-action"
@@ -1091,10 +1086,12 @@ export default function AgentConversation({ headerInset = 0, bottomInset = 0 }: 
               const durationMs = turn.startTs != null && turn.end?.timestamp != null
                 ? Math.max(0, turn.end.timestamp - turn.startTs)
                 : undefined;
+              const tailTime = turn.end?.timestamp
+                ?? turn.entries[turn.entries.length - 1]?.timestamp;
               // the tail (copy + clock + run stats) belongs to a
               // settled turn only — the live turn carries no actions chrome.
               const hasTail = turn.end != null
-                && (turnText !== '' || stats !== '' || durationMs != null);
+                && (turnText !== '' || stats !== '' || tailTime != null || durationMs != null);
               return (
                 <div key={turn.iteration} data-agent-turn={turn.iteration} className="flex flex-col gap-4">
                   {visibleTurnEntries.map((entry, i) => (
@@ -1128,6 +1125,12 @@ export default function AgentConversation({ headerInset = 0, bottomInset = 0 }: 
                         </button>
                       )}
                       <span className="ax-flow-time tabular-nums" data-side="end">
+                        {tailTime != null && (
+                          <>
+                            {formatTime(tailTime)}
+                            {durationMs != null || stats !== '' ? <span className="ax-flow-dot" aria-hidden>·</span> : null}
+                          </>
+                        )}
                         {durationMs != null && (
                           <>
                             {runDurationLabel(durationMs)}

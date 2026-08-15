@@ -188,6 +188,7 @@ export const enUS: Record<I18nKey, string> = {
   'composer.stopGenerate': 'Stop generating',
   'composer.startTask': 'Start task',
   'composer.send': 'Send',
+  'composer.queueSend': 'Queue follow-up',
   'composer.continueFailed': 'Continue failed. Please check the task state and retry',
   'composer.needProject': 'Please select a project directory before sending a task',
   'composer.createFailed': 'Task creation failed. Check the project path and API key',

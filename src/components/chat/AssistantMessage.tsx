@@ -111,6 +111,7 @@ export default memo(function AssistantMessage({ message, searchQuery, isLastAssi
         </div>
 
         {/* Actions: always visible */}
+        {!message.isStreaming && (
         <div className="ax-message-actions absolute bottom-[2px] right-0 z-[2]">
           <button
             className={clsx('ax-message-action', rating === 'up' && '!text-primary')}
@@ -153,6 +154,7 @@ export default memo(function AssistantMessage({ message, searchQuery, isLastAssi
             {copied ? <CheckOutlined style={{ color: 'var(--color-success)' }} /> : <CopyOutlined />}
           </button>
         </div>
+        )}
       </div>
       <span className="ax-message-time">
         {formatTime(message.timestamp)}

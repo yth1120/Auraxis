@@ -34,6 +34,7 @@ describe('AssistantMessage — AI 输出渲染', () => {
     expect(text).toContain('加粗');
     expect(container.querySelectorAll('li').length).toBeGreaterThanOrEqual(2);
     expect(container.querySelector('.ax-message-time')?.textContent?.length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('.ax-message-action').length).toBeGreaterThan(0);
   });
 
   it('提取思考块并渲染思考行', () => {
@@ -65,5 +66,7 @@ describe('AssistantMessage — AI 输出渲染', () => {
     expect(text).toContain('第二段');
     expect(text.split('第一段')).toHaveLength(2);
     expect(text.split('第二段')).toHaveLength(2);
+    // 流式状态下不显示完成态操作图标
+    expect(container.querySelectorAll('.ax-message-action').length).toBe(0);
   });
 });

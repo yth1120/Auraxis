@@ -189,6 +189,7 @@ export const zhCN = {
   'composer.stopGenerate': '停止生成',
   'composer.startTask': '启动任务',
   'composer.send': '发送',
+  'composer.queueSend': '排队续写',
   'composer.continueFailed': '续写失败，请检查任务状态后重试',
   'composer.needProject': '请先选择项目目录，再发送任务',
   'composer.createFailed': '任务创建失败，请检查项目路径与 API Key',
