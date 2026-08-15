@@ -1,0 +1,134 @@
+/**
+ * cli-args.ts — headless CLI command surface （插件管理）.
+ *
+ * Commands (all headless, no window):
+ *   auraxis --help
+ *   auraxis --run "<task>"
+ *   auraxis --plugin list
+ *   auraxis --sdk | --acp
+ */
+
+export type CliPermissionMode = 'ask' | 'plan' | 'afe';
+export type CliSandboxMode = 'read' | 'workspace-write' | 'full';
+export type CliReasoningEffort = 'high' | 'max';
+
+export interface CliArgs {
+  help: boolean;
+  sdk: boolean;
+  acp: boolean;
+  run?: string;
+  pluginList: boolean;
+  /** `--plugin scan [dir]` — discover installable plugin manifests. */
+  pluginScanDir?: string;
+  /** `--plugin enable <id>` / `--plugin disable <id>`. */
+  pluginEnable?: string;
+  pluginDisable?: string;
+  /** Project root for the task. Falls back to settings → cwd. */
+  project?: string;
+  model?: string;
+  apiKey?: string;
+  /** Override the resolved API base (also settable via DEEPSEEK_BASE_URL). */
+  apiBase?: string;
+  mode?: CliPermissionMode;
+  sandbox?: CliSandboxMode;
+  deepThink?: boolean;
+  reasoningEffort?: CliReasoningEffort;
+  maxIterations?: number;
+  /** Stream machine-readable NDJSON events instead of plain text. */
+  json?: boolean;
+  /** Print tool calls / thinking / lifecycle events to stderr. */
+  verbose?: boolean;
+  /** Auto-approve every tool call (default true for one-shot runs). */
+  autoApprove?: boolean;
+  /** Auto-approve generated plans in plan mode. */
+  approvePlan?: boolean;
+}
+
+function valueOf(argv: string[], flag: string): string | undefined {
+  const idx = argv.indexOf(flag);
+  if (idx >= 0 && argv[idx + 1] !== undefined) return argv[idx + 1];
+  const eq = argv.find((a) => a.startsWith(`${flag}=`));
+  return eq ? eq.slice(flag.length + 1) : undefined;
+}
+
+function has(argv: string[], flag: string): boolean {
+  return argv.includes(flag);
+}
+
+export function parseCliArgs(argv: string[]): CliArgs {
+  const out: CliArgs = {
+    help: false,
+    sdk: false,
+    acp: false,
+    pluginList: false,
+  };
+  if (has(argv, '--help') || has(argv, '-h') || argv.includes('help')) out.help = true;
+  if (has(argv, '--sdk')) out.sdk = true;
+  if (has(argv, '--acp')) out.acp = true;
+
+  out.run = valueOf(argv, '--run');
+  out.project = valueOf(argv, '--project');
+  out.model = valueOf(argv, '--model');
+  out.apiKey = valueOf(argv, '--api-key');
+  out.apiBase = valueOf(argv, '--api-base');
+  out.maxIterations = (() => {
+    const raw = valueOf(argv, '--max-iterations');
+    if (!raw) return undefined;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
+  })();
+  const mode = valueOf(argv, '--mode');
+  if (mode === 'ask' || mode === 'plan' || mode === 'afe') out.mode = mode;
+  const sandbox = valueOf(argv, '--sandbox');
+  if (sandbox === 'read' || sandbox === 'workspace-write' || sandbox === 'full') out.sandbox = sandbox;
+  const effort = valueOf(argv, '--reasoning-effort');
+  if (effort === 'high' || effort === 'max') out.reasoningEffort = effort;
+  out.deepThink = has(argv, '--deep-think') || has(argv, '--deepthink');
+  out.json = has(argv, '--json');
+  out.verbose = has(argv, '--verbose');
+  out.autoApprove = has(argv, '--auto-approve');
+  out.approvePlan = has(argv, '--approve-plan');
+
+  const pluginIdx = argv.indexOf('--plugin');
+  if (pluginIdx >= 0) {
+    const action = argv[pluginIdx + 1];
+    if (action === 'list') out.pluginList = true;
+    else if (action === 'scan') out.pluginScanDir = argv[pluginIdx + 2] || '';
+    else if (action === 'enable') out.pluginEnable = argv[pluginIdx + 2];
+    else if (action === 'disable') out.pluginDisable = argv[pluginIdx + 2];
+  }
+
+  return out;
+}
+
+export function cliUsage(): string {
+  return [
+    'Auraxis headless CLI',
+    '',
+    '  auraxis --help                                  显示本帮助',
+    '  auraxis --run "<任务>" [选项]                   无头执行任务',
+    '',
+    '任务选项:',
+    '  --project <路径>            项目根目录（默认: 设置 → 当前目录）',
+    '  --model <id>                模型 ID（默认: 设置 → deepseek-v4-pro）',
+    '  --api-key <key>             API Key（优先级高于设置；也支持 DEEPSEEK_API_KEY）',
+    '  --api-base=<url>            API 端点（默认: DEEPSEEK_BASE_URL → 官方端点；请用 = 形式）',
+    '  --mode <ask|plan|afe>       权限模式（默认: afe）',
+    '  --sandbox <read|workspace-write|full>  沙箱模式（默认: workspace-write）',
+    '  --deep-think                启用深度思考',
+    '  --reasoning-effort <high|max>  思考强度（默认 high）',
+    '  --max-iterations <n>        最大执行轮数',
+    '  --auto-approve              自动批准全部工具调用（单次 CLI 默认启用）',
+    '  --approve-plan              计划模式自动批准生成计划',
+    '  --json                      输出 NDJSON 事件 + 最终结果',
+    '  --verbose                   把工具调用/思考输出打印到 stderr',
+    '',
+    '其它命令:',
+    '  auraxis --plugin list                           列出已安装插件（来自最近同步）',
+    '  auraxis --plugin scan [目录]                     扫描目录下的 .auraxis-plugin/plugin.json',
+    '  auraxis --plugin enable <id>                    持久化启用插件（写入 plugin-state.json）',
+    '  auraxis --plugin disable <id>                   持久化禁用插件',
+    '  auraxis --sdk                                   SDK JSON-RPC 服务（stdio）',
+    '  auraxis --acp                                   ACP 服务（stdio）',
+  ].join('\n');
+}
