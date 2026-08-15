@@ -12,6 +12,8 @@ Auraxis v2.0.0 是一款基于 Electron 的桌面端 Agentic 编程助手，融�
 - **进程通信**：通过 Electron IPC（`contextBridge` + `ipcMain/ipcRenderer`）进行双向通信
 
 ### 技术栈
+<img width="1920" height="1032" alt="微信图片_20260815161435_450_38" src="https://github.com/user-attachments/assets/93e334b9-27b2-42f9-b8cc-b87d395e5136" />
+<img width="1920" height="1032" alt="微信图片_20260815161450_451_38" src="https://github.com/user-attachments/assets/770b8aca-7745-43b3-9afe-806774692d04" />
 
 | 层 | 技术 |
 |---|------|
