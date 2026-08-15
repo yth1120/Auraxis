@@ -1,4 +1,4 @@
-<img width="3078" height="1376" alt="Gemini_Generated_Image_6wvzm06wvzm06wvz" src="https://github.com/user-attachments/assets/cc06146b-51a2-4b2e-a6c4-41aca0a0fb5e" />
+<img width="3078" height="1376" alt="" src="https://github.com/user-attachments/assets/cc06146b-51a2-4b2e-a6c4-41aca0a0fb5e" />
 
 # Auraxis 项目架构与开发文档
 
