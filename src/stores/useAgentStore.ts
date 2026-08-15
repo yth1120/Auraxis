@@ -40,26 +40,6 @@ function agentIpc() {
  *  not resurrect them (delete/complete race). */
 const removedAgentIds = new Set<string>();
 
-// ── Diagnostic tracing (temporary) ─────────────────────
-// Records navigation-affecting mutations to the durable chat log so a
-// "task finished → view jumped to home" regression can be pinned to its
-// exact caller instead of being guessed at.
-function traceNav(event: string, detail?: unknown) {
-  try {
-    void window.electronAPI?.chatLog?.append('__ax-nav-trace__', [
-      {
-        type: 'system',
-        ts: Date.now(),
-        data: {
-          event,
-          detail: detail ?? null,
-          stack: (new Error().stack || '').split('\n').slice(1, 7).join(' | '),
-        },
-      },
-    ]);
-  } catch { /* non-critical */ }
-}
-
 // ─── Store ─────────────────────────────────────────
 
 export const useAgentStore = create<AgentStore>()(
@@ -74,7 +54,6 @@ export const useAgentStore = create<AgentStore>()(
       // ── Local mutations ──────────────────────────
 
       setCurrentAgent: (id) => {
-        if (id == null) traceNav('setCurrentAgent(null)');
         set({ currentAgentId: id });
       },
       setPlanFile: (path, agentId) =>
@@ -114,7 +93,6 @@ export const useAgentStore = create<AgentStore>()(
         })),
 
       removeAgent: async (id) => {
-        traceNav('removeAgent', id);
         const api = agentIpc();
         // Tombstone the id BEFORE the IPC round-trip: the backend may have a
         // terminal status broadcast already in flight, and without this guard
@@ -426,13 +404,11 @@ export const useAgentStore = create<AgentStore>()(
         // leave the Agent view permanently stuck on "任务不存在".
         const after = useAgentStore.getState();
         if (after.currentAgentId && !after.agents.some((a) => a.id === after.currentAgentId)) {
-          traceNav('refreshStates: orphaned selection cleared', after.currentAgentId);
           set({ currentAgentId: null });
         }
       },
 
       clearAgents: async () => {
-        traceNav('clearAgents');
         const api = agentIpc();
         if (api?.clear) {
           try {

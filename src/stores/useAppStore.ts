@@ -9,7 +9,7 @@ export const useAppStore = create<AppStore>()(
   persist(
     (set, get) => ({
       theme: 'light',
-      sidebarCollapsed: true,
+      sidebarCollapsed: false,
       sidebarMode: 'chat' as const,
       showSettings: false,
       showRightPanel: false,
@@ -52,21 +52,6 @@ export const useAppStore = create<AppStore>()(
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 
       setSidebarMode: (mode) => {
-        if (mode === 'chat') {
-          try {
-            void window.electronAPI?.chatLog?.append('__ax-nav-trace__', [
-              {
-                type: 'system',
-                ts: Date.now(),
-                data: {
-                  event: 'setSidebarMode(chat)',
-                  detail: null,
-                  stack: (new Error().stack || '').split('\n').slice(1, 7).join(' | '),
-                },
-              },
-            ]);
-          } catch { /* non-critical */ }
-        }
         set({ sidebarMode: mode });
       },
 

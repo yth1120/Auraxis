@@ -49,6 +49,21 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     }
   }, [open]);
 
+  // Esc must close the palette even before the input gains focus — the global
+  // app shortcut handler skips Escape while an input is focused, so relying on
+  // antd's panel-level keydown alone is timing-dependent.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [open, onClose]);
+
   const items = useMemo((): CommandItem[] => {
     const all: CommandItem[] = [];
 

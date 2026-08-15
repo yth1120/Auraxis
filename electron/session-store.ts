@@ -128,6 +128,9 @@ export class JsonlSessionStore implements SessionStore {
 
   async append(sessionId: string, events: Array<Omit<SessionEvent, 'seq'>>): Promise<void> {
     if (!sessionId || !events || events.length === 0) return;
+    // Reserved namespace for internal/debug writes — must never surface in
+    // the user's session history.
+    if (sessionId === '__ax-nav-trace__') return;
     const file = this.file(sessionId);
     await fs.mkdir(path.dirname(file), { recursive: true });
     let seq = await this.lastSeq(sessionId);
@@ -157,6 +160,7 @@ export class JsonlSessionStore implements SessionStore {
   /** Append a metadata snapshot as a `system` event (last write wins on replay). */
   async meta(sessionId: string, meta: SessionMeta): Promise<void> {
     if (!this.safeId(sessionId)) return;
+    if (sessionId === '__ax-nav-trace__') return;
     await this.append(sessionId, [
       { type: 'system', ts: Date.now(), data: { event: 'session_meta', meta } },
     ]);

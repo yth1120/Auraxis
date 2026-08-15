@@ -29,6 +29,12 @@ describe('JsonlSessionStore', () => {
     expect(events.map((e) => e.seq)).toEqual([1, 2, 3]);
   });
 
+  it('rejects reserved debug session ids so they never pollute history', async () => {
+    await store.append('__ax-nav-trace__', [ev('system', { event: 'setSidebarMode(chat)' })]);
+    const list = await store.list();
+    expect(list).toHaveLength(0);
+  });
+
   it('lists sessions with metadata and derived titles', async () => {
     await store.append('s1', [ev('user', { text: '第一个用户消息' })]);
     await store.meta('s1', { title: '自定义标题', model: 'm', messageCount: 7, pinned: true });
