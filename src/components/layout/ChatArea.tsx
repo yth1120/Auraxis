@@ -256,9 +256,12 @@ export default function ChatArea() {
             /* Code-mode home: personal dashboard (always show when no active agent task).
                Centered scroll column mirrors chat mode, so the scrollbar sits
                at the same X position with the same global styling. */
-            <div className="flex-1 min-h-0 flex flex-row min-w-0" style={{ paddingTop: headerHeight, paddingBottom: composerHeight }}>
+            <div className="flex-1 min-h-0 flex flex-row min-w-0">
               <div className="stats-home-scroll w-full max-w-[var(--content-max-width,880px)] mx-auto overflow-y-auto">
-                <div className="min-h-full flex flex-col justify-center py-10 px-8 box-border">
+                <div
+                  className="min-h-full flex flex-col justify-center py-10 px-8 box-border"
+                  style={{ paddingTop: headerHeight, paddingBottom: composerHeight }}
+                >
                   <div className="flex w-full max-w-[720px] mx-auto flex-col items-start text-left gap-1 mb-[18px]">
                     <span className="flex items-center gap-2">
                       <img src={logoPng} alt="Auraxis" className="w-9 h-9 object-contain" />
