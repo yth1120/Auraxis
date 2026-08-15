@@ -971,7 +971,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
         'scroll-thin flex flex-col flex-1 sider-scroll-area-inner mt-1 overflow-y-auto overflow-x-hidden',
       )}>
         {/* ── Top functions: normal in-flow items, scroll with the sidebar ── */}
-        <div className={clsx('shrink-0 flex flex-col gap-0.5', visualCollapsed ? 'px-0 pb-1' : 'px-2 pb-2')}>
+        <div className={clsx('shrink-0 flex flex-col gap-0', visualCollapsed ? 'px-0 pb-1' : 'px-2 pb-2')}>
           {SIDEBAR_TOP_NAV.filter((f) => {
             // Chat mode keeps only 新建对话; Agent mode shows it plus tools.
             return sidebarMode === 'code' ? true : f.key === 'new';
