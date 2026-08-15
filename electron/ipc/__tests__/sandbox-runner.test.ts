@@ -7,6 +7,14 @@ import { runSandboxedCommand, sandboxScriptPath, sandboxBackend, isSandboxSuppor
 
 const canRun = process.platform === 'win32' && sandboxScriptPath() !== null;
 const canRunAc = process.platform === 'win32' && sandboxScriptPath('appcontainer') !== null;
+// 当前平台的原生沙箱后端（Windows=restricted，Linux=linux，macOS=macos）。
+const platformBackend = process.platform === 'win32'
+  ? 'restricted'
+  : process.platform === 'linux'
+    ? 'linux'
+    : process.platform === 'darwin'
+      ? 'macos'
+      : 'restricted';
 
 describe.runIf(canRun)('sandbox-runner — Windows 原生沙箱', () => {
   it('runs a command under the restricted token and streams stdout', async () => {
@@ -65,7 +73,7 @@ describe.runIf(canRun)('sandbox-runner — Windows 原生沙箱', () => {
   }, 30_000);
 });
 
-describe.skipIf(canRun)('sandbox-runner — 平台不支持', () => {
+describe.skipIf(isSandboxSupported(platformBackend))('sandbox-runner — 平台不支持', () => {
   it('reports unsupported on non-Windows or missing launcher', async () => {
     const res = await runSandboxedCommand({
       argv: ['echo', 'x'],
@@ -77,19 +85,22 @@ describe.skipIf(canRun)('sandbox-runner — 平台不支持', () => {
 });
 
 describe('sandbox-runner — backend selection', () => {
-  it('defaults to restricted on win32 and honors the override', () => {
+  it('defaults to the platform backend and honors the override', () => {
     const orig = process.env.AURAXIS_SANDBOX_BACKEND;
     delete process.env.AURAXIS_SANDBOX_BACKEND;
-    expect(sandboxBackend()).toBe('restricted');
+    expect(sandboxBackend()).toBe(platformBackend);
     process.env.AURAXIS_SANDBOX_BACKEND = 'appcontainer';
     expect(sandboxBackend()).toBe('appcontainer');
     if (orig === undefined) delete process.env.AURAXIS_SANDBOX_BACKEND;
     else process.env.AURAXIS_SANDBOX_BACKEND = orig;
   });
 
-  it('resolves linux/macos launcher scripts and marks them unsupported on win32', () => {
+  it('resolves linux/macos launcher scripts', () => {
     expect(sandboxScriptPath('linux')?.endsWith('sandbox-linux.sh')).toBe(true);
     expect(sandboxScriptPath('macos')?.endsWith('sandbox-macos.sh')).toBe(true);
+  });
+
+  it.skipIf(process.platform !== 'win32')('marks linux/macos backends unsupported on win32', () => {
     expect(isSandboxSupported('linux')).toBe(false);
     expect(isSandboxSupported('macos')).toBe(false);
   });

@@ -4,6 +4,9 @@ import os from 'os';
 import path from 'path';
 
 const tmpRoot = mkdtempSync(path.join(os.tmpdir(), 'auraxis-lsp-'));
+// 与 tool-handlers.ts 的跨平台命令解析保持一致：Windows 需要 .cmd 后缀。
+const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 
 const spawnSyncMock = vi.hoisted(() =>
   vi.fn(() => ({ status: 0, stdout: Buffer.from(''), stderr: Buffer.from(''), error: undefined })),
@@ -197,7 +200,7 @@ describe('LSP — 定义/引用/悬停/诊断', () => {
       status: 2,
       stdout: Buffer.from(''),
       stderr: Buffer.from(
-        `${root}\\app.ts(1,2): error TS2322: msg\n${root}\\other.ts(3,4): warning TS6133: w`,
+        `${path.join(root, 'app.ts')}(1,2): error TS2322: msg\n${path.join(root, 'other.ts')}(3,4): warning TS6133: w`,
       ),
       error: undefined,
     } as any);
@@ -211,7 +214,7 @@ describe('LSP — 定义/引用/悬停/诊断', () => {
     spawnSyncMock.mockReturnValue({ status: 0, stdout: Buffer.from(''), stderr: Buffer.from(''), error: undefined } as any);
     const full = await executeToolCall('LSP', { action: 'diagnostics' }, ctx());
     expect(full.output).toMatchObject({ passed: true, message: '类型检查通过，未发现错误。' });
-    expect(spawnSyncMock.mock.calls.some((c: any) => c[0] === 'npx.cmd' && c[1].includes('--noEmit'))).toBe(true);
+    expect(spawnSyncMock.mock.calls.some((c: any) => c[0] === npxCmd && c[1].includes('--noEmit'))).toBe(true);
 
     spawnSyncMock.mockReturnValueOnce({ status: null, stdout: Buffer.from(''), stderr: Buffer.from(''), error: { message: 'spawn ENOENT' } } as any);
     expect((await executeToolCall('LSP', { action: 'diagnostics' }, ctx())).error).toContain('诊断执行失败');
@@ -236,25 +239,25 @@ describe('ReviewArtifact', () => {
   it('typecheck 选择脚本或 npx 回退', async () => {
     writePkg({ typecheck: 'tc' });
     await executeToolCall('ReviewArtifact', { check_type: 'typecheck' }, ctx());
-    expect(spawnSyncMock).toHaveBeenLastCalledWith('npm.cmd', ['run', 'tc'], expect.anything());
+    expect(spawnSyncMock).toHaveBeenLastCalledWith(npmCmd, ['run', 'tc'], expect.anything());
 
     writePkg({});
     await executeToolCall('ReviewArtifact', { check_type: 'typecheck' }, ctx());
-    expect(spawnSyncMock).toHaveBeenLastCalledWith('npx.cmd', ['tsc', '--noEmit', '--pretty', 'false'], expect.anything());
+    expect(spawnSyncMock).toHaveBeenLastCalledWith(npxCmd, ['tsc', '--noEmit', '--pretty', 'false'], expect.anything());
   });
 
   it('build / test / lint 脚本优先级', async () => {
     writePkg({});
     await executeToolCall('ReviewArtifact', { check_type: 'build' }, ctx());
-    expect(spawnSyncMock).toHaveBeenLastCalledWith('npx.cmd', ['tsc', '--noEmit'], expect.anything());
+    expect(spawnSyncMock).toHaveBeenLastCalledWith(npxCmd, ['tsc', '--noEmit'], expect.anything());
 
     writePkg({ test: 't' });
     await executeToolCall('ReviewArtifact', { check_type: 'test' }, ctx());
-    expect(spawnSyncMock).toHaveBeenLastCalledWith('npm.cmd', ['test'], expect.anything());
+    expect(spawnSyncMock).toHaveBeenLastCalledWith(npmCmd, ['test'], expect.anything());
 
     writePkg({});
     await executeToolCall('ReviewArtifact', { check_type: 'lint' }, ctx());
-    expect(spawnSyncMock).toHaveBeenLastCalledWith('npx.cmd', ['eslint', '.', '--ext', '.ts,.tsx', '--max-warnings', '0'], expect.anything());
+    expect(spawnSyncMock).toHaveBeenLastCalledWith(npxCmd, ['eslint', '.', '--ext', '.ts,.tsx', '--max-warnings', '0'], expect.anything());
   });
 
   it('进程错误/非零退出/通过三种结果', async () => {

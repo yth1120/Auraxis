@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import os from 'os';
+import path from 'path';
 
 vi.mock('electron', () => ({
   app: { getPath: () => os.tmpdir() },
@@ -148,7 +149,7 @@ describe('InspectRuntime / WriteSkill / AskUser', () => {
     expect((await executeToolCall('WriteSkill', {}, ctx())).error).toBe('name 与 content 必填');
     const r = await executeToolCall('WriteSkill', { name: 'x', content: 'body' }, ctx());
     expect(r.output).toEqual({ name: 'x', path: '/skills/x.md' });
-    expect(writeSkill).toHaveBeenCalledWith(os.tmpdir() + '\\skills', 'x', 'body');
+    expect(writeSkill).toHaveBeenCalledWith(path.join(os.tmpdir(), 'skills'), 'x', 'body');
   });
 
   it('AskUser 空问题拒绝并返回答案', async () => {

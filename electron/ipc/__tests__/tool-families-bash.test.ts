@@ -146,7 +146,9 @@ afterEach(() => {
 
 describe('Bash — 参数校验', () => {
   it('workspace-write 下拒绝越界 workdir', async () => {
-    const r = await executeToolCall('Bash', { command: 'ls', workdir: 'C:/outside' }, ctx({ sandboxMode: 'workspace-write' }));
+    // 跨平台越界路径：项目根（os.tmpdir()）的父目录之外。
+    const outside = path.resolve(os.tmpdir(), '..', `auraxis-outside-${process.pid}`);
+    const r = await executeToolCall('Bash', { command: 'ls', workdir: outside }, ctx({ sandboxMode: 'workspace-write' }));
     expect(r.error).toContain('工作目录超出项目边界');
   });
 

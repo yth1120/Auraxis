@@ -5,9 +5,19 @@ const h = vi.hoisted(() => ({
   win: null as null | any,
 }));
 
+// 单元测试不真正拉起系统 shell：node-pty 按平台附带预编译产物，但
+// 真实 spawn 依赖运行环境（macOS CI 上 posix_spawnp 可能失败）。这里
+// 用可控的假 PTY 验证 handler 接线与会话生命周期。
+const ptyMock = vi.hoisted(() => ({
+  spawn: vi.fn(),
+}));
+
 vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn((ch: string, fn: Function) => h.handlers.set(ch, fn)) },
   BrowserWindow: { fromWebContents: () => h.win },
+}));
+vi.mock('node-pty', () => ({
+  spawn: (...args: unknown[]) => ptyMock.spawn(...args),
 }));
 vi.mock('../pty-tool', () => ({
   ptyRegistry: {
@@ -36,6 +46,16 @@ beforeEach(() => {
   vi.mocked(ptyRegistry.peek).mockReturnValue(null);
   vi.mocked(ptyRegistry.subscribe).mockReturnValue(() => {});
   vi.mocked(ptyRegistry.write).mockReturnValue(false);
+  ptyMock.spawn.mockImplementation(() => {
+    const listeners: { data?: (d: string) => void; exit?: (info: { exitCode: number }) => void } = {};
+    return {
+      onData: vi.fn((cb: (d: string) => void) => { listeners.data = cb; }),
+      onExit: vi.fn((cb: (info: { exitCode: number }) => void) => { listeners.exit = cb; }),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(() => listeners.exit?.({ exitCode: 0 })),
+    };
+  });
   registerTerminalHandlers();
   registerAgentShellHandlers();
 });

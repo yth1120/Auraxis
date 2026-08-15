@@ -57,7 +57,8 @@ const finalAssistant = {
 describe('step-engine', () => {
   describe('buildTimeContextMessage', () => {
     it('includes the current wall-clock time and session elapsed duration', () => {
-      const now = new Date('2026-08-12T10:30:45+08:00').getTime();
+      // 本地时间构造，避免 CI 时区（UTC）把 10:30:45 渲染成 02:30:45。
+      const now = new Date(2026, 7, 12, 10, 30, 45).getTime();
       const msg = buildTimeContextMessage(now - 65_000, now);
       expect(msg.role).toBe('system');
       expect(msg.content).toContain('10:30:45');

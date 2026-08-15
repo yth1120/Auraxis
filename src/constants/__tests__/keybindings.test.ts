@@ -27,8 +27,15 @@ describe('matchBinding — Ctrl / Meta 平台语义', () => {
 });
 
 describe('isCtrlOrCmd', () => {
-  it('Windows 上只有 Ctrl 算', () => {
+  const isMac = /Mac|iPhone|iPad/.test(typeof navigator !== 'undefined' ? navigator.platform : '');
+
+  it.skipIf(isMac)('Windows/Linux 上只有 Ctrl 算', () => {
     expect(isCtrlOrCmd(ev({ ctrlKey: true }))).toBe(true);
     expect(isCtrlOrCmd(ev({ metaKey: true }))).toBe(false);
+  });
+
+  it.skipIf(!isMac)('macOS 上 Ctrl 或 Cmd 都算', () => {
+    expect(isCtrlOrCmd(ev({ ctrlKey: true }))).toBe(true);
+    expect(isCtrlOrCmd(ev({ metaKey: true }))).toBe(true);
   });
 });
