@@ -23,6 +23,11 @@ const headlessMode =
   || process.env.AURAXIS_SDK === '1'
   || process.env.AURAXIS_ACP === '1';
 
+// 测试/便携隔离：显式指定 userData 目录（E2E 启动时设置，正常桌面启动不生效）。
+if (process.env.AURAXIS_USER_DATA_DIR) {
+  app.setPath('userData', process.env.AURAXIS_USER_DATA_DIR);
+}
+
 // Headless processes must not share the desktop app's Chromium profile —
 // a second instance on the same userData dir is silently killed by the
 // singleton lock. Isolate the profile while still reading real settings

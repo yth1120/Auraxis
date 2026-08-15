@@ -1,7 +1,7 @@
 {
   "name": "@auraxis/sdk",
   "version": "2.0.0",
-  "description": "TypeScript client SDK for driving an Auraxis runtime over stdio JSON-RPC ().",
+  "description": "TypeScript client SDK for driving an Auraxis runtime over JSON-RPC 2.0 (loopback TCP).",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

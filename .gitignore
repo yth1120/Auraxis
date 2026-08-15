@@ -19,6 +19,8 @@ npm-debug.log*
 
 # Coverage
 coverage/
+test-results/
+playwright-report/
 
 # OS & IDE
 .DS_Store

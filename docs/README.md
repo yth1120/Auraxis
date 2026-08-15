@@ -1,6 +1,4 @@
 # Auraxis 项目架构与开发文档
-<img width="1198" height="798" alt="image" src="https://github.com/user-attachments/assets/821a42e6-b51d-43f1-b2ea-6bd047689746" />
-<img width="1198" height="798" alt="image" src="https://github.com/user-attachments/assets/08cc1829-a4fb-4ab8-9c0d-561b38d95051" />
 
 相关文档：[TS SDK](../packages/auraxis-sdk/README.md) · [Python SDK](../python/auraxis_sdk/README.md) · [工程规范](../AGENTS.md)
 
@@ -57,7 +55,7 @@ Electron Main Process (electron/)            Renderer Process (src/)
 │ ipc/agent-scheduler.ts — 调度器    │    │   工具/命令注册表              │
 │ ipc/agent-handlers.ts — Agent CRUD │   │                              │
 │ ipc/tool-handlers.ts — 63个工具执行│   │ src/components/ — UI 组件     │
-│ ipc/tool-defs.ts — 63 个工具定义  │    │    chat/, input/, layout/,    │
+ │ tool-defs.ts — 63 个工具定义     │    │    chat/, input/, layout/,    │
 │ ipc/permission-*.ts — 权限系统    │    │    settings/, agent/,         │
 │ ipc/mcp-handlers.ts — MCP 协议    │    │    permissions/, preview/     │
 │ ipc/memory-*.ts — 持久化记忆      │    │                              │
@@ -117,7 +115,7 @@ Auraxis/
 │       ├── session-store.ts     # 聊天/Agent 统一 JSONL 事件日志
 │       ├── sandbox-runner.ts    # 原生沙箱调度（restricted/AppContainer/linux/macos）
 │       ├── acp-server.ts / sdk-server.ts / headless-run.ts  # ACP / JSON-RPC SDK / 无头执行
-│       └── __tests__/           # 主进程测试（全仓 131 个测试文件 / 973 用例）
+ │       └── __tests__/           # 主进程测试（全仓 154 个测试文件 / 1234 用例）
 │
 ├── src/                         # 渲染进程代码（浏览器环境）
 │   ├── main.tsx                 # React 入口
@@ -137,7 +135,7 @@ Auraxis/
 │   │   ├── useAppStore.ts       # 主题、侧边栏、右侧面板、导航历史
 │   │   ├── useAgentStore.ts     # Agent CRUD、优先级、并发（持久化，模块层订阅 agent:event 流并做 RAF 节流）
 │   │   ├── useSessionStore.ts   # 会话保存/加载/删除/导出/分叉（最多 40 个）
-│   │   ├── usePermissionStore.ts # 权限模式 ask/plan/afe
+ │   │   ├── useProjectStore.ts   # 项目注册表、当前项目、工作区排序
 │   │   ├── usePluginStore.ts    # 已安装插件、启用/禁用
 │   │   ├── useMemoryStore.ts    # 活跃/搜索记忆（从主进程加载）
 │   │   ├── useFileTreeStore.ts  # 文件树、展开路径
@@ -170,8 +168,8 @@ Auraxis/
 ├── tsconfig.json                # 渲染进程 TS 配置（ESNext/bundler, @/* → src/*）
 ├── tsconfig.node.json           # Vite 配置专用（composite project reference）
 ├── tsconfig.electron.json       # 主进程 TS 配置（CommonJS → dist-electron/, rootDir: electron/）
-├── vite.config.ts               # Vite 构建配置
-├── vitest.config.ts             # 测试配置（覆盖率阈值：50% 行 / 60% 分支 / 60% 函数）
+├── vite.config.mts              # Vite 构建配置
+├── vitest.config.ts             # 测试配置（覆盖率阈值：65% 行 / 65% 分支 / 65% 函数）
 ├── electron-builder.yml         # 打包配置（NSIS/DMG/AppImage）
 └── .env.example                 # 环境变量模板
 ```
@@ -584,7 +582,7 @@ Agent 循环 (agent-loop.ts) — agentLoopRun()
 | useAppStore | `auraxis-app-storage` | 主题、侧边栏状态、面板宽度、右侧面板视图 |
 | useAgentStore | `auraxis-agent-storage` | Agent 列表、优先级、并发设置 |
 | useSessionStore | `auraxis-session-storage` | 会话列表（最多 40 个） |
-| usePermissionStore | `auraxis-permission-storage` | 权限模式（ask/plan/afe） |
+| useProjectStore | `auraxis-projects` | 项目注册表、当前项目、工作区/会话排序 |
 | usePluginStore | `auraxis-plugin-storage` | 已安装插件、启用状态 |
 | useAdvancedStore | `auraxis-advanced-storage` | MCP 服务器、Agent 旧设置 |
 | useKeybindingsStore | `auraxis_keybindings` | 快捷键覆盖 |
@@ -744,8 +742,9 @@ dist-electron/ + dist/ ──→ electron-builder ──→ release/
 - **测试框架**：Vitest（`describe`, `it`, `expect`, `vi` 通过 globals 注入）
 - **主进程测试**：`electron/**/__tests__/`，node 环境，依赖 `electron` 的模块用 `vi.mock('electron', ...)` 隔离
 - **渲染进程测试**：`src/**/__tests__/`，jsdom 环境（@testing-library/react）
-- **测试总数**：131 个测试文件 / 973 个用例（另有 2 例预置跳过）
-- **覆盖率阈值**：行/语句 50%，分支 60%，函数 60%（scope: `electron/ipc/`, `src/stores/`, `src/core/`；当前实际 56.1% 行/语句、76.8% 分支、70.1% 函数）
+- **测试总数**：154 个测试文件 / 1234 个用例通过（另有 2 例环境性跳过）
+- **覆盖率口径**：门槛统计范围仅为 `electron/ipc/`、`src/stores/`、`src/core/`；UI 组件（`src/components/`）与主进程入口（`main.ts` / `preload.ts` 等）不计入该门槛，另有组件级测试与 Playwright 端到端测试（`npm run test:e2e`）覆盖
+- **覆盖率阈值**：行/语句 65%，分支 65%，函数 65%（scope: `electron/ipc/`, `src/stores/`, `src/core/`；当前实际 71.9% 行/语句、78.2% 分支、77.4% 函数）
 - **运行命令**：`npm test`（全量）、`npm run test:backend`（主进程）、`npm run test:frontend`（渲染进程）、`npm run test:coverage`（覆盖率报告）
 
 ### 12.3 类型契约

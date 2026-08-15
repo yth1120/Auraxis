@@ -9,10 +9,10 @@ export default defineConfig({
     exclude: ['dist-electron/**', 'dist/**', 'packages/auraxis-sdk/dist/**', 'release/**', 'node_modules/**'],
     coverage: {
       provider: 'v8',
-      // 校准后的「真实且会守住」门槛：当前实际 56.1% 行/语句、76.8% 分支、
-      // 70.1% 函数（含 scheduler/query-engine/ai-handlers/tool 各族与工作树/LSP/Review 补测）。
-      // 行/语句已越过 50% 目标，取整锁定；分支/函数留足余量。
-      thresholds: { lines: 50, branches: 60, functions: 60, statements: 50 },
+      // 校准后的「真实且会守住」门槛：当前实际 71.9% 行/语句、78.2% 分支、
+      // 77.4% 函数（补测 useChatStore/useAgentStore 关键路径与端到端链路后）。
+      // 行/语句显著越过 50% 目标，取整锁定；分支/函数留足余量。
+      thresholds: { lines: 65, branches: 65, functions: 65, statements: 65 },
       include: ['electron/ipc/**/*.ts', 'src/stores/**/*.ts', 'src/core/**/*.ts'],
       exclude: ['dist-electron/**', 'dist/**', '**/__tests__/**', '**/*.test.*', '**/node_modules/**'],
     },

@@ -128,7 +128,7 @@ export function cliUsage(): string {
     '  auraxis --plugin scan [目录]                     扫描目录下的 .auraxis-plugin/plugin.json',
     '  auraxis --plugin enable <id>                    持久化启用插件（写入 plugin-state.json）',
     '  auraxis --plugin disable <id>                   持久化禁用插件',
-    '  auraxis --sdk                                   SDK JSON-RPC 服务（stdio）',
+    '  auraxis --sdk                                   SDK JSON-RPC 服务（回环 TCP）',
     '  auraxis --acp                                   ACP 服务（stdio）',
   ].join('\n');
 }

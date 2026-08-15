@@ -39,6 +39,20 @@ const root = path.join(__dirname, '..');
     if (!bridge.hasBridge) throw new Error('preload bridge missing (window.electronAPI)');
     if (bridge.bodyChildren === 0) throw new Error('renderer mounted an empty body');
 
+    // Composer interaction — the primary user path must mount and accept text.
+    const composer = win.locator('.ax-composer-textarea');
+    await composer.waitFor({ state: 'visible', timeout: 15_000 });
+    await composer.fill('E2E 冒烟消息');
+    const typed = await composer.inputValue();
+    if (typed !== 'E2E 冒烟消息') {
+      throw new Error(`composer did not accept typed text (got "${typed}")`);
+    }
+    const sendDisabled = await win.locator('button[aria-label="发送"]').isDisabled();
+    if (sendDisabled) {
+      throw new Error('send button stayed disabled after typing');
+    }
+    console.log('COMPOSER_OK', JSON.stringify({ typed, sendDisabled }));
+
     const ipc = await win.evaluate(async () => {
       const e = window.electronAPI;
       const checks = {

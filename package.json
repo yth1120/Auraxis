@@ -20,6 +20,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:smoke": "tsc -p tsconfig.electron.json && vite build && node scripts/smoke-electron.cjs",
+    "test:e2e": "npm run electron:compile && vite build && playwright test",
     "test:backend": "vitest run electron/ipc",
     "test:frontend": "vitest run src",
     "test:all": "vitest run"
