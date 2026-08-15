@@ -4,7 +4,6 @@ import type { MenuProps } from 'antd';
 import {
   ArrowLeft,
   ArrowRight,
-  CaretDown,
   Cube,
   PanelBottom,
   Bell,
@@ -453,22 +452,22 @@ export default function WorkbenchLayout() {
         <div className="ax-header-group shrink-0">
           <Dropdown menu={{ items: fileMenuItems }} trigger={['click']} placement="bottomLeft" overlayClassName="ax-top-menu-popup" transitionName="">
             <button className="ax-header-action !w-auto !px-1.5 text-sm">
-              {t('menu.file')} <CaretDown className="text-xs" />
+              {t('menu.file')}
             </button>
           </Dropdown>
           <Dropdown menu={{ items: editMenuItems }} trigger={['click']} placement="bottomLeft" overlayClassName="ax-top-menu-popup" transitionName="">
             <button className="ax-header-action !w-auto !px-1.5 text-sm">
-              {t('menu.edit')} <CaretDown className="text-xs" />
+              {t('menu.edit')}
             </button>
           </Dropdown>
           <Dropdown menu={{ items: viewMenuItems }} trigger={['click']} placement="bottomLeft" overlayClassName="ax-top-menu-popup" transitionName="">
             <button className="ax-header-action !w-auto !px-1.5 text-sm">
-              {t('menu.view')} <CaretDown className="text-xs" />
+              {t('menu.view')}
             </button>
           </Dropdown>
           <Dropdown menu={{ items: helpMenuItems }} trigger={['click']} placement="bottomLeft" overlayClassName="ax-top-menu-popup" transitionName="">
             <button className="ax-header-action !w-auto !px-1.5 text-sm">
-              {t('menu.help')} <CaretDown className="text-xs" />
+              {t('menu.help')}
             </button>
           </Dropdown>
         </div>
