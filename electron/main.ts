@@ -1,7 +1,7 @@
 import { app, BrowserWindow, shell, session, ipcMain, Notification } from 'electron';
 import path from 'path';
 import os from 'os';
-import { mkdtempSync, rmSync } from 'fs';
+import { existsSync, mkdtempSync, rmSync } from 'fs';
 import { registerIpcHandlers, isWindows11 } from './ipc';
 import { cleanupWindowStreams } from './ipc/ai-handlers';
 import { setMainWindowRef, clearMainWindowRef } from './ipc/window-ref';
@@ -102,6 +102,10 @@ function createWindow(useAcrylic = false) {
     // translucency can reveal the blurred desktop; solid fallback otherwise.
     backgroundColor: useAcrylic ? '#00000000' : '#0a0202',
     ...(useAcrylic ? { backgroundMaterial: 'acrylic' as const, show: false } : {}),
+    // 品牌 logo 作为开发态窗口/任务栏图标；打包后由 exe/app 图标接管。
+    ...(existsSync(path.join(__dirname, '../build/icon.png'))
+      ? { icon: path.join(__dirname, '../build/icon.png') }
+      : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
