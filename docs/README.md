@@ -5,7 +5,7 @@
 相关文档：[TS SDK](../packages/auraxis-sdk/README.md) · [Python SDK](../python/auraxis_sdk/README.md) · [工程规范](../AGENTS.md)
 
 ## 一、项目概述
-Auraxis v2.0.0 是一款基于 Electron 的桌面端 Agentic 编程助手，融合了统一 ReAct 步进引擎、多智能体调度、Code Mode 工具编排、插件扩展和持久化项目记忆。执行语义遵循通用约定（`end_turn` 即回合结束，无剧本/强制门），ReviewArtifact 作为可选验证工具。后端 LLM 默认为 DeepSeek API（兼容 OpenAI / Anthropic 格式），联网搜索支持 DuckDuckGo / Exa / Perplexity / DeepSeek 官方搜索多 provider。
+Auraxis v2.0.1 是一款基于 Electron 的桌面端 Agentic 编程助手，融合了统一 ReAct 步进引擎、多智能体调度、Code Mode 工具编排、插件扩展和持久化项目记忆。执行语义遵循通用约定（`end_turn` 即回合结束，无剧本/强制门），ReviewArtifact 作为可选验证工具。后端 LLM 默认为 DeepSeek API（兼容 OpenAI / Anthropic 格式），联网搜索支持 DuckDuckGo / Exa / Perplexity / DeepSeek 官方搜索多 provider。
 
 - **主进程**：Electron 主进程（`electron/`），负责窗口管理、IPC 通信、工具执行、智能体调度
 - **渲染进程**：React 18 + Vite（`src/`），负责 UI 渲染、状态管理、用户交互
