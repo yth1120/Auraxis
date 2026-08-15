@@ -281,7 +281,7 @@ const AgentRow = memo(function AgentRow({ agent: a, isActive, pendingCount, onSe
       onKeyDown={rowKey(() => onSelect(a.id))}
       title={a.description || a.name}
     >
-      <span className={clsx('shrink-0 flex items-center justify-center w-4 h-4 text-sm text-text-muted', statusColor)}>
+      <span className={clsx('shrink-0 flex items-center justify-center w-[18px] h-[18px] text-sm text-text-muted', statusColor)}>
         {AGENT_STATUS_ICON[a.status] || <ClockCircleOutlined />}
       </span>
       <span className="flex-1 min-w-0 flex items-center gap-[6px]">
@@ -588,7 +588,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
     return (
       <>
         {/* ── 对话 (original session list, unchanged) ── */}
-        {!visualCollapsed && <div className="ax-sidebar-label">{t('nav.chat')}</div>}
+        {!visualCollapsed && <div className="ax-sidebar-label !px-[18px] !pb-[6px]">{t('nav.chat')}</div>}
         <div className="flex flex-col gap-1 px-2 pb-1 sider-tree">
           {activeSessions.length === 0 ? (
             <div className="ax-sidebar-group flex flex-col items-center justify-center gap-[6px] px-4 py-10 text-center">
@@ -599,8 +599,8 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
           ) : singleProject ? (
             timeGroups.map((group) => (
               <div key={group.label} className="ax-sidebar-group">
-                <div className="px-3 pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">{group.label}</div>
-                <div className="px-1 pb-1 flex flex-col gap-0.5">{renderSessionRows(group.items)}</div>
+                <div className="px-[18px] pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">{group.label}</div>
+                <div className="px-2 pb-1 flex flex-col gap-0.5">{renderSessionRows(group.items)}</div>
               </div>
             ))
           ) : (
@@ -610,7 +610,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
               return (
                 <div key={key} className="ax-sidebar-group">
                   <button
-                    className="flex items-center gap-1 w-full px-3 pt-2.5 pb-[6px] border-none bg-transparent text-text-muted text-2xs font-semibold tracking-[0.06em] font-body cursor-pointer text-left hover:text-text-secondary"
+                    className="flex items-center gap-1 w-full px-[18px] pt-2.5 pb-[6px] border-none bg-transparent text-text-muted text-2xs font-semibold tracking-[0.06em] font-body cursor-pointer text-left hover:text-text-secondary"
                     onClick={() => {
                       toggleProject(key);
                       if (pg.projectRoot) {
@@ -627,7 +627,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
                     <span className="shrink-0 min-w-4 text-2xs font-semibold text-center text-text-muted">{pg.items.length}</span>
                   </button>
                   {!isCollapsed && (
-                    <div className="px-1 pb-1 flex flex-col gap-0.5">{renderSessionRows(pg.items)}</div>
+                    <div className="px-2 pb-1 flex flex-col gap-0.5">{renderSessionRows(pg.items)}</div>
                   )}
                 </div>
               );
@@ -635,8 +635,8 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
           )}
           {archivedSessions.length > 0 && (
             <div className="ax-sidebar-group">
-              <div className="px-3 pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">{t('sidebar.archived')}</div>
-              <div className="px-1 pb-1 flex flex-col gap-0.5">{renderSessionRows(archivedSessions)}</div>
+              <div className="px-[18px] pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">{t('sidebar.archived')}</div>
+              <div className="px-2 pb-1 flex flex-col gap-0.5">{renderSessionRows(archivedSessions)}</div>
             </div>
           )}
         </div>
@@ -710,7 +710,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
     return (
     <div className="flex flex-col px-2 sider-code-panel">
         {/* ── 项目工作区 （工作区树 + 会话） ── */}
-        <div className="shrink-0 flex items-center px-3 pt-2.5 pb-[6px]">
+        <div className="shrink-0 flex items-center px-[18px] pt-2.5 pb-[6px]">
           <span className="text-2xs font-semibold text-text-muted tracking-[0.06em]">{t('sidebar.projects')}</span>
           <Dropdown menu={{ items: viewItems }} trigger={['click']} placement="bottomRight" transitionName="">
             <button
@@ -734,14 +734,14 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
         </div>
 
         {projectGroupBy === 'flat' ? (
-          <div className="flex flex-col gap-1 px-1 pb-1">
+          <div className="flex flex-col gap-1 px-2 pb-1">
             {orderSessionsByKey('__flat__', activeSessions).length === 0 ? (
-              <div className="px-3 py-2 text-2xs text-text-faint">{t('sidebar.noSessions')}</div>
+              <div className="px-[18px] py-2 text-2xs text-text-faint">{t('sidebar.noSessions')}</div>
             ) : orderSessionsByKey('__flat__', activeSessions).map(renderSessionRow)}
             {taskGroups.map(([root, list]) => (
               <div key={root || '__unassigned__'} className="flex flex-col gap-0.5">
                 {root && (
-                  <div className="px-3 pt-1 pb-0.5 text-2xs text-text-faint truncate" title={root}>
+                  <div className="px-[18px] pt-1 pb-0.5 text-2xs text-text-faint truncate" title={root}>
                     {root.split(/[\\/]/).pop() || root}
                   </div>
                 )}
@@ -752,7 +752,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
         ) : (
           <div className="flex flex-col gap-1 px-2 pb-1">
             {projects.length === 0 && (
-              <div className="px-3 py-2 text-2xs text-text-faint">{t('sidebar.noProjects')}</div>
+              <div className="px-[18px] py-2 text-2xs text-text-faint">{t('sidebar.noProjects')}</div>
             )}
             {orderedProjects.map((p) => {
               const isCurrent = p.id === currentProjectId || (settingsProjectPath !== null && p.path === settingsProjectPath);
@@ -881,9 +881,9 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
                     )}
                   </div>
                   {expanded && (
-                    <div className="pl-3 pr-1 pb-1 mt-0.5 flex flex-col gap-0.5">
+                    <div className="pl-[26px] pr-1 pb-1 flex flex-col gap-0.5">
                       {projectSessions.length === 0 ? (
-                        <div className="px-3 py-2 text-2xs text-text-faint">{t('sidebar.noProjectSessions')}</div>
+                        <div className="px-[18px] py-2 text-2xs text-text-faint">{t('sidebar.noProjectSessions')}</div>
                       ) : visibleSessions.map(renderSessionRow)}
                       {projectSessions.length > 5 && (
                         <button
@@ -909,22 +909,22 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
 
       {projectGroupBy === 'workspace' && (taskGroupMap.get('') ?? []).length > 0 && (
         <div className="ax-sidebar-group">
-          <div className="px-3 pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">{t('sidebar.unassignedTasks')}</div>
-          <div className="px-1 pb-1 flex flex-col gap-0.5">{(taskGroupMap.get('') ?? []).map(renderAgentRow)}</div>
+          <div className="px-[18px] pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">{t('sidebar.unassignedTasks')}</div>
+          <div className="px-2 pb-1 flex flex-col gap-0.5">{(taskGroupMap.get('') ?? []).map(renderAgentRow)}</div>
         </div>
       )}
       {unassignedSessions.length > 0 && (
         <div className="ax-sidebar-group">
-          <div className="px-3 pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">{t('sidebar.unassignedSessions')}</div>
-          <div className="px-1 pb-1 flex flex-col gap-0.5">
+          <div className="px-[18px] pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">{t('sidebar.unassignedSessions')}</div>
+          <div className="px-2 pb-1 flex flex-col gap-0.5">
             {unassignedSessions.map(renderSessionRow)}
           </div>
         </div>
       )}
       {archivedSessions.length > 0 && (
         <div className="ax-sidebar-group">
-          <div className="px-3 pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">{t('sidebar.archived')}</div>
-          <div className="px-1 pb-1 flex flex-col gap-0.5">
+          <div className="px-[18px] pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">{t('sidebar.archived')}</div>
+          <div className="px-2 pb-1 flex flex-col gap-0.5">
             {archivedSessions.map(renderSessionRow)}
           </div>
         </div>
@@ -971,7 +971,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
         'scroll-thin flex flex-col flex-1 sider-scroll-area-inner mt-1 overflow-y-auto overflow-x-hidden',
       )}>
         {/* ── Top functions: normal in-flow items, scroll with the sidebar ── */}
-        <div className={clsx('shrink-0 flex flex-col gap-0', visualCollapsed ? 'px-0 pb-1' : 'px-2 pb-2')}>
+        <div className={clsx('shrink-0 flex flex-col gap-0.5', visualCollapsed ? 'px-0 pb-1' : 'px-2 pb-2')}>
           {SIDEBAR_TOP_NAV.filter((f) => {
             // Chat mode keeps only 新建对话; Agent mode shows it plus tools.
             return sidebarMode === 'code' ? true : f.key === 'new';
@@ -1010,7 +1010,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
       <div className={clsx('flex flex-col mt-auto shrink-0 border-t border-[var(--color-border-dim)]', visualCollapsed ? 'px-0 pt-[6px]' : 'px-2 pt-[6px]')}>
         <button
           className={clsx(
-            'ax-sidebar-item h-9 text-text-muted',
+            'ax-sidebar-item h-8 text-text-muted',
             visualCollapsed ? 'justify-center p-0 w-9 mx-auto' : 'px-[10px]',
           )}
           onClick={() => {
