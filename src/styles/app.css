@@ -554,6 +554,15 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Frosted sidebar (Windows 11 Acrylic): drop the opaque app canvas so the
+   native window material can show through the translucent sidebar. Every
+   visible pane (header / chat / right panel) keeps its own opaque background,
+   so only the sidebar region becomes transparent. */
+html.auraxis-glass,
+html.auraxis-glass body {
+  background: transparent !important;
+}
+
 /* ── Import existing global CSS files ────────────────────── */
 /* tokens.css is imported AFTER @theme so its values take precedence
    for CSS custom properties. During migration this ensures both

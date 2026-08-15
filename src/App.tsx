@@ -34,6 +34,8 @@ export default function App() {
   const settingsInitialKey = useAppStore((s) => s.settingsInitialKey);
   const theme = useAppStore((s) => s.theme);
   const enqueuePermission = useAdvancedStore((s) => s.enqueuePermission);
+  const sidebarGlass = useSettingsStore((s) => s.sidebarGlass);
+  const sidebarGlassSupported = useSettingsStore((s) => s.sidebarGlassSupported);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [systemDark, setSystemDark] = useState(
@@ -54,6 +56,12 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', resolvedTheme === 'dark');
   }, [resolvedTheme]);
+
+  // Frosted sidebar: the app's outer layers turn transparent only when native
+  // Acrylic is available, so the desktop (blurred) can show through.
+  useEffect(() => {
+    document.documentElement.classList.toggle('auraxis-glass', sidebarGlass > 0 && sidebarGlassSupported);
+  }, [sidebarGlass, sidebarGlassSupported]);
 
   // Prefetch SettingsModal chunk on idle so the first click feels instant.
   useEffect(() => {

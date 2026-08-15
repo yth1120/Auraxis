@@ -86,6 +86,8 @@ export interface ElectronAPI {
   isMaximized: () => Promise<boolean>;
   onMaximizeChange: (callback: (isMaximized: boolean) => void) => () => void;
   zoom: (delta: number | null) => Promise<number>;
+  setBackgroundMaterial: (enabled: boolean) => Promise<{ ok: boolean; error?: string }>;
+  backgroundMaterialSupported: () => Promise<{ ok: boolean; data?: boolean; error?: string }>;
 
   file: {
     open: (projectRoot?: string) => Promise<{ ok: boolean; data?: FileResult[]; error?: string }>;
@@ -408,6 +410,10 @@ export interface ElectronAPI {
       data?: { balance: string; toppedUp: string; currency: string };
       error?: string;
     }>;
+  };
+
+  coverage: {
+    get: () => Promise<{ ok: boolean; data?: unknown; error?: string }>;
   };
 
   browser?: {

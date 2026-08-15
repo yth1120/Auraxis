@@ -2,13 +2,16 @@ import { app, BrowserWindow, shell, session, ipcMain, Notification } from 'elect
 import path from 'path';
 import os from 'os';
 import { mkdtempSync, rmSync } from 'fs';
-import { registerIpcHandlers } from './ipc';
+import { registerIpcHandlers, isWindows11 } from './ipc';
 import { cleanupWindowStreams } from './ipc/ai-handlers';
 import { setMainWindowRef, clearMainWindowRef } from './ipc/window-ref';
 import { startSdkServer } from './sdk-server';
 import { sessionQuerySearch } from './fts';
 
 let mainWindow: BrowserWindow | null = null;
+
+/** Persisted sidebar-glass value read at boot (0 = solid, >0 = frosted). */
+let bootSidebarGlass = 0;
 
 // AURAXIS_FORCE_PRODUCTION=1 lets an unpackaged build load the local dist/
 // renderer (used by the Playwright smoke test and local production preview).
@@ -87,7 +90,7 @@ const CSP_HEADER = isDev
       "base-uri 'self'",
     ].join('; ');
 
-function createWindow() {
+function createWindow(useAcrylic = false) {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -95,7 +98,10 @@ function createWindow() {
     minHeight: 500,
     frame: false,
     title: 'Auraxis',
-    backgroundColor: '#0a0202',
+    // Acrylic needs a fully transparent base layer so the sidebar's own
+    // translucency can reveal the blurred desktop; solid fallback otherwise.
+    backgroundColor: useAcrylic ? '#00000000' : '#0a0202',
+    ...(useAcrylic ? { backgroundMaterial: 'acrylic' as const, show: false } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -113,6 +119,15 @@ function createWindow() {
   });
 
   setMainWindowRef(mainWindow);
+
+  // Avoid a transparent flash before first paint when Acrylic is enabled.
+  if (useAcrylic) {
+    const showTimer = setTimeout(() => mainWindow?.show(), 5000);
+    mainWindow.once('ready-to-show', () => {
+      clearTimeout(showTimer);
+      mainWindow?.show();
+    });
+  }
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
@@ -198,6 +213,10 @@ app.whenReady().then(async () => {
     if (typeof bootSettings?.projectPath === 'string' && bootSettings.projectPath) {
       const { undoManager } = await import('./ipc/undo-manager');
       await undoManager.init(bootSettings.projectPath);
+    }
+    const glass = Number(bootSettings?.sidebarGlass);
+    if (Number.isFinite(glass)) {
+      bootSidebarGlass = Math.max(0, Math.min(100, Math.round(glass)));
     }
   } catch { /* non-critical */ }
 
@@ -326,7 +345,7 @@ app.whenReady().then(async () => {
     } catch {
       /* maintenance is best-effort */
     }
-    createWindow();
+    createWindow(isWindows11() && bootSidebarGlass > 0);
   }
 
   // Window focus IPC for notification click
@@ -339,7 +358,7 @@ app.whenReady().then(async () => {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0 && !(process.argv.includes('--sdk') || process.env.AURAXIS_SDK === '1')) {
-      createWindow();
+      createWindow(false);
     }
   });
 });

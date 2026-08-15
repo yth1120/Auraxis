@@ -9,6 +9,7 @@ npm run electron:dev     # 编译主进程 + Vite + Electron（开发）
 npm run electron:compile # 仅编译 electron/ → dist-electron/
 npm run build            # 全量构建 + electron-builder
 npm run test             # vitest 全量
+npm run test:coverage    # 全量 + 覆盖率报告（生成 coverage/coverage-summary.json）
 npm run sdk:build        # packages/auraxis-sdk 编译
 npm run sdk:test         # SDK 测试
 ```
@@ -43,6 +44,7 @@ npm run sdk:test         # SDK 测试
 - 字重：正文 400、条目/按钮 500、标题/激活 600。字号档位：`text-4xs`(9) / `3xs`(10) / `2xs`(11) / `xs`(12) / `sm`(13) / `base`(14) / `md`(15) / `lg`(16)。
 - 控件高度统一 36px（antd `controlHeight: 36`，见 `src/styles/theme.ts`）。
 - 内容宽度：消息流/输入框 `--content-max-width: 748px`（`src/styles/tokens.css`）；首页快捷卡片可单独 1080px。
+- 侧边栏透明度：设置 → 外观 → 侧边栏透明度（0–100%）；仅 Windows 11 启用原生 Acrylic（`backgroundMaterial: 'acrylic'`），非 Win11 自动禁用滑杆；最透明保留约 12% 底色保证文字可读，顶部栏保持不透明。
 
 ## 聊天区布局约定
 
@@ -62,7 +64,8 @@ npm run sdk:test         # SDK 测试
 ## 测试与验证
 
 - 新增/改动必须过：`npx tsc --noEmit`（渲染层）、`npm run electron:compile`（主进程）、`npx vitest run`（全量）、`npx vite build`（构建）。
-- 测试覆盖门槛：lines/statements ≥ 80%、branches ≥ 70%、functions ≥ 80%（`vitest.config.ts`，校准后的可守住水平；当前实际 86.3% 行/语句、79.32% 分支、84.33% 函数）；只允许有意上调、不允许跌破当前门槛。
+- 测试覆盖门槛：lines/statements ≥ 80%、branches ≥ 70%、functions ≥ 80%（`vitest.config.ts`，校准后的可守住水平；当前实际 86.17% 行/语句、79.37% 分支、84.30% 函数）；只允许有意上调、不允许跌破当前门槛。
+- 覆盖率报告：`npm run test:coverage` 同时输出 `coverage/coverage-summary.json`（gitignore，开发期产物），设置面板「测试覆盖率」页经 `coverage:get` IPC 实时读取该文件；README / AGENTS / docs 中的用例数与覆盖率数字以最近一次全量覆盖率为准，更新后必须同步。
 - 覆盖率统计范围：`electron/ipc/`、`src/stores/`、`src/core/`（不含 `src/components/` 与主进程入口）；UI 由组件级测试覆盖，桌面端到端链路由 `npm run test:smoke` 覆盖。
 - 端到端：`npm run test:e2e`（Playwright 启动真实 Electron，覆盖启动/模式切换/发消息/快捷卡片/设置主题）；改动渲染层或主进程启动链路后必须重跑。
 - 主进程模块依赖 `electron` 的测试需 `vi.mock('electron', ...)`；纯逻辑优先抽成可测函数。

@@ -28,6 +28,10 @@ export interface SettingsStore {
   outputPricePerM: number;
   /** UI zoom level (Chromium zoom-level units, 0 = 100%). Restored at startup. */
   zoomLevel: number;
+  /** Sidebar frosted-glass transparency (0 = solid, 100 = most transparent). */
+  sidebarGlass: number;
+  /** Whether the current OS supports native Acrylic background material. */
+  sidebarGlassSupported: boolean;
   /** Agent access axis: hard sandbox boundary. Persisted to backend settings. */
   sandboxMode: SandboxMode;
   /** Web search provider for Agent / chat web search （联网搜索）. */
@@ -46,6 +50,8 @@ export interface SettingsStore {
   setInputPricePerM: (price: number) => void;
   setOutputPricePerM: (price: number) => void;
   setZoomLevel: (level: number) => void;
+  setSidebarGlass: (value: number) => void;
+  setSidebarGlassSupported: (supported: boolean) => void;
   setSandboxMode: (mode: SandboxMode) => void;
   setWebSearchProvider: (provider: string) => void;
   setExaApiKey: (key: string) => void;
@@ -67,6 +73,8 @@ export const useSettingsStore = create<SettingsStore>()(
       inputPricePerM: 0,
       outputPricePerM: 0,
       zoomLevel: 0,
+      sidebarGlass: 0,
+      sidebarGlassSupported: false,
       sandboxMode: 'workspace-write' as SandboxMode,
       webSearchProvider: 'duckduckgo',
       exaApiKey: '',
@@ -84,6 +92,19 @@ export const useSettingsStore = create<SettingsStore>()(
       setInputPricePerM: (price) => set({ inputPricePerM: Math.max(0, Number(price) || 0) }),
       setOutputPricePerM: (price) => set({ outputPricePerM: Math.max(0, Number(price) || 0) }),
       setZoomLevel: (level) => set({ zoomLevel: level }),
+
+      setSidebarGlass: (value) => {
+        const v = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+        set({ sidebarGlass: v });
+        // Persist for next boot (the main process reads this at window creation).
+        window.electronAPI?.settings?.set?.('sidebarGlass', v)?.catch?.(() => {});
+        // Toggle the native window material only when the OS actually supports it.
+        if (useSettingsStore.getState().sidebarGlassSupported) {
+          window.electronAPI?.setBackgroundMaterial?.(v > 0)?.catch?.(() => {});
+        }
+      },
+
+      setSidebarGlassSupported: (supported) => set({ sidebarGlassSupported: !!supported }),
 
       setSandboxMode: (mode) => {
         set({ sandboxMode: mode });
@@ -144,6 +165,7 @@ export const useSettingsStore = create<SettingsStore>()(
         inputPricePerM: state.inputPricePerM,
         outputPricePerM: state.outputPricePerM,
         zoomLevel: state.zoomLevel,
+        sidebarGlass: state.sidebarGlass,
         sandboxMode: state.sandboxMode,
         webSearchProvider: state.webSearchProvider,
       }),
@@ -170,6 +192,23 @@ export const useSettingsStore = create<SettingsStore>()(
           window.electronAPI.settings.get('perplexityApiKey').then((result) => {
             if (typeof result?.data === 'string') useSettingsStore.setState({ perplexityApiKey: result.data });
           }).catch(() => {});
+          window.electronAPI.settings.get('sidebarGlass').then((result) => {
+            const v = Number(result?.data);
+            if (Number.isFinite(v)) {
+              useSettingsStore.setState({ sidebarGlass: Math.max(0, Math.min(100, Math.round(v))) });
+            }
+          }).catch(() => {});
+          // Ask the main process whether Acrylic is available; if it is and the
+          // persisted value is non-zero, make sure the material is active.
+          if (window.electronAPI.backgroundMaterialSupported) {
+            window.electronAPI.backgroundMaterialSupported().then((r) => {
+              const supported = !!(r?.ok && r.data);
+              useSettingsStore.setState({ sidebarGlassSupported: supported });
+              if (supported && useSettingsStore.getState().sidebarGlass > 0) {
+                window.electronAPI?.setBackgroundMaterial?.(true)?.catch?.(() => {});
+              }
+            }).catch(() => {});
+          }
         }
       },
     }

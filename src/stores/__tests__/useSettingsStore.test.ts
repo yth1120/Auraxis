@@ -8,7 +8,10 @@ vi.stubGlobal('window', {
     settings: {
       setApiKey: vi.fn().mockResolvedValue({ ok: true }),
       getApiKey: vi.fn().mockResolvedValue({ ok: true, data: 'sk-mocked' }),
+      set: vi.fn().mockResolvedValue({ ok: true }),
     },
+    setBackgroundMaterial: vi.fn().mockResolvedValue({ ok: true }),
+    backgroundMaterialSupported: vi.fn().mockResolvedValue({ ok: true, data: true }),
   },
 });
 
@@ -102,6 +105,35 @@ describe('useSettingsStore — setters', () => {
     expect(useSettingsStore.getState().deepseekApiKey).toBe('sk-test-key');
     useSettingsStore.getState().clearApiKeys();
     expect(useSettingsStore.getState().deepseekApiKey).toBe('');
+  });
+
+  it('setSidebarGlass 限制在 0-100 并持久化', () => {
+    const set = (window as any).electronAPI.settings.set;
+    useSettingsStore.getState().setSidebarGlass(150);
+    expect(useSettingsStore.getState().sidebarGlass).toBe(100);
+    expect(set).toHaveBeenCalledWith('sidebarGlass', 100);
+
+    useSettingsStore.getState().setSidebarGlass(-10);
+    expect(useSettingsStore.getState().sidebarGlass).toBe(0);
+
+    useSettingsStore.getState().setSidebarGlass(35);
+    expect(useSettingsStore.getState().sidebarGlass).toBe(35);
+  });
+
+  it('仅当系统支持 Acrylic 时切换窗口材质', () => {
+    const setMaterial = (window as any).electronAPI.setBackgroundMaterial;
+    useSettingsStore.getState().setSidebarGlassSupported(true);
+    useSettingsStore.getState().setSidebarGlass(60);
+    expect(setMaterial).toHaveBeenLastCalledWith(true);
+
+    setMaterial.mockClear();
+    useSettingsStore.getState().setSidebarGlassSupported(false);
+    useSettingsStore.getState().setSidebarGlass(80);
+    expect(setMaterial).not.toHaveBeenCalled();
+
+    useSettingsStore.getState().setSidebarGlassSupported(true);
+    useSettingsStore.getState().setSidebarGlass(0);
+    expect(setMaterial).toHaveBeenLastCalledWith(false);
   });
 });
 

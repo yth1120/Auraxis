@@ -34,6 +34,7 @@ Auraxis v2.0.0 是一款基于 Electron 的桌面端 Agentic 编程助手，融�
 - **原生沙箱**：Windows restricted token / AppContainer、Linux、macOS 四种后端 + worktree 隔离 + read-before-write 观测硬门
 - **工作流隔离**：模型编排脚本运行在 worker thread，超时可强杀
 - **会话标题**：LLM 生成 + 规则回退；**逐消息评分**、**附件画廊/灯箱**、**图片草稿栏**
+- **外观设置**：主题模式（跟随系统/浅/深）、中英双语、侧边栏透明度（Windows 11 原生 Acrylic 磨砂透出桌面）；设置面板内置真实测试覆盖率报告（`coverage/coverage-summary.json`）
 - **遥测**：opt-in（`AURAXIS_TELEMETRY_MODE`），严格白名单脱敏，NDJSON 上报
 
 ---
@@ -103,6 +104,7 @@ Auraxis/
 │       ├── project-handlers.ts  # 项目操作（文件树、目录选择、代码应用/预览）
 │       ├── system-handlers.ts   # 系统信息（统计、Git 分支、版本）
 │       ├── settings-store.ts    # 加密持久化设置（API Key 使用 safeStorage）
+│       ├── coverage-handlers.ts # 测试覆盖率报告读取（coverage/coverage-summary.json）
 │       ├── conflict-detector.ts # 多 Agent 文件锁防并发写入冲突
 │       ├── undo-manager.ts      # 文件级撤销（快照 + 恢复）
 │       ├── plan-handlers.ts     # 计划审批流（发送→前端→等待用户确认→超时）
@@ -115,7 +117,7 @@ Auraxis/
 │       ├── session-store.ts     # 聊天/Agent 统一 JSONL 事件日志
 │       ├── sandbox-runner.ts    # 原生沙箱调度（restricted/AppContainer/linux/macos）
 │       ├── acp-server.ts / sdk-server.ts / headless-run.ts  # ACP / JSON-RPC SDK / 无头执行
- │       └── __tests__/           # 主进程测试（全仓 154 个测试文件 / 1234 用例）
+ │       └── __tests__/           # 主进程测试（全仓 166 个测试文件 / 1346 用例）
 │
 ├── src/                         # 渲染进程代码（浏览器环境）
 │   ├── main.tsx                 # React 入口
@@ -235,6 +237,7 @@ interface IpcResponse<T = unknown> {
 | | `window:focus` | 渲染→主 | 聚焦窗口（通知点击） |
 | | `window:isMaximized` | 渲染→主 | 查询最大化状态 |
 | | `window:maximize-changed` | 主→渲染 | 最大化状态变更事件 |
+| | `window:setBackgroundMaterial` / `window:backgroundMaterialSupported` | 渲染→主 | 侧边栏 Acrylic 磨砂材质切换与支持检测（Windows 11） |
 | **shell** | `shell:openExternal` | 渲染→主 | 在默认浏览器打开 URL（仅 http/https） |
 | | `shell:openInVSCode` | 渲染→主 | 在 VS Code 中打开项目 |
 | **file** | `file:open` | 渲染→主 | 打开文件对话框 |
@@ -294,6 +297,7 @@ interface IpcResponse<T = unknown> {
 | **settings** | `settings:get` / `settings:set` | 渲染→主 | 读写设置 |
 | | `settings:getApiKey` / `api:setKey` | 渲染→主 | API Key 管理 |
 | | `settings:setPermissionMode` / `settings:getPermissionMode` | 渲染→主 | 权限模式管理 |
+| **coverage** | `coverage:get` | 渲染→主 | 读取测试覆盖率报告（coverage/coverage-summary.json） |
 | **model** | `model:getAll` | 渲染→主 | 获取所有可用模型 |
 | **app** | `app:error` | 主→渲染 | 未捕获异常/未处理 Promise 拒绝 |
 | **cron** | `cron:create` / `cron:delete` / `cron:list` | 渲染→主 | 定时任务的创建/删除/列出 |
@@ -578,7 +582,7 @@ Agent 循环 (agent-loop.ts) — agentLoopRun()
 | Store | localStorage Key | 持久化内容 |
 |-------|-----------------|-----------|
 | useChatStore | `auraxis-chat-storage` | 最近 40 条消息 |
-| useSettingsStore | `auraxis-settings-storage` | API Key、默认模型、项目路径、通知设置 |
+| useSettingsStore | `auraxis-settings-storage` | API Key、默认模型、项目路径、通知设置、侧边栏透明度 |
 | useAppStore | `auraxis-app-storage` | 主题、侧边栏状态、面板宽度、右侧面板视图 |
 | useAgentStore | `auraxis-agent-storage` | Agent 列表、优先级、并发设置 |
 | useSessionStore | `auraxis-session-storage` | 会话列表（最多 40 个） |
@@ -742,9 +746,10 @@ dist-electron/ + dist/ ──→ electron-builder ──→ release/
 - **测试框架**：Vitest（`describe`, `it`, `expect`, `vi` 通过 globals 注入）
 - **主进程测试**：`electron/**/__tests__/`，node 环境，依赖 `electron` 的模块用 `vi.mock('electron', ...)` 隔离
 - **渲染进程测试**：`src/**/__tests__/`，jsdom 环境（@testing-library/react）
-- **测试总数**：164 个测试文件 / 1339 个用例通过（另有 2 例环境性跳过）
+- **测试总数**：166 个测试文件 / 1346 个用例通过（另有 2 例环境性跳过）
 - **覆盖率口径**：门槛统计范围仅为 `electron/ipc/`、`src/stores/`、`src/core/`；UI 组件（`src/components/`）与主进程入口（`main.ts` / `preload.ts` 等）不计入该门槛，另有组件级测试与 Playwright 端到端测试（`npm run test:e2e`）覆盖
-- **覆盖率阈值**：行/语句 80%，分支 70%，函数 80%（scope: `electron/ipc/`, `src/stores/`, `src/core/`；当前实际 86.3% 行/语句、79.32% 分支、84.33% 函数）
+- **覆盖率阈值**：行/语句 80%，分支 70%，函数 80%（scope: `electron/ipc/`, `src/stores/`, `src/core/`；当前实际 86.17% 行/语句、79.37% 分支、84.30% 函数）
+- **覆盖率报告**：`npm run test:coverage` 同时输出 `coverage/coverage-summary.json`（gitignore 的开发期产物）；设置面板「测试覆盖率」页经 `coverage:get` IPC 实时读取，纯浏览器 dev 由 Vite 中间件提供同一路径，生产构建将其拷入 `dist/coverage/`。报告缺失时面板提示运行命令，不显示伪造数字。
 - **端到端测试**：13 条 Playwright UI 链路通过（真实 Electron）
 - **运行命令**：`npm test`（全量）、`npm run test:backend`（主进程）、`npm run test:frontend`（渲染进程）、`npm run test:coverage`（覆盖率报告）
 
@@ -798,6 +803,7 @@ Aura 设计系统 —「Black is the Axis，White is the Structure，Purple is t
 - **图标**：`lucide-react` 经 `src/components/common/icons.tsx` 兼容层；**禁用 AntD 图标与 @phosphor-icons/react**
 - **字体**：系统 UI 栈（`-apple-system, Segoe UI, PingFang SC, Microsoft YaHei`）+ 等宽栈（`SF Mono, JetBrains Mono, Fira Code, Consolas`）
 - **动画**：`prefers-reduced-motion` 适配；执行等待用品牌 GIF（`src/assets/executing.gif`）+ 渐变流光文字
+- **侧边栏透明度**：设置 → 外观 → 侧边栏透明度（0–100%）；仅 Windows 11 启用原生 Acrylic（`backgroundMaterial: 'acrylic'`），非 Win11 自动禁用滑杆；最透明保留约 12% 底色保证文字可读，顶部栏保持不透明。
 
 ### 12.7 IDE 别名
 

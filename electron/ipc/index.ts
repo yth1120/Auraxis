@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import { mkdirSync } from 'fs';
 import path from 'path';
+import os from 'os';
 import { app, ipcMain, BrowserWindow, shell } from 'electron';
 import { registerFileHandlers } from './file-handlers';
 import { registerProjectHandlers } from './project-handlers';
@@ -39,9 +40,17 @@ import { registerFtsHandlers } from './fts-handlers';
 import { registerFeedbackHandlers } from './feedback-handlers';
 import { registerTitleHandlers } from './title-handlers';
 import { registerPluginStateHandlers } from './plugin-state-handlers';
+import { registerCoverageIpc } from './coverage-handlers';
 import { readSettings, writeSettings } from './settings-store';
 import { getAllModels } from './model-config';
 import { getActiveWorktree } from './tool-handlers';
+
+/** Windows 11 build 22000+ exposes the native Mica/Acrylic material API. */
+export function isWindows11(): boolean {
+  if (process.platform !== 'win32') return false;
+  const build = Number(os.release().split('.')[2] ?? 0);
+  return Number.isFinite(build) && build >= 22000;
+}
 
 /** Broadcast worktree sandbox status change to all renderer windows. */
 export function broadcastWorktreeStatus(win: BrowserWindow, active: boolean, sandboxPath?: string, taskId?: string) {
@@ -85,6 +94,25 @@ export function registerIpcHandlers() {
     const next = delta === null ? 0 : Math.max(-3, Math.min(3, wc.getZoomLevel() + delta));
     wc.setZoomLevel(next);
     return next;
+  });
+
+  // Native frosted-glass window material. The renderer keeps a persisted
+  // sidebar-glass value and calls this on change / rehydrate; unsupported
+  // OSes (Windows 10 / non-Windows) keep the solid sidebar untouched.
+  ipcMain.handle('window:setBackgroundMaterial', (event, enabled: boolean) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return { ok: false, error: 'window unavailable' };
+    if (!isWindows11()) return { ok: false, error: 'unsupported' };
+    try {
+      win.setBackgroundMaterial(enabled ? 'acrylic' : 'none');
+      return { ok: true };
+    } catch (error: any) {
+      return { ok: false, error: error?.message || String(error) };
+    }
+  });
+
+  ipcMain.handle('window:backgroundMaterialSupported', (_event) => {
+    return { ok: true, data: isWindows11() };
   });
 
   ipcMain.handle('shell:openExternal', async (_event, url: string) => {
@@ -249,6 +277,7 @@ export function registerIpcHandlers() {
   registerFeedbackHandlers();
   registerTitleHandlers();
   registerPluginStateHandlers();
+  registerCoverageIpc();
   app.on('before-quit', () => {
     cleanupTerminalSessions();
     cleanupAgentShellWatchers();

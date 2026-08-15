@@ -140,6 +140,17 @@ export default function WorkbenchLayout() {
   const worktreeTaskId = useWorktreeStore((s) => s.taskId);
   const openFileRequest = useAppStore((s) => s.openFileRequest);
   const projectPath = useSettingsStore((s) => s.projectPath);
+  const sidebarGlass = useSettingsStore((s) => s.sidebarGlass);
+  const sidebarGlassSupported = useSettingsStore((s) => s.sidebarGlassSupported);
+  // Frosted sidebar: only translucent when the OS actually provides Acrylic,
+  // otherwise the solid panel color stays untouched (no unblurred window
+  // transparency on Windows 10 / non-Windows).
+  const sidebarGlassOn = sidebarGlass > 0 && sidebarGlassSupported;
+  // At 100 the panel keeps a faint 12% tint so labels stay readable over the
+  // blurred desktop; the tint grows with the value towards fully solid.
+  const sidebarBg = sidebarGlassOn
+    ? `color-mix(in srgb, var(--color-glass-panel) ${Math.round(100 - sidebarGlass * 0.88)}%, transparent)`
+    : undefined;
 
   // Track maximize state so the maximize button reflects 还原 vs 最大化.
   const [isMaximized, setIsMaximized] = useState(false);
@@ -424,7 +435,10 @@ export default function WorkbenchLayout() {
   };
 
   return (
-    <Layout className="workbench-layout !h-screen !overflow-hidden !bg-[var(--color-glass-header)]">
+    <Layout className={clsx(
+      'workbench-layout !h-screen !overflow-hidden',
+      sidebarGlassOn ? '!bg-transparent' : '!bg-[var(--color-glass-header)]',
+    )}>
       {/* ── Top Header Bar ── */}
       <Header className="ax-header !h-10 !pl-0 !pr-3 shrink-0">
         <div className="ax-header-group flex-1 min-w-0 gap-2.5">
@@ -726,14 +740,17 @@ export default function WorkbenchLayout() {
       {tabs.length > 1 && <TabBar />}
 
       {/* ── Body: drawer sider + Allotment (Content | optional Right Panel) ── */}
-      <div className="flex-1 flex min-h-0 min-w-0 overflow-hidden !p-0 !bg-[var(--color-glass-panel)]" ref={bodyRef}>
+      <div className={clsx(
+        'flex-1 flex min-h-0 min-w-0 overflow-hidden !p-0',
+        sidebarGlassOn ? '!bg-transparent' : '!bg-[var(--color-glass-panel)]',
+      )} ref={bodyRef}>
         <aside
           data-pane="sider"
           className={clsx(
             'sider-drawer relative z-30 h-full shrink-0 overflow-hidden bg-[var(--color-glass-panel)] border-r border-border-dim transition-[width] duration-300 ease-out',
             isResizingSider && '!transition-none',
           )}
-          style={{ width: sidebarCollapsed ? 0 : Math.max(260, sidebarWidth) }}
+          style={{ width: sidebarCollapsed ? 0 : Math.max(260, sidebarWidth), background: sidebarBg }}
         >
           <div className="h-full overflow-hidden" style={{ width: Math.max(260, sidebarWidth) }}>
             <SiderNav collapsed={sidebarCollapsed} />

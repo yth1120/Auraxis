@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import {
-  Input, InputNumber, Modal, Select, Button, Space, message, Switch, Popconfirm, Segmented,
+  Input, InputNumber, Modal, Select, Button, Space, message, Switch, Popconfirm, Segmented, Slider,
 } from 'antd';
 import {
   MinusCircle as MinusCircleOutlined,
@@ -144,6 +144,7 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
     setInputPricePerM, setOutputPricePerM,
     webSearchProvider, exaApiKey, perplexityApiKey,
     setWebSearchProvider, setExaApiKey, setPerplexityApiKey,
+    sidebarGlass, setSidebarGlass, sidebarGlassSupported,
   } = useSettingsStore();
 
   useEffect(() => {
@@ -493,6 +494,37 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
           ]}
         />
       </SettingItem>
+      </section>
+      <SectionTitle>{t('settings.section.sidebar')}</SectionTitle>
+      <section className="mb-2">
+        <SettingItem
+          title={t('settings.sidebarGlass')}
+          description={t('settings.sidebarGlass.desc')}
+          noBorder
+        >
+          <div className="flex items-center gap-3 w-full">
+            <Slider
+              className="flex-1 min-w-0"
+              min={0}
+              max={100}
+              step={5}
+              value={sidebarGlass}
+              onChange={setSidebarGlass}
+              disabled={!sidebarGlassSupported}
+              tooltip={{ formatter: (v) => `${v}%` }}
+              marks={{
+                0: t('settings.sidebarGlass.off'),
+                100: t('settings.sidebarGlass.max'),
+              }}
+            />
+            <span className="w-12 shrink-0 text-right text-xs tabular-nums text-text-muted">{sidebarGlass}%</span>
+          </div>
+          {!sidebarGlassSupported && (
+            <div className="mt-1.5 text-2xs text-text-faint">
+              {t('settings.sidebarGlass.unsupported')}
+            </div>
+          )}
+        </SettingItem>
       </section>
     </>
   );
