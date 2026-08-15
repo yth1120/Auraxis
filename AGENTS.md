@@ -62,7 +62,7 @@ npm run sdk:test         # SDK 测试
 ## 测试与验证
 
 - 新增/改动必须过：`npx tsc --noEmit`（渲染层）、`npm run electron:compile`（主进程）、`npx vitest run`（全量）、`npx vite build`（构建）。
-- 测试覆盖门槛：lines/statements ≥ 80%、branches ≥ 70%、functions ≥ 80%（`vitest.config.ts`，校准后的可守住水平；当前实际 86.3% 行/语句、79.3% 分支、84.4% 函数）；只允许有意上调、不允许跌破当前门槛。
+- 测试覆盖门槛：lines/statements ≥ 80%、branches ≥ 70%、functions ≥ 80%（`vitest.config.ts`，校准后的可守住水平；当前实际 86.33% 行/语句、79.28% 分支、84.35% 函数）；只允许有意上调、不允许跌破当前门槛。
 - 覆盖率统计范围：`electron/ipc/`、`src/stores/`、`src/core/`（不含 `src/components/` 与主进程入口）；UI 由组件级测试覆盖，桌面端到端链路由 `npm run test:smoke` 覆盖。
 - 端到端：`npm run test:e2e`（Playwright 启动真实 Electron，覆盖启动/模式切换/发消息/快捷卡片/设置主题）；改动渲染层或主进程启动链路后必须重跑。
 - 主进程模块依赖 `electron` 的测试需 `vi.mock('electron', ...)`；纯逻辑优先抽成可测函数。
