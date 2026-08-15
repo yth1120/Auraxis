@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, vi } from 'vitest';
+import { message, Modal } from 'antd';
 import { executeCommand, SLASH_COMMANDS } from '../commands';
 import { useChatStore } from '../../stores/useChatStore';
 
@@ -15,6 +16,16 @@ function ctx() {
 }
 
 describe('executeCommand — /skill', () => {
+  beforeEach(() => {
+    // Stub antd message/Modal so async command feedback never schedules a
+    // React commit after the test environment is torn down.
+    vi.spyOn(message, 'error').mockImplementation(() => undefined as any);
+    vi.spyOn(message, 'success').mockImplementation(() => undefined as any);
+    vi.spyOn(message, 'warning').mockImplementation(() => undefined as any);
+    vi.spyOn(message, 'info').mockImplementation(() => undefined as any);
+    vi.spyOn(Modal, 'info').mockImplementation(() => undefined as any);
+  });
+
   it('registers /skill in the command list', () => {
     expect(SLASH_COMMANDS.some((c) => c.name === 'skill')).toBe(true);
   });

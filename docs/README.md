@@ -744,7 +744,7 @@ dist-electron/ + dist/ ──→ electron-builder ──→ release/
 - **渲染进程测试**：`src/**/__tests__/`，jsdom 环境（@testing-library/react）
 - **测试总数**：163 个测试文件 / 1336 个用例通过（另有 2 例环境性跳过）
 - **覆盖率口径**：门槛统计范围仅为 `electron/ipc/`、`src/stores/`、`src/core/`；UI 组件（`src/components/`）与主进程入口（`main.ts` / `preload.ts` 等）不计入该门槛，另有组件级测试与 Playwright 端到端测试（`npm run test:e2e`）覆盖
-- **覆盖率阈值**：行/语句 80%，分支 70%，函数 80%（scope: `electron/ipc/`, `src/stores/`, `src/core/`；当前实际 86.33% 行/语句、79.28% 分支、84.35% 函数）
+- **覆盖率阈值**：行/语句 80%，分支 70%，函数 80%（scope: `electron/ipc/`, `src/stores/`, `src/core/`；当前实际 86.3% 行/语句、79.32% 分支、84.33% 函数）
 - **端到端测试**：13 条 Playwright UI 链路通过（真实 Electron）
 - **运行命令**：`npm test`（全量）、`npm run test:backend`（主进程）、`npm run test:frontend`（渲染进程）、`npm run test:coverage`（覆盖率报告）
 
