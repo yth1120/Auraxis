@@ -271,18 +271,6 @@
   margin: 0 10px;
 }
 
-@media (hover: hover) {
-  [data-time-hover-root] .ax-flow-time {
-    opacity: 0;
-    transition: opacity 80ms ease;
-  }
-
-  [data-time-hover-root]:hover .ax-flow-time,
-  [data-time-hover-root]:focus-within .ax-flow-time {
-    opacity: 1;
-  }
-}
-
 /* 会话统计条: one dim, centered session stats strip under the flow,
    with the handful of actions that have no right-panel home kept as quiet
    text links. */

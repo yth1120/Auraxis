@@ -30,6 +30,7 @@ import TimelineScrubber from '../chat/TimelineScrubber';
 import type { TimelineTick } from '../chat/TimelineScrubber';
 import ExecutingIndicator from '../common/ExecutingIndicator';
 import StateDot from '../common/StateDot';
+import { formatTime } from '../../utils/time';
 import TerminalBlock from '../common/TerminalBlock';
 import DeepDiveStatus from '../common/DeepDiveStatus';
 import StreamRenderer from '../chat/StreamRenderer';
@@ -540,12 +541,6 @@ function cleanText(t: string | undefined): string {
     .trim();
 }
 
-function clockTime(ts: number): string {
-  const d = new Date(ts);
-  const two = (v: number) => String(v).padStart(2, '0');
-  return `${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`;
-}
-
 const LogEntry = memo(function LogEntry({
   entry,
   isStreaming,
@@ -1038,7 +1033,7 @@ export default function AgentConversation({ headerInset = 0, bottomInset = 0 }: 
                 <div className="ax-flow-actions" data-align="end">
                   {agent.startTime != null && (
                     <span className="ax-flow-time" data-side="start">
-                      {clockTime(agent.startTime)}
+                      {formatTime(agent.startTime)}
                     </span>
                   )}
                   <button
@@ -1137,7 +1132,7 @@ export default function AgentConversation({ headerInset = 0, bottomInset = 0 }: 
                       <span className="ax-flow-time tabular-nums" data-side="end">
                         {tailTime != null && (
                           <>
-                            {clockTime(tailTime)}
+                            {formatTime(tailTime)}
                             {durationMs != null || stats !== '' ? <span className="ax-flow-dot" aria-hidden>·</span> : null}
                           </>
                         )}
