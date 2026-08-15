@@ -100,10 +100,11 @@ describe('cron 解析与持久化', () => {
 describe('定时触发', () => {
   it('一次性任务触发后删除并回调外部监听', () => {
     vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-15T00:00:30+08:00'));
     const spy = vi.fn();
     setCronFireCallback(spy);
     createCronJob({ name: 'once', prompt: 'p', cron: '* * * * *', recurring: false });
-    vi.advanceTimersByTime(61_000);
+    vi.advanceTimersByTime(30_000);
     expect(getCronJobCount()).toBe(0);
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy.mock.calls[0][0]).toMatchObject({ name: 'once', recurring: false, firedCount: 1 });
@@ -111,24 +112,26 @@ describe('定时触发', () => {
 
   it('周期性任务触发后重新武装并累计 firedCount', () => {
     vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-15T00:00:30+08:00'));
     const spy = vi.fn();
     setCronFireCallback(spy);
     const r = createCronJob({ name: 'rec', prompt: 'p', cron: '* * * * *', recurring: true });
-    vi.advanceTimersByTime(61_000);
+    vi.advanceTimersByTime(30_000);
     expect(getCronJob(r.data!.jobId)!.firedCount).toBe(1);
     expect(getCronJobCount()).toBe(1);
 
-    vi.advanceTimersByTime(61_000);
+    vi.advanceTimersByTime(60_000);
     expect(getCronJob(r.data!.jobId)!.firedCount).toBe(2);
     expect(spy).toHaveBeenCalledTimes(2);
   });
 
   it('setCronFireCallback 覆盖默认回调后默认启动逻辑不执行', () => {
     vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-15T00:00:30+08:00'));
     const spy = vi.fn();
     setCronFireCallback(spy);
     createCronJob({ name: 'x', prompt: 'p', cron: '* * * * *', recurring: false });
-    vi.advanceTimersByTime(61_000);
+    vi.advanceTimersByTime(30_000);
     expect(spy).toHaveBeenCalledTimes(1);
     expect(vi.mocked(scheduler.startAgent)).not.toHaveBeenCalled();
   });

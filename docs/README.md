@@ -169,7 +169,7 @@ Auraxis/
 ├── tsconfig.node.json           # Vite 配置专用（composite project reference）
 ├── tsconfig.electron.json       # 主进程 TS 配置（CommonJS → dist-electron/, rootDir: electron/）
 ├── vite.config.mts              # Vite 构建配置
-├── vitest.config.ts             # 测试配置（覆盖率阈值：65% 行 / 65% 分支 / 65% 函数）
+├── vitest.config.ts             # 测试配置（覆盖率阈值：75% 行 / 70% 分支 / 75% 函数）
 ├── electron-builder.yml         # 打包配置（NSIS/DMG/AppImage）
 └── .env.example                 # 环境变量模板
 ```
@@ -742,9 +742,9 @@ dist-electron/ + dist/ ──→ electron-builder ──→ release/
 - **测试框架**：Vitest（`describe`, `it`, `expect`, `vi` 通过 globals 注入）
 - **主进程测试**：`electron/**/__tests__/`，node 环境，依赖 `electron` 的模块用 `vi.mock('electron', ...)` 隔离
 - **渲染进程测试**：`src/**/__tests__/`，jsdom 环境（@testing-library/react）
-- **测试总数**：154 个测试文件 / 1234 个用例通过（另有 2 例环境性跳过）
+- **测试总数**：160 个测试文件 / 1309 个用例通过（另有 2 例环境性跳过）
 - **覆盖率口径**：门槛统计范围仅为 `electron/ipc/`、`src/stores/`、`src/core/`；UI 组件（`src/components/`）与主进程入口（`main.ts` / `preload.ts` 等）不计入该门槛，另有组件级测试与 Playwright 端到端测试（`npm run test:e2e`）覆盖
-- **覆盖率阈值**：行/语句 65%，分支 65%，函数 65%（scope: `electron/ipc/`, `src/stores/`, `src/core/`；当前实际 71.9% 行/语句、78.2% 分支、77.4% 函数）
+- **覆盖率阈值**：行/语句 75%，分支 70%，函数 75%（scope: `electron/ipc/`, `src/stores/`, `src/core/`；当前实际 82.7% 行/语句、79.0% 分支、83.0% 函数）
 - **运行命令**：`npm test`（全量）、`npm run test:backend`（主进程）、`npm run test:frontend`（渲染进程）、`npm run test:coverage`（覆盖率报告）
 
 ### 12.3 类型契约
