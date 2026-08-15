@@ -9,6 +9,7 @@ import {
 } from '@/components/common/icons';
 import { AGENT_SKILLS, type AgentSkillIconKey } from '../../core/skills';
 import { useChatStore } from '../../stores/useChatStore';
+import { useT, agentSkillNameKey, agentSkillDescKey } from '../../i18n';
 
 const SKILL_ICONS: Record<AgentSkillIconKey, ReactNode> = {
   search: <SearchIcon size={20} weight="regular" />,
@@ -25,6 +26,7 @@ const SKILL_ICONS: Record<AgentSkillIconKey, ReactNode> = {
  * prompt and focuses it — the user reviews and presses Enter to send.
  */
 export default function QuickActionsPanel() {
+  const t = useT();
   return (
     <section className="mb-12 last:mb-0">
       <div className="mx-auto grid max-w-[720px] grid-cols-3 gap-2.5 max-[560px]:grid-cols-2">
@@ -37,15 +39,15 @@ export default function QuickActionsPanel() {
               useChatStore.getState().setInputValue(skill.instruction);
               useChatStore.getState().requestComposerFocus();
             }}
-            title={skill.description}
-            aria-label={`${skill.name}：${skill.description}`}
+            title={t(agentSkillDescKey(skill.key))}
+            aria-label={`${t(agentSkillNameKey(skill.key))}：${t(agentSkillDescKey(skill.key))}`}
           >
             <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-[var(--color-bg-elevated)] ring-1 ring-[var(--color-border-dim)] text-text-primary transition-colors duration-150 group-hover:ring-[var(--color-border-strong)]">
               {SKILL_ICONS[skill.icon]}
             </span>
             <span className="min-w-0 w-full">
-              <span className="block text-sm font-medium text-text-primary leading-snug truncate">{skill.name}</span>
-              <span className="block text-2xs text-text-muted leading-[1.4] truncate mt-0.5">{skill.description}</span>
+              <span className="block text-sm font-medium text-text-primary leading-snug truncate">{t(agentSkillNameKey(skill.key))}</span>
+              <span className="block text-2xs text-text-muted leading-[1.4] truncate mt-0.5">{t(agentSkillDescKey(skill.key))}</span>
             </span>
           </button>
         ))}

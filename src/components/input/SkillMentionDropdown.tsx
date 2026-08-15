@@ -1,6 +1,6 @@
 import { Wrench } from '@/components/common/icons';
 import type { AgentSkill } from '@/core/skills';
-import { useT } from '../../i18n';
+import { useT, agentSkillNameKey, agentSkillDescKey } from '../../i18n';
 
 interface SkillMentionDropdownProps {
   skills: AgentSkill[];
@@ -15,7 +15,10 @@ export default function SkillMentionDropdown({ skills, query, selected, onSelect
   const t = useT();
   const q = query.trim().toLowerCase();
   const visible = skills.filter(
-    (s) => !q || s.name.toLowerCase().includes(q) || s.key.includes(q),
+    (s) => !q
+      || s.name.toLowerCase().includes(q)
+      || s.key.includes(q)
+      || t(agentSkillNameKey(s.key)).toLowerCase().includes(q),
   );
 
   if (visible.length === 0) return null;
@@ -40,8 +43,8 @@ export default function SkillMentionDropdown({ skills, query, selected, onSelect
               <Wrench size={12} weight="fill" />
             </span>
             <span className="min-w-0 flex flex-col gap-[1px]">
-              <strong className="overflow-hidden text-ellipsis whitespace-nowrap">{skill.name}</strong>
-              <span className="overflow-hidden text-ellipsis whitespace-nowrap text-2xs opacity-60">{skill.description}</span>
+              <strong className="overflow-hidden text-ellipsis whitespace-nowrap">{t(agentSkillNameKey(skill.key))}</strong>
+              <span className="overflow-hidden text-ellipsis whitespace-nowrap text-2xs opacity-60">{t(agentSkillDescKey(skill.key))}</span>
             </span>
           </div>
         ))}

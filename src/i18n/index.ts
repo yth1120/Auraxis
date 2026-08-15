@@ -95,6 +95,34 @@ export function keybindingDescKey(description: string): I18nKey {
   return KB_DESC_KEYS[description] ?? 'kb.openPalette';
 }
 
+const SKILL_NAME_KEYS: Record<string, I18nKey> = {
+  'code-review': 'skill.codeReview.name',
+  'bug-fix': 'skill.bugFix.name',
+  refactor: 'skill.refactor.name',
+  'test-gen': 'skill.testGen.name',
+  architecture: 'skill.architecture.name',
+  'feature-dev': 'skill.featureDev.name',
+};
+
+const SKILL_DESC_KEYS: Record<string, I18nKey> = {
+  'code-review': 'skill.codeReview.desc',
+  'bug-fix': 'skill.bugFix.desc',
+  refactor: 'skill.refactor.desc',
+  'test-gen': 'skill.testGen.desc',
+  architecture: 'skill.architecture.desc',
+  'feature-dev': 'skill.featureDev.desc',
+};
+
+/** Built-in skill display name key (registry keeps stable ids). */
+export function agentSkillNameKey(key: string): I18nKey {
+  return SKILL_NAME_KEYS[key] ?? 'skill.codeReview.name';
+}
+
+/** Built-in skill display description key. */
+export function agentSkillDescKey(key: string): I18nKey {
+  return SKILL_DESC_KEYS[key] ?? 'skill.codeReview.desc';
+}
+
 /** Reactive translator hook — components re-render on locale change. */
 export function useT() {
   const locale = useI18nStore((s) => s.locale);

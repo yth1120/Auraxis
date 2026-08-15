@@ -110,7 +110,7 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
   const [activeKey, setActiveKey] = useState(initialKey ?? 'general');
   const [appVersion, setAppVersion] = useState('0.0.0');
   const models = useModels();
-  const runtimeFields = useMemo(() => buildAgentRuntimeFields(models), [models]);
+  const runtimeFields = useMemo(() => buildAgentRuntimeFields(models, t), [models, t]);
   const [credSource, setCredSource] = useState<string | null>(null);
   const [projectActions, setProjectActions] = useState<{ name: string; command: string; platform?: string }[]>([]);
   const [sshConnections, setSshConnections] = useState<{ id: string; name: string; host: string; port: number; username: string; keyPath?: string; useAgent?: boolean; createdAt: number }[]>([]);

@@ -30,7 +30,7 @@ import { ModeTrigger, ModePanelContent } from './ModeToggler';
 import AccessSelector, { type AccessMode } from './AccessSelector';
 import { resolveSessionRefs } from '../../utils/sessionRefs';
 import { resolveFollowTarget } from '../../utils/followTarget';
-import { t, useT } from '../../i18n';
+import { t, useT, agentSkillNameKey } from '../../i18n';
 import GhostToast from '../layout/GhostToast';
 import { SLASH_COMMANDS, executeCommand, createAgent, type SlashCommand } from '../../constants/commands';
 import { listSlashCommands, findPluginCommand, resolveSkillRefs } from '../../utils/slashCommands';
@@ -295,9 +295,12 @@ export default function ChatInput({ position }: ChatInputProps) {
   const dollarSkills = useMemo(() => {
     const q = dollarQuery.trim().toLowerCase();
     return allSkills.filter(
-      (s) => !q || s.name.toLowerCase().includes(q) || s.key.includes(q),
+      (s) => !q
+        || s.name.toLowerCase().includes(q)
+        || s.key.includes(q)
+        || t(agentSkillNameKey(s.key)).toLowerCase().includes(q),
     );
-  }, [dollarQuery, allSkills]);
+  }, [dollarQuery, allSkills, t]);
 
   const hasInput = inputValue.trim().length > 0;
 
