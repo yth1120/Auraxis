@@ -1084,8 +1084,6 @@ export default function AgentConversation({ headerInset = 0, bottomInset = 0 }: 
                   : flowEntries;
               if ((agentErrorsOnly || agentTextOnly || runningFilterActive) && visibleTurnEntries.length === 0) return null;
               const stats = turnStats(turn.metricsEnd ?? turn.end);
-              const tailTime = turn.end?.timestamp
-                ?? turn.entries[turn.entries.length - 1]?.timestamp;
               const turnText = turn.entries
                 .filter((e) => e.type === 'text' && (e.text ?? '').trim())
                 .map((e) => e.text as string)
@@ -1096,7 +1094,7 @@ export default function AgentConversation({ headerInset = 0, bottomInset = 0 }: 
               // the tail (copy + clock + run stats) belongs to a
               // settled turn only — the live turn carries no actions chrome.
               const hasTail = turn.end != null
-                && (turnText !== '' || stats !== '' || tailTime != null || durationMs != null);
+                && (turnText !== '' || stats !== '' || durationMs != null);
               return (
                 <div key={turn.iteration} data-agent-turn={turn.iteration} className="flex flex-col gap-4">
                   {visibleTurnEntries.map((entry, i) => (
@@ -1130,12 +1128,6 @@ export default function AgentConversation({ headerInset = 0, bottomInset = 0 }: 
                         </button>
                       )}
                       <span className="ax-flow-time tabular-nums" data-side="end">
-                        {tailTime != null && (
-                          <>
-                            {formatTime(tailTime)}
-                            {durationMs != null || stats !== '' ? <span className="ax-flow-dot" aria-hidden>·</span> : null}
-                          </>
-                        )}
                         {durationMs != null && (
                           <>
                             {runDurationLabel(durationMs)}
