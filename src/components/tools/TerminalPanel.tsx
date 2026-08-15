@@ -307,17 +307,17 @@ export default function TerminalPanel({ onClose }: { onClose?: () => void }) {
   return (
     <div className="h-full w-full flex flex-col">
       {/* ── Header: icon · title · mode · actions ── */}
-      <div className="flex items-center gap-2 px-2.5 pt-1.5 pb-1.5 shrink-0">
-        <span className="shrink-0 flex items-center justify-center w-6 h-6 rounded-md bg-[var(--color-bg-inset)] text-primary">
-          <TerminalWindow size={13} />
+      <div className="flex items-center gap-2 px-2.5 pt-1 pb-1 shrink-0">
+        <span className="shrink-0 flex items-center justify-center w-5 h-5 rounded-md bg-[var(--color-bg-inset)] text-primary">
+          <TerminalWindow size={12} />
         </span>
-        <span className="text-sm font-semibold text-text-primary">{t('terminal.title')}</span>
+        <span className="text-xs font-semibold text-text-primary">{t('terminal.title')}</span>
         {currentAgentId && (
-          <div className="flex items-center gap-0.5 h-6 px-0.5 rounded-full bg-[var(--color-bg-inset)]">
+          <div className="flex items-center gap-0.5 h-5 px-0.5 rounded-full bg-[var(--color-bg-inset)]">
             <button
               type="button"
               className={clsx(
-                'h-5 px-2 rounded-full text-2xs font-medium border-none cursor-pointer transition-colors duration-150',
+                'h-[18px] px-1.5 rounded-full text-2xs font-medium border-none cursor-pointer transition-colors duration-150',
                 viewMode === 'local' ? 'bg-[var(--color-bg-elevated)] text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary',
               )}
               onClick={() => setViewMode('local')}
@@ -327,7 +327,7 @@ export default function TerminalPanel({ onClose }: { onClose?: () => void }) {
             <button
               type="button"
               className={clsx(
-                'h-5 px-2 rounded-full text-2xs font-medium border-none cursor-pointer transition-colors duration-150',
+                'h-[18px] px-1.5 rounded-full text-2xs font-medium border-none cursor-pointer transition-colors duration-150',
                 viewMode === 'agent' ? 'bg-[var(--color-bg-elevated)] text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary',
               )}
               onClick={() => setViewMode('agent')}
@@ -338,38 +338,38 @@ export default function TerminalPanel({ onClose }: { onClose?: () => void }) {
           </div>
         )}
         {runningCount > 0 && (
-          <span className="inline-flex items-center h-[18px] px-1.5 rounded-full text-2xs font-medium bg-[var(--color-success-soft)] text-[var(--color-success)]">
+          <span className="inline-flex items-center h-4 px-1.5 rounded-full text-2xs font-medium bg-[var(--color-success-soft)] text-[var(--color-success)]">
             {t('terminal.running', { n: runningCount })}
           </span>
         )}
         <div className="ml-auto flex items-center gap-0.5">
           <button
             type="button"
-            className="flex items-center justify-center w-6 h-6 rounded-md text-text-muted cursor-pointer border-none bg-transparent transition-colors duration-150 hover:bg-[var(--color-hover)] hover:text-text-primary"
+            className="flex items-center justify-center w-5 h-5 rounded-md text-text-muted cursor-pointer border-none bg-transparent transition-colors duration-150 hover:bg-[var(--color-hover)] hover:text-text-primary"
             onClick={() => clearRef.current()}
             aria-label={t('terminal.clear')}
             title={t('terminal.clear')}
           >
-            <Eraser size={14} />
+            <Eraser size={12} />
           </button>
           <button
             type="button"
-            className="flex items-center justify-center w-6 h-6 rounded-md text-text-muted cursor-pointer border-none bg-transparent transition-colors duration-150 hover:bg-[var(--color-hover)] hover:text-text-primary"
+            className="flex items-center justify-center w-5 h-5 rounded-md text-text-muted cursor-pointer border-none bg-transparent transition-colors duration-150 hover:bg-[var(--color-hover)] hover:text-text-primary"
             onClick={() => setSessionKey((k) => k + 1)}
             aria-label={t('terminal.new')}
             title={t('terminal.new')}
           >
-            <Plus size={14} />
+            <Plus size={12} />
           </button>
           {onClose && (
             <button
               type="button"
-              className="flex items-center justify-center w-6 h-6 rounded-md text-text-muted cursor-pointer border-none bg-transparent transition-colors duration-150 hover:bg-[var(--color-hover)] hover:text-text-primary"
+              className="flex items-center justify-center w-5 h-5 rounded-md text-text-muted cursor-pointer border-none bg-transparent transition-colors duration-150 hover:bg-[var(--color-hover)] hover:text-text-primary"
               onClick={onClose}
               aria-label={t('terminal.close')}
               title={t('terminal.close')}
             >
-              <X size={14} />
+              <X size={12} />
             </button>
           )}
         </div>
