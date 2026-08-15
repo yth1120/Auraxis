@@ -33,6 +33,10 @@ describe('useAppStore — theme & sidebar', () => {
     expect(useAppStore.getState().theme).toBe('light');
   });
 
+  it('首次启动默认展开侧边栏', () => {
+    expect(useAppStore.getState().sidebarCollapsed).toBe(false);
+  });
+
   it('toggleSidebar 切换 collapsed', () => {
     const initial = useAppStore.getState().sidebarCollapsed;
     useAppStore.getState().toggleSidebar();
