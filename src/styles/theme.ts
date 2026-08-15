@@ -47,7 +47,7 @@ export const lightTheme: ThemeConfig = {
     borderRadius: shared.borderRadius,
     borderRadiusLG: 8,
     borderRadiusSM: 6,
-    borderRadiusXS: 4,
+    borderRadiusXS: 5,
   },
   components: {
     Button: {
@@ -62,7 +62,7 @@ export const lightTheme: ThemeConfig = {
       colorBgContainer: '#FFFFFF', colorBorder: '#E2E2DE', activeBorderColor: '#E2E2DE',
       hoverBorderColor: '#E2E2DE', addonBg: 'transparent',
       activeShadow: 'none',
-      borderRadius: 8, borderRadiusLG: 10, controlHeight: 36,
+      borderRadius: 8, borderRadiusLG: 12, controlHeight: 36,
     },
     Tooltip: { colorBgSpotlight: '#040712', colorTextLightSolid: '#FFFFFF', borderRadius: 6 },
     Switch: { colorPrimary: '#111216', colorPrimaryHover: '#292C32', trackHeight: 22 },
@@ -116,7 +116,7 @@ export const darkTheme: ThemeConfig = {
     colorBorder: '#292C32', colorBorderSecondary: 'rgba(255,255,255,0.07)',
     colorSplit: 'rgba(255, 255, 255, 0.07)',
     colorLink: '#8C8AA8', colorLinkHover: '#A6A4C2', colorLinkActive: '#6F6D8E',
-    borderRadius: shared.borderRadius, borderRadiusLG: 8, borderRadiusSM: 6, borderRadiusXS: 4,
+    borderRadius: shared.borderRadius, borderRadiusLG: 8, borderRadiusSM: 6, borderRadiusXS: 5,
   },
   components: {
     Button: {
@@ -131,7 +131,7 @@ export const darkTheme: ThemeConfig = {
       colorBgContainer: '#16181D', colorBorder: 'rgba(255,255,255,0.08)', activeBorderColor: 'rgba(255,255,255,0.08)',
       hoverBorderColor: 'rgba(255,255,255,0.08)', addonBg: 'transparent',
       activeShadow: 'none',
-      borderRadius: 8, borderRadiusLG: 10, controlHeight: 36,
+      borderRadius: 8, borderRadiusLG: 12, controlHeight: 36,
     },
     Tooltip: { colorBgSpotlight: '#23262B', colorTextLightSolid: '#F1F1EE', borderRadius: 6 },
     Switch: { colorPrimary: '#F1F1EE', colorPrimaryHover: '#D9D9D6', trackHeight: 22 },

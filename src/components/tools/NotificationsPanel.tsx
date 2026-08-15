@@ -134,7 +134,7 @@ export default function NotificationsPanel({ onClose }: { onClose?: () => void }
 
   return (
     <ToolViewShell
-      icon={<Bell size={18} />}
+      icon={<Bell size={20} />}
       title={tPanel('notif.title')}
       description={tPanel('notif.desc')}
       actions={

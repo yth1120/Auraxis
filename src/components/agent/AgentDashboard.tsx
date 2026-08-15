@@ -203,7 +203,7 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
         {/* Active task */}
         {activeTask && (
           <div className="text-xs text-text-secondary flex items-center overflow-hidden text-ellipsis whitespace-nowrap">
-            <ExecutingIndicator size={13} className="mr-1" />
+            <ExecutingIndicator size={14} className="mr-1" />
             {(activeTask as any).activeForm || (activeTask as any).content}
           </div>
         )}
@@ -261,7 +261,7 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
                   (t?.status) === 'completed' && 'text-text-secondary',
                   (t?.status) === 'in_progress' && 'text-text-primary',
                 )}>
-                  {(t?.status) === 'completed' ? <CheckCircle /> : (t?.status) === 'in_progress' ? <ExecutingIndicator size={13} /> : <Clock />}
+                  {(t?.status) === 'completed' ? <CheckCircle /> : (t?.status) === 'in_progress' ? <ExecutingIndicator size={14} /> : <Clock />}
                 </span>
                 <span>{t?.content ?? '-'}</span>
               </div>

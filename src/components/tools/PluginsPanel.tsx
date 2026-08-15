@@ -22,7 +22,7 @@ export default function PluginsPanel({ onClose }: { onClose?: () => void }) {
 
   return (
     <ToolViewShell
-      icon={<Blocks size={18} />}
+      icon={<Blocks size={20} />}
       title={t('plugins.title')}
       description={t('plugins.desc')}
       actions={

@@ -63,7 +63,7 @@ export default function ScheduledPanel({ onClose }: { onClose?: () => void }) {
 
   return (
     <ToolViewShell
-      icon={<CalendarCheck size={18} />}
+      icon={<CalendarCheck size={20} />}
       title={tPanel('sched.title')}
       description={tPanel('sched.desc')}
       actions={

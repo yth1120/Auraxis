@@ -55,7 +55,7 @@ export default memo(function AssistantMessage({ message, searchQuery, isLastAssi
     const parts = text.split(new RegExp(`(${q})`, 'gi'));
     return parts.map((part, i) =>
       part.toLowerCase() === searchQuery!.toLowerCase()
-        ? <mark key={i} style={{ background: 'var(--color-accent)', color: '#fff', borderRadius: 2, padding: '0 1px' }}>{part}</mark>
+        ? <mark key={i} style={{ background: 'var(--color-accent)', color: '#fff', borderRadius: 5, padding: '0 1px' }}>{part}</mark>
         : part,
     );
   }, [searchQuery, hasSearch]);
@@ -121,7 +121,7 @@ export default memo(function AssistantMessage({ message, searchQuery, isLastAssi
             }}
             title={t('msg.helpful')}
           >
-            <ThumbsUp size={13} weight={rating === 'up' ? 'fill' : 'regular'} />
+            <ThumbsUp size={14} weight={rating === 'up' ? 'fill' : 'regular'} />
           </button>
           <button
             className={clsx('ax-message-action', rating === 'down' && '!text-danger')}
@@ -131,7 +131,7 @@ export default memo(function AssistantMessage({ message, searchQuery, isLastAssi
             }}
             title={t('msg.problem')}
           >
-            <ThumbsDown size={13} weight={rating === 'down' ? 'fill' : 'regular'} />
+            <ThumbsDown size={14} weight={rating === 'down' ? 'fill' : 'regular'} />
           </button>
           {isLastAssistant && (
             <button

@@ -11,7 +11,7 @@ import type { AgentTask, TaskStatus } from '../../types/chat';
 
 const ICON: Record<TaskStatus, React.ReactNode> = {
   pending: <ClockCircleOutlined />,
-  running: <ExecutingIndicator size={13} />,
+  running: <ExecutingIndicator size={14} />,
   done: <CheckCircleOutlined />,
   error: <CloseCircleOutlined />,
   skipped: <MinusCircleOutlined />,

@@ -168,7 +168,7 @@ export default function StatsHeatmap() {
           color: bgSec,
           borderWidth: 2,
           borderColor: 'transparent',
-          borderRadius: 3,
+          borderRadius: 5,
         },
         splitLine: { show: false },
         dayLabel: { show: false },

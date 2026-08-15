@@ -316,7 +316,7 @@ function Checklist({ todos }: { todos: NonNullable<AgentLogEntry['todos']> }) {
             t.status === 'completed' && '!text-text-secondary',
             t.status === 'in_progress' && '!text-accent',
           )}>
-            {t.status === 'completed' ? <CheckIcon /> : t.status === 'in_progress' ? <ExecutingIndicator size={13} /> : <CircleIcon />}
+            {t.status === 'completed' ? <CheckIcon /> : t.status === 'in_progress' ? <ExecutingIndicator size={14} /> : <CircleIcon />}
           </span>
           <span className={clsx(
             'leading-relaxed text-[var(--color-text-secondary)]',
@@ -516,7 +516,7 @@ function AgentToolRow({
               }
             }}
           >
-            <EyeIcon size={11} />
+            <EyeIcon size={12} />
             {t('tl.inspect')}
           </button>
         </div>

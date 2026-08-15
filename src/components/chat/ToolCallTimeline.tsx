@@ -129,7 +129,7 @@ function GroupNode({ group, index }: { group: ToolGroup; index: number }) {
 
 
   const StatusIcon = group.status === 'running'
-    ? <ExecutingIndicator size={11} />
+    ? <ExecutingIndicator size={12} />
     : group.status === 'error'
       ? <CloseCircleOutlined style={{ fontSize: 10, color: 'var(--color-danger, #EF4444)' }} />
       : <CheckCircleOutlined style={{ fontSize: 10, color: 'var(--color-success, #10B981)' }} />;

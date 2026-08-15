@@ -28,7 +28,7 @@ function CopyButton({ text }: { text: string }) {
       className="inline-flex items-center gap-1 text-2xs text-text-muted border-none bg-transparent cursor-pointer hover:text-text-primary"
       onClick={(e) => { e.stopPropagation(); copyText(text, setCopied); }}
     >
-      {copied ? <Check size={11} /> : <Copy size={11} />}
+      {copied ? <Check size={12} /> : <Copy size={12} />}
       {copied ? t('tool.copied') : t('tool.copy')}
     </button>
   );

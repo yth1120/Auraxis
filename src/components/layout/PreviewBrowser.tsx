@@ -296,7 +296,7 @@ export default function PreviewBrowser({ tabId }: PreviewBrowserProps) {
         {!hasContent ? (
           <div className="w-full flex items-center justify-center p-8">
             <div className="flex flex-col items-center justify-center gap-1.5 text-center">
-              <span className="text-faint [&_svg]:w-[22px] [&_svg]:h-[22px]"><Tray size={22} /></span>
+              <span className="text-faint [&_svg]:w-5 [&_svg]:h-5"><Tray size={20} /></span>
               <div className="text-xs text-muted">{warning ?? t('pb.startHint')}</div>
               {!warning && <div className="text-xs text-faint">{t('pb.examples')}</div>}
             </div>

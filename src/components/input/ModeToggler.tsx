@@ -102,7 +102,7 @@ export const ModePanelContent = memo(function ModePanelContent({ onSelect }: { o
   return (
     <div className="flex flex-col min-h-0">
       {/* ── Model selection (header icon only; model names stay clean) ── */}
-      {sectionHeader(<Brain size={13} />, t('model.title'))}
+      {sectionHeader(<Brain size={14} />, t('model.title'))}
       {BUILT_IN_MODELS.map((m) => {
         const selected = m.id === selectedModel;
         return (
@@ -127,7 +127,7 @@ export const ModePanelContent = memo(function ModePanelContent({ onSelect }: { o
       })}
 
       {/* ── Thinking depth: full-track segmented control + current desc ── */}
-      {sectionHeader(<Gauge size={13} />, t('think.title'))}
+      {sectionHeader(<Gauge size={14} />, t('think.title'))}
       <div className="flex gap-1 p-0.5 w-full mt-[2px] bg-bg-tertiary rounded-lg" role="radiogroup" aria-label={t('think.title')}>
         {THINKING_LEVELS.map((level) => {
           const selected = level.key === reasoningEffort;

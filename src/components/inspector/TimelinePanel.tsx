@@ -940,7 +940,7 @@ export default function TimelinePanel() {
               onClick={() => setSelectedKey(null)}
               aria-label={tPanel('tl.closeDetail')}
             >
-              <X size={13} />
+              <X size={14} />
             </button>
           </header>
           <div className="flex items-center gap-1 px-2 pt-2 shrink-0">

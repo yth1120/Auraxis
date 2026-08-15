@@ -601,7 +601,7 @@ export default function WorkbenchLayout() {
               {!searchQuery.trim() ? (
                 <div className="flex flex-col items-center justify-center gap-2 px-4 py-6 text-center">
                   <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-[var(--color-bg-inset)] text-text-faint">
-                    <MagnifyingGlass size={18} />
+                    <MagnifyingGlass size={20} />
                   </span>
                   <span className="text-sm font-medium text-text-secondary">{t('search.start')}</span>
                   <span className="text-2xs text-text-faint leading-[1.5]">{t('search.scope')}</span>
@@ -609,7 +609,7 @@ export default function WorkbenchLayout() {
               ) : searchResults.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 px-4 py-6 text-center">
                   <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-[var(--color-bg-inset)] text-text-faint">
-                    <MagnifyingGlass size={18} />
+                    <MagnifyingGlass size={20} />
                   </span>
                   <span className="text-sm font-medium text-text-secondary">{t('search.noResults')}</span>
                   <span className="text-2xs text-text-faint leading-[1.5]">{t('search.tryAgain')}</span>

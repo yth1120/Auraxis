@@ -42,7 +42,7 @@ export default function SkillsDirectory({ open, onClose }: { open: boolean; onCl
     <Modal
       title={
         <span className="flex items-center gap-2">
-          <Wrench size={15} className="text-primary" />
+          <Wrench size={16} className="text-primary" />
           {t('skills.title')}
         </span>
       }
@@ -78,7 +78,7 @@ export default function SkillsDirectory({ open, onClose }: { open: boolean; onCl
                   }}
       title={t('skills.copyTip')}
                   >
-      <Copy size={13} />
+      <Copy size={14} />
                   </button>
               </div>
       {s.whenToUse && <span className="text-2xs text-text-muted truncate">{t('skills.whenToUse', { text: s.whenToUse })}</span>}
