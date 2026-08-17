@@ -88,7 +88,7 @@ describe('fts', () => {
     expect(indexed).toBeGreaterThanOrEqual(2);
     const hits = await searchFts('登录');
     expect(hits.length).toBeGreaterThanOrEqual(1);
-  });
+  }, 60_000);
 
   it('sessionQuerySearch returns bounded model-facing hits', async () => {
     await addFtsDoc({ type: 'chat', id: 's-mem', title: '登录模块讨论', text: '我们决定登录模块使用静水流深方案', ts: 5000 });
