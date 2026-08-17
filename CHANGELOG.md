@@ -1,5 +1,7 @@
 # Auraxis 更新日志
 
+> **原始版本**：Auraxis 由个人早期项目 **DeepFlow v1.3.0** 演进而来。DeepFlow 仓库保留为作者的个人开发成长记录（https://github.com/yth1120/DeepFlow），其 v1.3.0 原始发布产物（Windows / macOS / Linux 安装包）已归档到本仓库 Releases：`origin-deepflow-1.3.0`。
+
 ## v2.0.0（2026-08-15）
 
 > 首个正式大版本：桌面端 Agentic 编程助手的基础能力全量落地。
