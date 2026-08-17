@@ -1,5 +1,40 @@
 # Auraxis 更新日志
 
+## v2.0.0（2026-08-15）
+
+> 首个正式大版本：桌面端 Agentic 编程助手的基础能力全量落地。
+
+### 核心引擎
+
+- **统一 ReAct 步进引擎**：`query-engine` + `step-engine` 统一驱动聊天与 Agent，支持流式输出、重试、停止策略、上下文压缩
+- **多 Agent 调度**：AgentScheduler 优先级队列、并发控制、暂停/恢复；Explore / Plan / general-purpose 三类内置 Agent；子 Agent 递归（3 层）；计划生成与审批
+- **Code Mode**：`RunCode` 的 TypeScript 程序在工作线程中编排工具，子调用回穿完整权限管线（8 路并发重叠、硬超时）
+- **工具系统（63 个）**：Bash / Read / Write / Edit / Delete / Grep / Glob / WebSearch / WebFetch、终端六件套（Terminal*）、PTY 持久会话、LSP、NotebookEdit、Cron / Schedule、GitCommit、RunWorkflow、SessionQuery、ReadImage、EnterWorktree、ReviewArtifact 等
+
+### 能力与基础设施
+
+- **权限体系**：ask / plan / auto 三策略、权限规则（once/session/always）、原生沙箱（Windows restricted token / AppContainer、Linux、macOS）、read-before-write 观测硬门、文件级撤销
+- **MCP 协议客户端**：服务器配置、连接状态、工具发现与调用
+- **插件系统**：安装 / 启用 / 禁用、内置示例插件（timestamp / uuid）
+- **对外 SDK**：TypeScript SDK（TCP JSON-RPC）与 Python SDK
+- **headless CLI 与 ACP**：`--run` 无头任务执行、`--plugin` 管理、ACP stdio 服务
+- **持久化**：会话 / Agent 统一 JSONL 事件日志、SQLite 投影缓存、FTS5 全文搜索、长期记忆（better-sqlite3，JSON 回退）
+- **终端与远程**：底部可拖拽终端抽屉、PTY 持久会话、SSH 远程主机（密钥认证）、后台任务 / 定时任务
+- **图片输入**：ReadImage + 内容寻址附件存储，多模态转 OpenAI / Anthropic 消息块，非视觉模型自动降级文本
+- **联网搜索多 provider**：DuckDuckGo / Exa / Perplexity / DeepSeek 官方搜索
+
+### 桌面体验
+
+- **外观**：深色 / 浅色 / 跟随系统主题、中英双语、Windows 11 Acrylic 侧边栏透明度、设置面板内置真实测试覆盖率报告
+- **会话**：LLM 标题生成、逐消息评分、附件画廊 / 灯箱、图片草稿栏
+- **统计**：ECharts 活动热力图（品牌配色 / 主题自适应 / 活跃摘要）
+- **稳定性**：流式期间隐藏操作图标、气泡时间统一、执行中续写排队发送；终端测试注入可控 PTY、沙箱 OS 用例跨平台化，三平台 CI 构建稳定
+
+### 质量
+
+- 全量单测 + E2E（Playwright 真实 Electron）覆盖启动、模式切换、发消息、快捷卡片、设置主题
+- 发布物：Windows NSIS / macOS DMG（x64 + arm64）/ Linux AppImage
+
 ## v3.0.0（2026-08-18）
 
 > 本次为从 v2.0.0 以来的大版本：包含 Work 模式对齐 Claude Cowork、专业文档技能、云连接器、溯源记忆、论文驱动模块、缓存对齐、UI 视觉规范整改与大量基础设施升级。
