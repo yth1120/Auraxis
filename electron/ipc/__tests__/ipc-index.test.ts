@@ -225,6 +225,7 @@ describe('index — registerIpcHandlers 总注册与窗口/shell/设置处理器
     win.setBackgroundMaterial = vi.fn();
     (electronMock.BrowserWindow as any).fromWebContents = () => win;
     const releaseSpy = vi.spyOn(os, 'release').mockReturnValue('10.0.22631');
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32' as any);
     registerIpcHandlers();
     const h = handlers();
 
@@ -236,10 +237,12 @@ describe('index — registerIpcHandlers 总注册与窗口/shell/设置处理器
     expect(win.setBackgroundColor).toHaveBeenCalledWith('#0a0202');
     expect(win.setBackgroundMaterial).toHaveBeenCalledWith('none');
     releaseSpy.mockRestore();
+    platformSpy.mockRestore();
   });
 
   it('window:glassState 返回系统支持与当前窗口是否已预置 Acrylic', () => {
     const releaseSpy = vi.spyOn(os, 'release').mockReturnValue('10.0.22631');
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32' as any);
     registerIpcHandlers();
     const h = handlers();
 
@@ -254,6 +257,7 @@ describe('index — registerIpcHandlers 总注册与窗口/shell/设置处理器
       data: { supported: true, ready: true },
     });
     releaseSpy.mockRestore();
+    platformSpy.mockRestore();
   });
 
   it('shell:openExternal 仅放行 http/https', async () => {

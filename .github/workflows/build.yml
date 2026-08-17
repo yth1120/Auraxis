@@ -60,6 +60,8 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           pattern: Auraxis-*
@@ -71,6 +73,6 @@ jobs:
         with:
           name: Auraxis ${{ github.ref_name }}
           files: release/*
-          generate_release_notes: true
+          body_path: CHANGELOG.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
