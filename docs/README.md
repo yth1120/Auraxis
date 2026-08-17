@@ -1062,6 +1062,33 @@ npm run build            # 生产构建
 | [src/core/plugin-manager.ts](../src/core/plugin-manager.ts) | 插件管理 |
 | [src/styles/theme.ts](../src/styles/theme.ts) | 主题配置 |
 
-## 附录：项目沿革
+## 附录：DeepFlow v1.3.0 版本说明
 
-DeepFlow v1.3.0 为 Auraxis 的前身项目。DeepFlow 源码保留于 https://github.com/yth1120/DeepFlow；其 v1.3.0 发布产物归档于本仓库 Release `origin-deepflow-1.3.0`。
+DeepFlow v1.3.0 是 Auraxis 的前身版本，基于 Electron 的桌面端 Agentic 编程助手。
+
+### 技术栈
+
+- 桌面框架：Electron 33（无边框窗口，`contextIsolation: true`）
+- 前端：React 18 + TypeScript 5.5 + Vite 5
+- UI：Ant Design 5，自定义深色 / 浅色主题
+- 状态管理：Zustand 4（14 个 Store）
+- AI API：axios SSE 流式请求，兼容 DeepSeek / OpenAI 与 Anthropic 格式
+- 构建：Vite + electron-builder（NSIS / DMG / AppImage）
+
+### 核心能力
+
+- ReAct 智能体循环（聊天 / Agent 双路径）
+- 多智能体调度与子 Agent
+- 插件扩展与持久化项目记忆
+- React Flow 图式工作流可视化
+- 结构化工具输出卡片
+- ReviewArtifact 强制质量门、Git 提交与文件删除工具
+
+### 发布产物
+
+- Windows：[DeepFlow.Setup.1.3.0.exe](https://github.com/yth1120/Auraxis-Agent/releases/download/origin-deepflow-1.3.0/DeepFlow.Setup.1.3.0.exe)
+- macOS（Intel）：[DeepFlow-1.3.0.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/origin-deepflow-1.3.0/DeepFlow-1.3.0.dmg)
+- macOS（Apple Silicon）：[DeepFlow-1.3.0-arm64.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/origin-deepflow-1.3.0/DeepFlow-1.3.0-arm64.dmg)
+- Linux：[DeepFlow-1.3.0.AppImage](https://github.com/yth1120/Auraxis-Agent/releases/download/origin-deepflow-1.3.0/DeepFlow-1.3.0.AppImage)
+
+DeepFlow 源码仓库：https://github.com/yth1120/DeepFlow

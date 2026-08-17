@@ -94,6 +94,15 @@
 - 压测：200 会话冷启动约 1.4s；18/30 Agent 并发全部完成；默认 3 并发无卡顿
 - 发布物：Windows NSIS 安装包（x64）+ blockmap + latest.yml，v3.0.0 标签已推送
 
-## 项目沿革
+## DeepFlow v1.3.0 版本说明
 
-DeepFlow v1.3.0 为 Auraxis 的前身项目，其 v1.3.0 发布产物归档于本仓库 Release `origin-deepflow-1.3.0`（源码见 https://github.com/yth1120/DeepFlow）。
+DeepFlow v1.3.0 是 Auraxis 的前身版本：Electron 33 + React 18 + TypeScript 5.5 + Vite 5，包含 ReAct 智能体循环、多智能体调度、插件扩展、持久化项目记忆、React Flow 图式工作流可视化、结构化工具输出卡片与 ReviewArtifact 质量门。
+
+### 发布产物
+
+- Windows：[DeepFlow.Setup.1.3.0.exe](https://github.com/yth1120/Auraxis-Agent/releases/download/origin-deepflow-1.3.0/DeepFlow.Setup.1.3.0.exe)
+- macOS（Intel）：[DeepFlow-1.3.0.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/origin-deepflow-1.3.0/DeepFlow-1.3.0.dmg)
+- macOS（Apple Silicon）：[DeepFlow-1.3.0-arm64.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/origin-deepflow-1.3.0/DeepFlow-1.3.0-arm64.dmg)
+- Linux：[DeepFlow-1.3.0.AppImage](https://github.com/yth1120/Auraxis-Agent/releases/download/origin-deepflow-1.3.0/DeepFlow-1.3.0.AppImage)
+
+源码仓库：https://github.com/yth1120/DeepFlow
