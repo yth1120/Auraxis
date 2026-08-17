@@ -2,7 +2,7 @@
 
 # Auraxis 项目架构与开发文档
 
-相关文档：[TS SDK](../packages/auraxis-sdk/README.md) · [Python SDK](../python/auraxis_sdk/README.md) · [工程规范](../AGENTS.md) · [可信记忆项目方案](PLAN-TRUSTED-MEMORY.md) · [Eywa 溯源记忆落地方案](design-eywa-provenance-memory.md)
+相关文档：[TS SDK](../packages/auraxis-sdk/README.md) · [Python SDK](../python/auraxis_sdk/README.md) · [工程规范](../AGENTS.md)
 
 ## 一、项目概述
 Auraxis v3.0.0 是一款基于 Electron 的桌面端 Agentic 编程助手，融合了统一 ReAct 步进引擎、多智能体调度、Code Mode 工具编排、插件扩展和持久化项目记忆。执行语义遵循通用约定（`end_turn` 即回合结束，无剧本/强制门），ReviewArtifact 作为可选验证工具。后端 LLM 默认为 DeepSeek API（兼容 OpenAI / Anthropic 格式），联网搜索默认使用 DeepSeek 官方原生搜索（失败自动降级 DuckDuckGo，另支持 Exa / Perplexity provider）。DeepSeek 官方能力已接入：思考强度 low/high/max 三档、strict tools（Beta）、计划生成 JSON 模式、对话前缀续写（代码块“继续写”）、FIM 补全（Beta）API、流式 usage 与上下文缓存命中展示、user_id 隔离、可配置单次最大输出 tokens（上限 384K）、官方离线 tokenizer 本地计数。
@@ -536,7 +536,7 @@ Work/Code 统一引擎（`query-engine.ts` → `step-engine.ts`）为 DeepSeek �
 
 ## 五、研究论文与技术落地
 
-> 以下 11 篇论文/系统均为项目「论文驱动开发」的来源；实现均为自研（借鉴算法思想，未复制论文代码）。缓存方向的技术基于 DeepSeek API 的官方前缀缓存机制做**客户端侧适配**（服务端算法如 radix tree / KV 融合无法在托管 API 上直接调用）。可信记忆完整方案另见 [PLAN-TRUSTED-MEMORY.md](PLAN-TRUSTED-MEMORY.md) 与 [design-eywa-provenance-memory.md](design-eywa-provenance-memory.md)。
+> 以下 11 篇论文/系统均为项目「论文驱动开发」的来源；实现均为自研（借鉴算法思想，未复制论文代码）。缓存方向的技术基于 DeepSeek API 的官方前缀缓存机制做**客户端侧适配**（服务端算法如 radix tree / KV 融合无法在托管 API 上直接调用）。
 
 ### 5.1 论文总览
 
@@ -766,7 +766,7 @@ Agent 循环 (agent-loop.ts) — agentLoopRun()
 
 ### 9.2 长期记忆（Memory）
 
-长期记忆已升级为 **证据先于信念（evidence before belief）的溯源记忆**（Eywa + MAP-Graph，完整方案见第五章 5.2/5.3 与 [PLAN-TRUSTED-MEMORY.md](PLAN-TRUSTED-MEMORY.md)）：
+长期记忆已升级为 **证据先于信念（evidence before belief）的溯源记忆**（Eywa + MAP-Graph，完整方案见第五章 5.2/5.3）：
 
 - **三层数据模型**：Evidence（不可变源证据，SQLite/JSON 双后端）→ Signal（规则优先的类型化信号）→ Belief（LLM 派生 + 硬锚点验证，支持 / 不支持 / 引用不存在三态）
 - **实时证据钩子**：`chat-log.ts` / `session-log.ts` 写入后 best-effort 捕获用户消息与工具终态证据
