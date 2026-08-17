@@ -56,7 +56,7 @@ function ctx(extra: Record<string, unknown> = {}) {
   return {
     projectRoot: root,
     requestId: 'lr-1',
-    mode: 'afe' as const,
+    mode: 'auto' as const,
     sandboxMode: 'full' as const,
     autoApprove: true,
     ...extra,

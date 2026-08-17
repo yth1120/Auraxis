@@ -41,6 +41,8 @@ vi.mock('../../tool-defs', () => ({
 }));
 vi.mock('../model-config', () => ({
   resolveApiBase: (m: string) => `https://api.example/${m}`,
+  resolveModelApiBase: async (m: string) => `https://api.example/${m}`,
+  resolveModelApiKey: async () => undefined,
 }));
 vi.mock('../permission-handlers', () => ({
   requestPermission: vi.fn(async () => true),
@@ -152,8 +154,14 @@ describe('AgentScheduler — 启动与生命周期', () => {
     expect(h.loops[0].opts.tools).toEqual([{ name: 'Read' }]);
   });
 
-  it('低/中 reasoningEffort 归一化为 high，high/max 原样透传', async () => {
+  it('reasoningEffort 三档映射：low→low、medium→high、high/max 原样透传', async () => {
     scheduler.startAgent(makeCfg({ reasoningEffort: 'low' }), projectRoot);
+    await vi.waitFor(() => expect(h.loops).toHaveLength(1));
+    expect(h.loops[0].opts.reasoningEffort).toBe('low');
+
+    scheduler.clearAll();
+    h.loops.length = 0;
+    scheduler.startAgent(makeCfg({ reasoningEffort: 'medium' }), projectRoot);
     await vi.waitFor(() => expect(h.loops).toHaveLength(1));
     expect(h.loops[0].opts.reasoningEffort).toBe('high');
 
@@ -524,7 +532,7 @@ describe('registerSchedulerIpc — 通道路由与校验', () => {
     ).resolves.toEqual(expect.objectContaining({ ok: false, error: expect.stringContaining('项目目录不存在') }));
     await expect(
       handler('agent:start')(fakeEvent, { config: makeCfg({ surface: 'chat' }), projectPath: projectRoot }),
-    ).resolves.toEqual(expect.objectContaining({ ok: false, error: expect.stringContaining('对话模式') }));
+    ).resolves.toEqual(expect.objectContaining({ ok: false, error: expect.stringContaining('Chat 模式') }));
   });
 
   it('agent:start 成功返回 agentId 并启动循环', async () => {

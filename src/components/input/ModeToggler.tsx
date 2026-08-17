@@ -1,18 +1,24 @@
 import { forwardRef, memo, useEffect } from 'react';
-import { Brain, CaretDown, Check as CheckIcon, Gauge } from '@/components/common/icons';
+import { Brain, CaretDown, Check as CheckIcon } from '@/components/common/icons';
 import { useChatStore } from '../../stores/useChatStore';
+import { useAppStore } from '../../stores/useAppStore';
 import { BUILT_IN_MODELS } from '../../types/chat';
 import clsx from 'clsx';
 import { useT, type I18nKey } from '../../i18n';
+import { ThinkingDepthSelector, THINKING_LEVELS, type ThinkingLevel } from './ThinkingDepthSelector';
 import type { ReactNode } from 'react';
 
-type ThinkingLevel = 'low' | 'medium' | 'high';
+const THINKING_LABEL_KEY: Record<ThinkingLevel, I18nKey> = {
+  low: 'think.low',
+  medium: 'think.medium',
+  high: 'think.high',
+};
 
-const THINKING_LEVELS: { key: ThinkingLevel; labelKey: I18nKey; descKey: I18nKey }[] = [
-  { key: 'low', labelKey: 'think.low', descKey: 'think.low.desc' },
-  { key: 'medium', labelKey: 'think.medium', descKey: 'think.medium.desc' },
-  { key: 'high', labelKey: 'think.high', descKey: 'think.high.desc' },
-];
+const THINKING_DESC_KEY: Record<ThinkingLevel, I18nKey> = {
+  low: 'think.low.desc',
+  medium: 'think.medium.desc',
+  high: 'think.high.desc',
+};
 
 function modelName(modelId: string): string {
   return BUILT_IN_MODELS.find((m) => m.id === modelId)?.name ?? modelId;
@@ -45,7 +51,13 @@ export const ModeTrigger = memo(
     const t = useT();
     const selectedModel = useChatStore((s) => s.selectedModel);
     const reasoningEffort = useChatStore((s) => s.reasoningEffort);
-    const effort = THINKING_LEVELS.find((l) => l.key === reasoningEffort);
+    const sidebarMode = useAppStore((s) => s.sidebarMode);
+    const effortLabel = THINKING_LEVELS.includes(reasoningEffort)
+      ? t(THINKING_LABEL_KEY[reasoningEffort])
+      : t('think.medium');
+    // Chat 已改为 DeepSeek 风格：只有思考开关、无思考深度，触发器只显示模型名；
+    // Work/Code 保留思考深度，触发器始终显示当前档位。
+    const showEffort = sidebarMode !== 'chat';
 
     return (
       <button
@@ -58,7 +70,9 @@ export const ModeTrigger = memo(
         aria-expanded={open}
       >
         <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{modelName(selectedModel)}</span>
-        <span className="shrink-0 text-text-muted">/ {effort ? t(effort.labelKey) : t('think.medium')}</span>
+        {showEffort && (
+          <span className="shrink-0 text-text-muted">/ {effortLabel}</span>
+        )}
         <ChevronDown open={open} />
       </button>
     );
@@ -67,17 +81,17 @@ export const ModeTrigger = memo(
 
 /* ── Single-pane dropdown panel: all models + thinking depth ── */
 
-interface ModePanelProps {
-  contentOnly?: boolean;
-  onSelect?: () => void;
-}
-
 export const ModePanelContent = memo(function ModePanelContent({ onSelect }: { onSelect?: () => void }) {
   const t = useT();
   const selectedModel = useChatStore((s) => s.selectedModel);
   const setSelectedModel = useChatStore((s) => s.setSelectedModel);
   const reasoningEffort = useChatStore((s) => s.reasoningEffort);
   const setReasoningEffort = useChatStore((s) => s.setReasoningEffort);
+  const sidebarMode = useAppStore((s) => s.sidebarMode);
+
+  // Chat 模式 = DeepSeek 风格（思考开关在输入工具栏，面板只选模型）；
+  // Work/Code 默认思考开启、深度滑轨始终可用。
+  const isChat = sidebarMode === 'chat';
 
   // Escape closes the whole menu.
   useEffect(() => {
@@ -121,52 +135,25 @@ export const ModePanelContent = memo(function ModePanelContent({ onSelect }: { o
               <span className="overflow-hidden text-ellipsis whitespace-nowrap text-sm leading-5 font-medium text-text-primary">{m.name}</span>
               <span className="overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-[17px] text-text-muted">{t(modelDescriptionKey(m.id))}</span>
             </span>
-            <span className="flex flex-none w-[18px] items-center justify-center">{selected ? <Check /> : null}</span>
+            <span className="flex flex-none w-5 items-center justify-center">{selected ? <Check /> : null}</span>
           </button>
         );
       })}
 
-      {/* ── Thinking depth: full-track segmented control + current desc ── */}
-      {sectionHeader(<Gauge size={14} />, t('think.title'))}
-      <div className="flex gap-1 p-0.5 w-full mt-[2px] bg-bg-tertiary rounded-lg" role="radiogroup" aria-label={t('think.title')}>
-        {THINKING_LEVELS.map((level) => {
-          const selected = level.key === reasoningEffort;
-          return (
-            <button
-              key={level.key}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              title={t(level.descKey)}
-              className={clsx(
-                'flex-1 min-w-0 h-7 px-1 rounded-lg border-none text-xs font-medium cursor-pointer transition-[background,color,box-shadow] duration-150',
-                selected
-                  ? 'bg-[var(--color-bg-elevated)] shadow-sm text-text-primary font-semibold'
-                  : 'bg-transparent text-text-muted hover:text-text-secondary',
-              )}
-              onClick={() => {
-                setReasoningEffort(level.key);
-                onSelect?.();
-              }}
-            >
-              {t(level.labelKey)}
-            </button>
-          );
-        })}
-      </div>
-      <div className="px-2 pt-1.5 pb-0.5 text-xs leading-[18px] text-text-muted">
-        {t(THINKING_LEVELS.find((l) => l.key === reasoningEffort)?.descKey ?? 'think.medium.desc')}
-      </div>
-    </div>
-  );
-});
-
-// Legacy wrapper for backward compatibility (used in tests)
-export const ModePanel = memo(function ModePanel({ contentOnly, onSelect }: ModePanelProps) {
-  if (contentOnly) return <ModePanelContent onSelect={onSelect} />;
-  return (
-    <div className="w-[320px] p-1.5 bg-[var(--color-bg-elevated)] rounded-xl z-50 flex flex-col shadow-[var(--shadow-md)]">
-      <ModePanelContent onSelect={onSelect} />
+      {!isChat && (
+        <ThinkingDepthSelector
+          title={t('think.title')}
+          value={reasoningEffort}
+          labels={{
+            low: t('think.low'),
+            medium: t('think.medium'),
+            high: t('think.high'),
+          }}
+          ariaLabel={t('think.title')}
+          description={t(THINKING_DESC_KEY[reasoningEffort])}
+          onChange={setReasoningEffort}
+        />
+      )}
     </div>
   );
 });

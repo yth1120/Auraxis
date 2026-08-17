@@ -332,7 +332,7 @@ export default function FileTreePanel({ tabId: _tabId, variant = 'tabs' }: FileT
                   type="button"
                   aria-label={`${tPanel('ftp.closeTip')} ${t.name}`}
                   title={tPanel('ftp.closeTip')}
-                  className="flex items-center justify-center w-4 h-4 rounded text-faint cursor-pointer border-none bg-transparent hover:bg-[var(--color-hover)] hover:text-text-primary shrink-0"
+                  className="flex items-center justify-center w-4 h-4 rounded-md text-faint cursor-pointer border-none bg-transparent hover:bg-[var(--color-hover)] hover:text-text-primary shrink-0"
                   onClick={() => useAppStore.getState().closeFileTab(t.path)}
                 >
                   <X size={12} />

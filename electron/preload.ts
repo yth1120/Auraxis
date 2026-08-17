@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { ApplyCodePayload } from './contracts/core';
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -25,12 +26,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Native frosted-glass window material (Windows 11 Acrylic) for the sidebar.
   setBackgroundMaterial: (enabled: boolean) => ipcRenderer.invoke('window:setBackgroundMaterial', enabled),
   backgroundMaterialSupported: () => ipcRenderer.invoke('window:backgroundMaterialSupported'),
+  getGlassState: () => ipcRenderer.invoke('window:glassState'),
   onMaximizeChange: (callback: (isMaximized: boolean) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, isMaximized: boolean) => callback(isMaximized);
     ipcRenderer.on('window:maximize-changed', handler);
     return () => {
       ipcRenderer.removeListener('window:maximize-changed', handler);
     };
+  },
+
+  // --- Local account / login ---
+  auth: {
+    status: () => ipcRenderer.invoke('auth:status'),
+    setup: (params: { name: string; email: string; password: string; rememberMe: boolean }) =>
+      ipcRenderer.invoke('auth:setup', params),
+    login: (params: { email: string; password: string; rememberMe: boolean }) =>
+      ipcRenderer.invoke('auth:login', params),
+    logout: () => ipcRenderer.invoke('auth:logout'),
+    changePassword: (params: { currentPassword: string; newPassword: string }) =>
+      ipcRenderer.invoke('auth:changePassword', params),
+    setAvatar: (avatar: string) => ipcRenderer.invoke('auth:setAvatar', avatar),
   },
 
   // --- File operations ---
@@ -50,25 +65,47 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // --- Project operations ---
   project: {
     getTree: (projectRoot: string) => ipcRenderer.invoke('project:getTree', projectRoot),
-    applyCode: (payload: any) => ipcRenderer.invoke('project:applyCode', payload),
-    previewCode: (payload: any) => ipcRenderer.invoke('project:previewCode', payload),
+    applyCode: (payload: ApplyCodePayload) => ipcRenderer.invoke('project:applyCode', payload),
+    previewCode: (payload: ApplyCodePayload) => ipcRenderer.invoke('project:previewCode', payload),
     selectDirectory: () => ipcRenderer.invoke('project:selectDirectory'),
+    loadGlobalState: () => ipcRenderer.invoke('project:loadGlobalState'),
+    saveGlobalState: (state: unknown) => ipcRenderer.invoke('project:saveGlobalState', state),
   },
 
   // --- AI operations ---
   ai: {
     chatStream: (
-      request: { model: string; messages: { role: string; content: string }[]; isDeepThink: boolean; reasoningEffort?: 'high' | 'max'; isWebSearch: boolean; apiKey?: string },
-      callbacks: { onChunk: (text: string) => void; onDone: () => void; onError: (error: string) => void }
+      request: {
+        model: string;
+        messages: { role: string; content: string }[];
+        isDeepThink: boolean;
+        reasoningEffort?: 'low' | 'high' | 'max';
+        isWebSearch: boolean;
+        apiKey?: string;
+        prefix?: { content: string; stop?: string[] };
+      },
+      callbacks: {
+        onChunk: (text: string) => void;
+        onThinking?: (text: string) => void;
+        onUsage?: (usage: { inputTokens: number; outputTokens: number; reasoningTokens?: number; cacheHitTokens?: number; cacheMissTokens?: number }) => void;
+        onDone: () => void;
+        onError: (error: string) => void;
+      }
     ) => {
       const requestId = generateId();
 
-      const chunkHandler = (_event: Electron.IpcRendererEvent, data: { requestId: string; type: string; text?: string; error?: string }) => {
+      const chunkHandler = (_event: Electron.IpcRendererEvent, data: { requestId: string; type: string; text?: string; usage?: any; error?: string }) => {
         if (data.requestId !== requestId) return;
         try {
           switch (data.type) {
             case 'chunk':
               callbacks.onChunk(data.text || '');
+              break;
+            case 'thinking':
+              callbacks.onThinking?.(data.text || '');
+              break;
+            case 'usage':
+              callbacks.onUsage?.(data.usage);
               break;
             case 'done':
               cleanup();
@@ -106,9 +143,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       if (cleanup) cleanup();
       return ipcRenderer.invoke('ai:abortStream', requestId);
     },
+    // FIM 补全（Beta）：中间填充，供编辑器/行内补全使用。
+    fim: (params: { model: string; apiKey?: string; prompt: string; suffix?: string; maxTokens?: number }) =>
+      ipcRenderer.invoke('ai:fim', params),
 
     sendQuery: (
-      request: { model: string; messages: { role: string; content: string }[]; isDeepThink: boolean; reasoningEffort?: 'high' | 'max'; projectRoot: string; autoApprove?: boolean; apiKey?: string },
+      request: { sessionId?: string; model: string; messages: { role: string; content: string }[]; memoryContext?: string; isDeepThink: boolean; reasoningEffort?: 'low' | 'high' | 'max'; projectRoot: string; autoApprove?: boolean; mode?: string; apiKey?: string; maxIterations?: number },
       callbacks: { onEvent: (event: any) => void; onDone: () => void; onError: (error: string) => void }
     ) => {
       const requestId = generateId();
@@ -150,6 +190,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return ipcRenderer.invoke('ai:abortQuery', requestId);
     },
 
+    clearQueryContext: (sessionId: string) => ipcRenderer.invoke('ai:clearQueryContext', sessionId),
+
     abortTool: (requestId: string, toolCallId: string) => ipcRenderer.invoke('ai:abortTool', requestId, toolCallId),
 
     retryTool: (requestId: string, toolName: string) => ipcRenderer.invoke('ai:retryTool', requestId, toolName),
@@ -161,6 +203,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('ai:testConnection', { apiKey }),
   },
 
+  // --- 官方离线 tokenizer ---
+  tokenizer: {
+    count: (text: string) => ipcRenderer.invoke('tokenizer:count', text),
+  },
+
   // --- Memory ---
   memory: {
     extract: (ctx: any) => ipcRenderer.invoke('memory:extract', ctx),
@@ -169,6 +216,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     search: (projectPath: string, query: string) => ipcRenderer.invoke('memory:search', projectPath, query),
     archive: (id: string) => ipcRenderer.invoke('memory:archive', id),
     delete: (id: string) => ipcRenderer.invoke('memory:delete', id),
+    evidenceList: (projectPath: string) => ipcRenderer.invoke('memory:evidenceList', projectPath),
+    evidenceDetail: (id: string) => ipcRenderer.invoke('memory:evidenceDetail', id),
+    readForQuery: (projectPath: string, query: string, opts?: unknown) =>
+      ipcRenderer.invoke('memory:readForQuery', projectPath, query, opts),
+    beliefAudit: (id: string) => ipcRenderer.invoke('memory:beliefAudit', id),
+    readTrace: (runId: string) => ipcRenderer.invoke('memory:readTrace', runId),
+    erase: (scope: string) => ipcRenderer.invoke('memory:erase', scope),
+    reindex: (projectPath: string) => ipcRenderer.invoke('memory:reindex', projectPath),
+    graph: (projectPath: string, role?: string, agent?: { id?: string; name?: string }) =>
+      ipcRenderer.invoke('memory:graph', projectPath, role, agent),
+    rejections: (projectPath: string) => ipcRenderer.invoke('memory:rejections', projectPath),
   },
 
   // --- Settings ---
@@ -186,6 +244,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
     readFile: (filePath: string, projectRoot?: string) => ipcRenderer.invoke('context:readFile', filePath, projectRoot),
     compact: (projectRoot: string, messages: { role: string; content: string }[]) =>
       ipcRenderer.invoke('context:compact', { projectRoot, messages }),
+  },
+
+  // --- Instructions (global / folder-level AGENTS.md) ---
+  instructions: {
+    getGlobal: () => ipcRenderer.invoke('instructions:getGlobal'),
+    setGlobal: (content: string) => ipcRenderer.invoke('instructions:setGlobal', content),
+    listProject: (projectRoot: string) => ipcRenderer.invoke('instructions:listProject', projectRoot),
+    get: (projectRoot: string, relPath?: string) => ipcRenderer.invoke('instructions:get', projectRoot, relPath),
+    set: (projectRoot: string, relPath: string | undefined, content: string) =>
+      ipcRenderer.invoke('instructions:set', projectRoot, relPath, content),
+  },
+
+  // --- Cloud connectors (Slack / Drive / Notion) ---
+  connectors: {
+    status: () => ipcRenderer.invoke('connector:status'),
+    setToken: (kind: 'slack' | 'drive' | 'notion', token: string) =>
+      ipcRenderer.invoke('connector:setToken', kind, token),
+    test: (kind: 'slack' | 'drive' | 'notion') => ipcRenderer.invoke('connector:test', kind),
   },
 
   // --- Permission ---
@@ -208,6 +284,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   permissionProfile: {
     list: () => ipcRenderer.invoke('permission:listProfiles'),
     save: (custom: any[], activeId: string) => ipcRenderer.invoke('permission:saveProfiles', { custom, activeId }),
+    listProjectProfiles: () => ipcRenderer.invoke('permission:listProjectProfiles'),
+    setProjectProfile: (path: string, profileId: string | null) =>
+      ipcRenderer.invoke('permission:setProjectProfile', { path, profileId }),
+    moveProjectProfile: (from: string, to: string) =>
+      ipcRenderer.invoke('permission:moveProjectProfile', { from, to }),
   },
 
   // --- AskUser (model → human question) ---
@@ -246,6 +327,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     resume: (agentId: string) => ipcRenderer.invoke('agent:resume', agentId),
     continue: (agentId: string, instruction: string, displayInstruction?: string) =>
       ipcRenderer.invoke('agent:continue', agentId, instruction, displayInstruction),
+    approveDelivery: (agentId: string) => ipcRenderer.invoke('agent:approveDelivery', agentId),
     setPriority: (agentId: string, priority: string) => ipcRenderer.invoke('agent:setPriority', agentId, priority),
     getQueue: () => ipcRenderer.invoke('agent:getQueue'),
     setMaxConcurrent: (n: number) => ipcRenderer.invoke('agent:setMaxConcurrent', n),
@@ -464,7 +546,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // --- Chat logs (authoritative session store) ---
   chatLog: {
-    append: (sessionId: string, events: unknown[]) => ipcRenderer.invoke('chatLog:append', sessionId, events),
+    append: (sessionId: string, events: unknown[], projectRoot?: string) =>
+      ipcRenderer.invoke('chatLog:append', sessionId, events, projectRoot),
     read: (sessionId: string) => ipcRenderer.invoke('chatLog:read', sessionId),
     list: () => ipcRenderer.invoke('chatLog:list'),
     project: (sessionId: string) => ipcRenderer.invoke('chatLog:project', sessionId),

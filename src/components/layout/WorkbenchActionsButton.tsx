@@ -5,8 +5,8 @@ import { useT } from '../../i18n';
 
 /**
  * One-click workbench panel toggle. The right panel's in-panel tabs
- * (检查器 / 时间线 / 审查) handle view switching — the entry stays a simple
- * on/off switch, matching the VSCode panel-toggle pattern.
+ * (文件 / 执行详情 / 时间线 / 审查 / 预览) handle view switching — the entry
+ * stays a simple on/off switch, matching the VSCode panel-toggle pattern.
  */
 export default function WorkbenchActionsButton() {
   const t = useT();

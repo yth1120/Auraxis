@@ -2,15 +2,18 @@
  * web-search.ts — provider registry for the WebSearch tool （联网搜索）.
  *
  * Providers:
- *   duckduckgo   — keyless HTML scrape (default)
+ *   duckduckgo   — keyless HTML scrape (fallback)
  *   exa          — Exa search API (EXA_API_KEY / settings.exaApiKey)
  *   perplexity   — Perplexity chat completions with citations
  *                  (PERPLEXITY_API_KEY / settings.perplexityApiKey)
  *   deepseek     — DeepSeek native web_search via the Anthropic-compatible
  *                  Messages API (DEEPSEEK_API_KEY; DEEPSEEK_SEARCH_BASE_URL)
+ *                  （默认 provider，失败自动降级 duckduckgo）
  *
  * Extra providers can be added at runtime via registerWebSearchProvider.
  */
+
+import { getDeepSeekUserId } from './auth-store';
 
 export interface WebSearchResult {
   title: string;
@@ -262,6 +265,10 @@ registerWebSearchProvider({
   search: async (query, { apiKey, signal }) => {
     if (!apiKey) throw new Error('缺少 DEEPSEEK_API_KEY');
     const req = buildDeepSeekSearchRequest(query, apiKey);
+    const userId = await getDeepSeekUserId();
+    if (userId) {
+      (req.body as Record<string, unknown>).metadata = { user_id: userId };
+    }
     const response = await fetch(req.url, {
       method: 'POST',
       headers: req.headers,
@@ -280,7 +287,8 @@ export function resolveWebSearchProvider(settings: Record<string, unknown>): {
   provider: WebSearchProvider;
   apiKey?: string;
 } {
-  const preferred = typeof settings.webSearchProvider === 'string' ? settings.webSearchProvider : 'duckduckgo';
+  // 默认走 DeepSeek 官方原生搜索（与 Chat 联网按钮同源）；失败时自动降级 DuckDuckGo。
+  const preferred = typeof settings.webSearchProvider === 'string' ? settings.webSearchProvider : 'deepseek';
   const provider = registry.get(preferred) || registry.get('duckduckgo')!;
   const envKey = provider.keyEnv ? process.env[provider.keyEnv] : undefined;
   const settingsKey = `${provider.id}ApiKey`;

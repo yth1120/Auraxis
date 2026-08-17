@@ -27,7 +27,6 @@ import { useMessageFeedbackStore } from '../../stores/useMessageFeedbackStore';
 export default function MessageList({ bottomInset = 0, headerInset = 0 }: { bottomInset?: number; headerInset?: number }) {
   const t = useT();
   const messages = useChatStore((s) => s.messages);
-  const commands = useChatStore((s) => s.commands ?? []);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const currentProjectPath = useChatStore((s) => s.currentProjectPath);
   const settingsProjectPath = useSettingsStore((s) => s.projectPath);
@@ -75,8 +74,9 @@ export default function MessageList({ bottomInset = 0, headerInset = 0 }: { bott
   }, [matchIndex, totalMatches, matchMsgIndices]);
 
   useEffect(() => {
-    (window as { __toggleSearch?: () => void }).__toggleSearch = () => setSearchOpen((p) => !p);
-    return () => { delete (window as { __toggleSearch?: () => void }).__toggleSearch; };
+    const toggle = () => setSearchOpen((p) => !p);
+    window.addEventListener('auraxis:toggle-message-search', toggle);
+    return () => window.removeEventListener('auraxis:toggle-message-search', toggle);
   }, []);
 
   // Load persisted per-message ratings once per session.
@@ -112,7 +112,7 @@ export default function MessageList({ bottomInset = 0, headerInset = 0 }: { bott
   ), []);
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden relative" role="log" aria-live="polite" aria-busy={isStreaming} aria-label={t('msglist.aria')}>
+    <div className="flex-1 flex flex-col overflow-hidden relative">
       {searchOpen && (
         <div className="ax-search-bar shrink-0" style={{ paddingTop: headerInset }}>
           <Input
@@ -145,18 +145,8 @@ export default function MessageList({ bottomInset = 0, headerInset = 0 }: { bott
           </span>
         </div>
       )}
-      <div className="flex-1 min-h-0 flex flex-row min-w-0">
+      <div className="flex-1 min-h-0 flex flex-row min-w-0" role="log" aria-live="polite" aria-busy={isStreaming} aria-label={t('msglist.aria')}>
         <div className="flex-1 min-w-0 max-w-[var(--content-max-width,880px)] mx-auto w-full flex flex-col overflow-hidden">
-          {commands.length > 0 && (
-            <div className="shrink-0 w-full px-4 pb-2 flex flex-col gap-0.5">
-              {commands.map((cmd) => (
-                <div key={cmd.id} className="flex items-center gap-1.5 min-w-0 text-xs text-text-muted">
-                  <span className="shrink-0 font-mono text-text-secondary">/{cmd.name}</span>
-                  {cmd.args && <span className="min-w-0 truncate text-text-faint">{cmd.args}</span>}
-                </div>
-              ))}
-            </div>
-          )}
           <Virtuoso
             ref={virtuosoRef}
             scrollerRef={(ref) => {
@@ -174,7 +164,6 @@ export default function MessageList({ bottomInset = 0, headerInset = 0 }: { bott
               if (msg.disclosure) {
                 return <DisclosureRow data={msg.disclosure} />;
               }
-              const isLastAssistant = !isStreaming && msg.role === 'assistant' && _index === messages.length - 1;
               const files = (msg.toolCalls ?? [])
                 .filter((tc) => tc.toolName === 'Write' || tc.toolName === 'Edit' || tc.toolName === 'NotebookEdit')
                 .map((tc) => String((tc.input as { file_path?: unknown })?.file_path ?? ''))
@@ -189,7 +178,6 @@ export default function MessageList({ bottomInset = 0, headerInset = 0 }: { bott
                   <MessageBubble
                     message={msg}
                     searchQuery={searchQuery}
-                    isLastAssistant={isLastAssistant}
                   />
                   {files.length > 0 && <DeliverablesRow files={files} />}
                   {laterSessionIds.length > 0 && projectRoot && (

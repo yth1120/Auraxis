@@ -47,7 +47,7 @@ describe('ChatInput — 输入区核心交互', () => {
       stopStreaming: mockStopStreaming,
     });
     useAppStore.setState({ sidebarMode: 'chat', theme: 'light' });
-    useSettingsStore.setState({ projectPath: null, sandboxMode: 'workspace-write' });
+    useSettingsStore.setState({ projectPath: null, permissionPreset: 'ask' });
     useAgentStore.setState({ agents: [], currentAgentId: null });
     useSessionStore.setState({ sessions: [] });
     useInspectorStore.setState({ plans: [] });
@@ -58,6 +58,9 @@ describe('ChatInput — 输入区核心交互', () => {
       plan: { list: vi.fn(async () => ({ ok: false })) },
       project: { selectDirectory: vi.fn(async () => ({ ok: false })) },
       chatLog: { append: vi.fn(async () => ({ ok: true })) },
+      system: {
+        getGitBranches: vi.fn(async () => ({ ok: true, data: { current: '', branches: [] } })),
+      },
     };
   });
 
@@ -102,17 +105,33 @@ describe('ChatInput — 输入区核心交互', () => {
     expect(mockSendMessage).not.toHaveBeenCalled();
   });
 
-  it('while streaming, the textarea is disabled and Enter stops generation', async () => {
+  it('Chat 工具栏有思考开关，与联网搜索并排，点击切换 isDeepThink', async () => {
+    useAppStore.setState({ sidebarMode: 'chat' });
+    useChatStore.setState({ isDeepThink: false, reasoningEffort: 'high' });
+    const { getByRole } = await renderChatInput();
+
+    const thinking = getByRole('button', { name: '思考' });
+    const webSearch = getByRole('button', { name: '联网搜索' });
+    expect(thinking).toBeTruthy();
+    expect(webSearch).toBeTruthy();
+    expect(thinking.getAttribute('aria-pressed')).toBe('false');
+
+    fireEvent.click(thinking);
+    expect(useChatStore.getState().isDeepThink).toBe(true);
+    expect(useChatStore.getState().reasoningEffort).toBe('high');
+  });
+
+  it('while streaming, the textarea stays editable and Enter stops then sends', async () => {
     useChatStore.setState({ isStreaming: true, inputValue: '进行中的回复' });
     const { getByPlaceholderText, getByRole } = await renderChatInput();
     const textarea = getByPlaceholderText('输入你的问题…') as HTMLTextAreaElement;
 
-    expect(textarea.disabled).toBe(true);
-    expect(getByRole('button', { name: '停止生成' })).toBeTruthy();
+    expect(textarea.disabled).toBe(false);
+    expect(getByRole('button', { name: '停止并发送' })).toBeTruthy();
 
     fireEvent.keyDown(textarea, { key: 'Enter' });
     expect(mockStopStreaming).toHaveBeenCalledTimes(1);
-    expect(mockSendMessage).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockSendMessage).toHaveBeenCalledTimes(1));
   });
 
   it('typing a slash prefix opens the command dropdown and Enter completes it', async () => {
@@ -134,5 +153,18 @@ describe('ChatInput — 输入区核心交互', () => {
     const { getByPlaceholderText, getByRole } = await renderChatInput();
     expect(getByPlaceholderText('描述你的任务…')).toBeTruthy();
     expect(getByRole('button', { name: '启动任务' })).toBeTruthy();
+  });
+
+  it('输入框上方显示本地标识与当前 Git 分支', async () => {
+    (window as any).electronAPI.system.getGitBranches.mockResolvedValue({
+      ok: true,
+      data: { current: 'main', branches: ['main', 'dev'] },
+    });
+    useAppStore.setState({ sidebarMode: 'code' });
+    useSettingsStore.setState({ projectPath: 'C:/proj' });
+
+    const { getByText } = await renderChatInput();
+    expect(getByText('本地')).toBeTruthy();
+    await waitFor(() => expect(getByText('main')).toBeTruthy());
   });
 });

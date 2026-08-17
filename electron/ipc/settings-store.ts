@@ -2,10 +2,33 @@ import { app, safeStorage } from 'electron';
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 
-const API_KEY_KEYS = new Set(['deepseekApiKey', 'exaApiKey', 'perplexityApiKey']);
+const API_KEY_KEYS = new Set([
+  'deepseekApiKey',
+  'exaApiKey',
+  'perplexityApiKey',
+  'slackToken',
+  'driveToken',
+  'notionToken',
+]);
+
+export const MAX_OUTPUT_TOKENS_MIN = 1024;
+export const MAX_OUTPUT_TOKENS_CAP = 384_000;
+export const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
+
+/** 读取设置中的单次最大输出 tokens（官方上限 384K），越界自动收敛。 */
+export function resolveMaxOutputTokens(
+  settings: Record<string, unknown> | null | undefined,
+  fallback = DEFAULT_MAX_OUTPUT_TOKENS,
+): number {
+  const v = Number(settings?.maxOutputTokens);
+  if (!Number.isFinite(v) || v <= 0) return fallback;
+  return Math.min(MAX_OUTPUT_TOKENS_CAP, Math.max(MAX_OUTPUT_TOKENS_MIN, Math.round(v)));
+}
 
 /** One-time per-process guard so the plaintext→encrypted migration runs once. */
 let plaintextMigrationQueued = false;
+/** v2：联网搜索统一到 DeepSeek 官方原生搜索（旧默认 duckduckgo → deepseek）。 */
+let webSearchMigrationQueued = false;
 
 function getSettingsPath(): string {
   // Headless CLI runs in an isolated Chromium profile but must still read the
@@ -38,9 +61,30 @@ export async function readSettings(): Promise<Record<string, unknown>> {
         }
       }
     }
+    // 解密自定义模型的内嵌 apiKey（enc: 前缀）。
+    const customModels = settings.customModels as { apiKey?: string }[] | undefined;
+    if (Array.isArray(customModels)) {
+      for (const m of customModels) {
+        if (typeof m.apiKey === 'string' && m.apiKey.startsWith('enc:')) {
+          try {
+            const buf = Buffer.from(m.apiKey.slice(4), 'base64');
+            m.apiKey = safeStorage.isEncryptionAvailable()
+              ? safeStorage.decryptString(buf)
+              : m.apiKey;
+          } catch {
+            delete m.apiKey;
+          }
+        }
+      }
+    }
     // Migrate legacy plaintext keys to safeStorage encryption (write-once).
     if (plaintextKeys.length > 0 && !plaintextMigrationQueued) {
       plaintextMigrationQueued = true;
+      void writeSettings(settings).catch(() => {});
+    }
+    if (settings.webSearchProvider === 'duckduckgo' && !webSearchMigrationQueued) {
+      webSearchMigrationQueued = true;
+      settings.webSearchProvider = 'deepseek';
       void writeSettings(settings).catch(() => {});
     }
     return settings;
@@ -54,14 +98,32 @@ export async function writeSettings(settings: Record<string, unknown>): Promise<
   // Encrypt API keys
   for (const key of API_KEY_KEYS) {
     if (typeof toWrite[key] === 'string' && toWrite[key] && !(toWrite[key] as string).startsWith('enc:')) {
-      try {
-        if (safeStorage.isEncryptionAvailable()) {
-          const encrypted = safeStorage.encryptString(toWrite[key] as string);
-          toWrite[key] = 'enc:' + encrypted.toString('base64');
-        }
-      } catch {
-        // If encryption fails, don't store in plaintext
+      if (!safeStorage.isEncryptionAvailable()) {
+        // 加密不可用时绝不落明文：宁可丢弃，也不写盘。
         delete toWrite[key];
+        continue;
+      }
+      try {
+        const encrypted = safeStorage.encryptString(toWrite[key] as string);
+        toWrite[key] = 'enc:' + encrypted.toString('base64');
+      } catch {
+        delete toWrite[key];
+      }
+    }
+  }
+  // 加密自定义模型的内嵌 apiKey；加密不可用时丢弃该 key，不落明文。
+  const customModels = toWrite.customModels as { apiKey?: string }[] | undefined;
+  if (Array.isArray(customModels)) {
+    for (const m of customModels) {
+      if (typeof m.apiKey !== 'string' || !m.apiKey || m.apiKey.startsWith('enc:')) continue;
+      if (!safeStorage.isEncryptionAvailable()) {
+        delete m.apiKey;
+        continue;
+      }
+      try {
+        m.apiKey = 'enc:' + safeStorage.encryptString(m.apiKey).toString('base64');
+      } catch {
+        delete m.apiKey;
       }
     }
   }

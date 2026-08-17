@@ -13,7 +13,7 @@ import type { ToolDef } from './tool-defs';
 import { getAllMcpTools, callMcpTool } from './ipc/mcp-handlers';
 
 const MCP_PREFIX = 'mcp__';
-const MAX_TOTAL_TOOLS = 64;
+const MAX_TOTAL_TOOLS = 96;
 
 let cachedMcpTools: ToolDef[] | null = null;
 let mcpCacheVersion = 0;

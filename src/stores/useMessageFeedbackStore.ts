@@ -4,6 +4,7 @@
  */
 
 import { create } from 'zustand';
+import { useSettingsStore } from './useSettingsStore';
 
 interface MessageFeedbackStore {
   ratings: Record<string, 'up' | 'down'>;
@@ -46,6 +47,13 @@ export const useMessageFeedbackStore = create<MessageFeedbackStore>((set, get) =
       return { ratings };
     });
     const api = window.electronAPI?.feedback?.message;
-    if (api) void api({ messageId, sessionId, rating: next ?? null }).catch(() => {});
+    if (api) {
+      void api({
+        messageId,
+        sessionId,
+        rating: next ?? null,
+        projectPath: useSettingsStore.getState().projectPath || undefined,
+      }).catch(() => {});
+    }
   },
 }));

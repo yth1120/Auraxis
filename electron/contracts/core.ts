@@ -2,11 +2,22 @@
  * core.ts — single source of truth for cross-process core types.
  *
  * electron/types.ts and the renderer both re-export from here, so IPC contract
- * types (PermissionMode, IpcResponse, ModelDefinition, …) are never
+ * types (ApprovalPolicy, IpcResponse, ModelDefinition, …) are never
  * duplicated across the process boundary.
  */
 
-export type PermissionMode = 'ask' | 'plan' | 'afe';
+/** 审批策略 — how much the loop asks before acting.
+ *  · ask  — prompt per risky tool.
+ *  · plan — plan approval authorizes the run.
+ *  · auto — approve everything (was historically spelled 'afe'). */
+export type ApprovalPolicy = 'ask' | 'plan' | 'auto';
+
+/** Normalize persisted/CLI values, including the legacy 'afe' spelling. */
+export function normalizeApprovalPolicy(value: unknown): ApprovalPolicy {
+  if (value === 'ask' || value === 'plan' || value === 'auto') return value;
+  if (value === 'afe') return 'auto';
+  return 'ask';
+}
 
 export interface FileResult {
   name: string;
@@ -19,6 +30,9 @@ export interface FileSearchResult {
   name: string;
   path: string;
   isDirectory: boolean;
+  /** 内容命中时的上下文片段（文件名命中为空）。 */
+  snippet?: string;
+  matchType?: 'name' | 'content';
 }
 
 export interface ApplyCodePayload {
@@ -91,6 +105,6 @@ export interface ModelDefinition {
 }
 
 export const BUILT_IN_MODELS: ModelDefinition[] = [
-  { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', provider: 'deepseek', maxTokens: 8192 },
-  { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', provider: 'deepseek', maxTokens: 8192 },
+  { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', provider: 'deepseek', maxTokens: 384000 },
+  { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', provider: 'deepseek', maxTokens: 384000 },
 ];

@@ -60,7 +60,9 @@ export default function NotificationsPanel({ onClose }: { onClose?: () => void }
 
   const openAgent = (agentId?: string) => {
     if (!agentId) return;
-    useAppStore.getState().setSidebarMode('code');
+    const app = useAppStore.getState();
+    const targetSurface = useAgentStore.getState().agents.find((a) => a.id === agentId)?.surface ?? 'code';
+    app.setSidebarMode(targetSurface === 'work' ? 'work' : 'code');
     useAgentStore.getState().setCurrentAgent(agentId);
   };
 
@@ -81,7 +83,7 @@ export default function NotificationsPanel({ onClose }: { onClose?: () => void }
     return (
       <section>
         <div className="mb-1.5 px-1 text-2xs font-medium text-text-muted">{label}</div>
-        <ul className="m-0 p-0 list-none rounded-xl bg-[var(--color-bg-secondary)] overflow-hidden divide-y divide-[var(--color-border-dim)]/60">
+        <ul className="m-0 p-0 list-none rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border-dim)] overflow-hidden divide-y divide-[var(--color-border-dim)]/60">
           {list.map((n) => {
             const running = n.kind === 'cron' && (n.title.includes('执行中') || n.title.toLowerCase().includes('running'));
             const failed = /失败|出错|failed|error/i.test(n.title);
@@ -159,7 +161,7 @@ export default function NotificationsPanel({ onClose }: { onClose?: () => void }
       onClose={onClose}
     >
       {items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-[6px] py-16 text-center rounded-xl bg-[var(--color-bg-secondary)]">
+        <div className="flex flex-col items-center justify-center gap-[6px] py-16 text-center rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border-dim)]">
           <span className="flex items-center justify-center w-11 h-11 rounded-2xl bg-[var(--color-bg-inset)] text-text-faint">
             <Bell size={20} />
           </span>

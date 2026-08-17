@@ -203,10 +203,10 @@ describe('Permission — request message generation', () => {
 
 // ─── Mode-aware auto-approval (shouldAutoApprove) ──────
 
-type PermissionMode = 'ask' | 'plan' | 'afe';
+type ApprovalPolicy = 'ask' | 'plan' | 'auto';
 
 interface PermissionContext {
-  mode: PermissionMode;
+  mode: ApprovalPolicy;
   approvedPlanSteps?: string[];
 }
 
@@ -217,7 +217,7 @@ function shouldAutoApprove(
   toolCallId: string | undefined,
   ctx: PermissionContext,
 ): boolean {
-  if (ctx.mode === 'afe') return true;
+  if (ctx.mode === 'auto') return true;
   if (ctx.mode === 'plan') {
     // Plan approval carries approved task ids — any non-empty approval
     // authorizes the run's execution.
@@ -329,9 +329,9 @@ describe('shouldAutoApprove — Plan 模式', () => {
   });
 });
 
-describe('shouldAutoApprove — AFE 模式', () => {
+describe('shouldAutoApprove — 自动模式', () => {
   it('所有工具自动允许（无 approvedSteps）', () => {
-    const ctx: PermissionContext = { mode: 'afe' };
+    const ctx: PermissionContext = { mode: 'auto' };
     expect(shouldAutoApprove('Bash', 'tc-1', ctx)).toBe(true);
     expect(shouldAutoApprove('Write', 'tc-2', ctx)).toBe(true);
     expect(shouldAutoApprove('Edit', 'tc-3', ctx)).toBe(true);
@@ -340,25 +340,25 @@ describe('shouldAutoApprove — AFE 模式', () => {
     expect(shouldAutoApprove('Read', 'tc-6', ctx)).toBe(true);
   });
 
-  it('AFE 模式不依赖 toolCallId', () => {
-    const ctx: PermissionContext = { mode: 'afe' };
+  it('自动模式不依赖 toolCallId', () => {
+    const ctx: PermissionContext = { mode: 'auto' };
     expect(shouldAutoApprove('Bash', undefined, ctx)).toBe(true);
     expect(shouldAutoApprove('Write', undefined, ctx)).toBe(true);
   });
 });
 
 describe('shouldAutoApprove — 模式切换', () => {
-  it('从 Ask 切换到 AFE 后立即全自动', () => {
+  it('从 Ask 切换到自动后立即全自动', () => {
     const askCtx: PermissionContext = { mode: 'ask' };
     expect(shouldAutoApprove('Bash', 'tc-1', askCtx)).toBe(false);
 
-    const afeCtx: PermissionContext = { mode: 'afe' };
-    expect(shouldAutoApprove('Bash', 'tc-1', afeCtx)).toBe(true);
+    const autoCtx: PermissionContext = { mode: 'auto' };
+    expect(shouldAutoApprove('Bash', 'tc-1', autoCtx)).toBe(true);
   });
 
-  it('从 AFE 切换到 Ask 后恢复确认', () => {
-    const afeCtx: PermissionContext = { mode: 'afe' };
-    expect(shouldAutoApprove('Bash', 'tc-1', afeCtx)).toBe(true);
+  it('从自动切换到 Ask 后恢复确认', () => {
+    const autoCtx: PermissionContext = { mode: 'auto' };
+    expect(shouldAutoApprove('Bash', 'tc-1', autoCtx)).toBe(true);
 
     const askCtx: PermissionContext = { mode: 'ask' };
     expect(shouldAutoApprove('Bash', 'tc-1', askCtx)).toBe(false);
@@ -375,15 +375,15 @@ describe('shouldAutoApprove — 模式切换', () => {
     expect(shouldAutoApprove('Bash', 'tc-1', askCtx)).toBe(false);
   });
 
-  it('从 Plan 切换到 AFE 后全自动', () => {
+  it('从 Plan 切换到自动后全自动', () => {
     const planCtx: PermissionContext = {
       mode: 'plan',
       approvedPlanSteps: [],
     };
     expect(shouldAutoApprove('Bash', 'tc-1', planCtx)).toBe(false);
 
-    const afeCtx: PermissionContext = { mode: 'afe' };
-    expect(shouldAutoApprove('Bash', 'tc-1', afeCtx)).toBe(true);
+    const autoCtx: PermissionContext = { mode: 'auto' };
+    expect(shouldAutoApprove('Bash', 'tc-1', autoCtx)).toBe(true);
   });
 });
 
@@ -432,8 +432,8 @@ describe('完整权限流水线（shouldAutoApprove + checkPermission）', () =>
     expect(fullPermissionCheck('Bash', { command: 'ls' }, [], 'tc-1', ctx)).toBe('ask');
   });
 
-  it('AFE 模式：所有工具在 Step 0 自动通过，忽略规则', () => {
-    const ctx: PermissionContext = { mode: 'afe' };
+  it('自动模式：所有工具在 Step 0 自动通过，忽略规则', () => {
+    const ctx: PermissionContext = { mode: 'auto' };
     const rules: PermissionRule[] = [
       { id: 'r1', toolName: 'Bash', action: 'deny', scope: 'always', createdAt: 1 },
       { id: 'r2', toolName: 'Write', action: 'deny', scope: 'always', createdAt: 2 },

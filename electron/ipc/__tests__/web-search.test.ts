@@ -99,7 +99,7 @@ describe('web-search providers', () => {
   });
 
   it('resolves provider + key from settings and env', () => {
-    expect(resolveWebSearchProvider({}).provider.id).toBe('duckduckgo');
+    expect(resolveWebSearchProvider({}).provider.id).toBe('deepseek');
     expect(resolveWebSearchProvider({ webSearchProvider: 'exa', exaApiKey: 'k1' }).apiKey).toBe('k1');
     process.env.EXA_API_KEY = 'env-key';
     expect(resolveWebSearchProvider({ webSearchProvider: 'exa', exaApiKey: 'k1' }).apiKey).toBe('env-key');

@@ -3,7 +3,7 @@ export interface UndoEntry {
   sessionId: string;
   agentId?: string;
   timestamp: number;
-  type: 'file:write' | 'file:edit' | 'message:delete';
+  type: 'file:write' | 'file:edit' | 'message:delete' | 'message:regenerate';
   description: string;
   revert: () => Promise<void>;
   expiresAt?: number;

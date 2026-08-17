@@ -2,7 +2,7 @@
 // Merges AgentInfo (System A) + AgentState (System B) into one schema
 
 import type { ToolName } from './tools';
-import type { PermissionRequest, PermissionMode } from './advanced';
+import type { PermissionRequest, ApprovalPolicy, DeepSeekToolChoice, WorkAutonomyTier, WorkDelivery } from './advanced';
 import type { CompactionData, ContextDisclosure } from './chat';
 
 // ─── Status ────────────────────────────────────────
@@ -14,7 +14,8 @@ export type AgentStatus =
   | 'paused'
   | 'completed'
   | 'error'
-  | 'stopped';
+  | 'stopped'
+  | 'review';
 
 // ─── Priority ──────────────────────────────────────
 
@@ -84,8 +85,14 @@ export interface AgentInfo {
   messagesCount: number;
   totalInputTokens: number;
   totalOutputTokens: number;
+  /** 实测推理 tokens 与上下文缓存命中/未命中（API usage，累计）。 */
+  totalReasoningTokens?: number;
+  totalCacheHitTokens?: number;
+  totalCacheMissTokens?: number;
   /** Project directory this task operates in (workspace linkage). */
   projectRoot?: string;
+  /** Which UI surface this task belongs to ('work' / 'code' lists are separate). */
+  surface?: 'chat' | 'work' | 'code';
   parentAgentId?: string;
   /** 通过 Report 工具发送的进度汇报。 */
   reports?: { id: string; text: string; ts: number }[];
@@ -97,7 +104,9 @@ export interface AgentInfo {
   // LLM config
   model?: string;
   isDeepThink?: boolean;
-  reasoningEffort?: 'high' | 'max';
+  reasoningEffort?: 'low' | 'high' | 'max';
+  /** DeepSeek tool_choice：auto/none/required/强制指定工具。 */
+  toolChoice?: DeepSeekToolChoice;
 
   // Workspace isolation
   workspaceId?: string;
@@ -105,6 +114,11 @@ export interface AgentInfo {
   // Result
   result?: string;
   error?: string;
+
+  /** Work 模式执行档位。 */
+  workTier?: WorkAutonomyTier;
+  /** Work 模式交付验收数据（任务完成后由后端结构化生成）。 */
+  delivery?: WorkDelivery;
 
   // Plan (from scheduler path)
   plan?: AgentPlan | null;
@@ -148,13 +162,21 @@ export interface AgentCreateRequest {
   customTools?: ToolName[];
   autoApprove?: boolean;
   isDeepThink?: boolean;
-  reasoningEffort?: 'high' | 'max';
-  /** Permission mode for this task's tool calls (ask/plan/afe). */
-  mode?: PermissionMode;
+  reasoningEffort?: 'low' | 'high' | 'max';
+  /** DeepSeek tool_choice：auto/none/required/强制指定工具。 */
+  toolChoice?: DeepSeekToolChoice;
+  /** 审批策略 for this task's tool calls (ask/plan/auto). */
+  mode?: ApprovalPolicy;
+  /** Work 模式执行自主度档位。 */
+  workTier?: WorkAutonomyTier;
+  /** 项目工作区根目录（含主根）；工具读写边界由它界定。 */
+  workspaceRoots?: string[];
+  /** 项目可写根目录（roots 的子集）。 */
+  writableRoots?: string[];
   /** Per-task sandbox boundary; falls back to the global setting when absent. */
   sandboxMode?: 'read' | 'workspace-write' | 'full';
   /** Which UI surface created this task — 'chat' is rejected by the backend. */
-  surface?: 'chat' | 'code';
+  surface?: 'chat' | 'work' | 'code';
   /** Active goal carried into the agent run （目标状态）. */
   goal?: { text: string; maxRounds: number } | null;
 }
@@ -181,6 +203,8 @@ export interface AgentStore {
   maxConcurrent: number;
   /** The agent task currently focused in the Code-mode middle column. */
   currentAgentId: string | null;
+  /** 各模式记住最近选中的任务：切走再切回时恢复，不再清空。 */
+  lastAgentIdBySurface: { work?: string; code?: string };
   /** Pending permission prompts keyed by the agent task they belong to. */
   agentPermissions: Record<string, PermissionRequest[]>;
 
@@ -202,6 +226,8 @@ export interface AgentStore {
   resumeAgent: (agentId: string) => Promise<void>;
   /** Continue a settled task on the SAME agent (id/workspace/history). */
   continueAgent: (agentId: string, instruction: string, displayInstruction?: string) => Promise<{ ok: boolean; error?: string }>;
+  /** Work 交付验收通过：review → completed。 */
+  approveDelivery: (agentId: string) => Promise<{ ok: boolean; error?: string }>;
   setAgentPriority: (agentId: string, priority: AgentPriority) => Promise<void>;
   setMaxConcurrent: (count: number) => Promise<void>;
   refreshStates: () => Promise<void>;

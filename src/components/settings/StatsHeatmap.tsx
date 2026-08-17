@@ -122,8 +122,8 @@ export default function StatsHeatmap() {
     start.setDate(start.getDate() + 1);
 
     // Brand palette read from the live design tokens.
-    const bgSec = cssVar('--color-bg-secondary', '#F4F4F1');
-    const bgTer = cssVar('--color-bg-tertiary', '#E9E9E6');
+    const bgSec = cssVar('--color-bg-secondary', '#F5F6F8');
+    const bgTer = cssVar('--color-bg-tertiary', '#EBEDF0');
     const accentSoft = cssVar('--color-accent-soft', 'rgba(106,104,132,0.10)');
     const accentStrong = cssVar('--color-accent-strong', 'rgba(106,104,132,0.16)');
     const accent = cssVar('--color-accent', '#6A6884');

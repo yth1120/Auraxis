@@ -19,6 +19,9 @@ export interface UndoEntry {
   size: number;
   /** The file did not exist before the write — undo deletes it instead of restoring a backup. */
   created?: boolean;
+  /** Coherence Collapse：被标记为"最佳已知补丁"的检查点。 */
+  best?: boolean;
+  bestLabel?: string;
 }
 
 // ─── Class ──────────────────────────────────────────────
@@ -143,6 +146,57 @@ class UndoManager {
     await this.saveHistory(snapDir);
     try { await fs.unlink(backupPath); } catch { /* ignore */ }
     return true;
+  }
+
+  /**
+   * Coherence Collapse：把"该文件+会话 最近一次编辑前的备份"标记为最佳补丁。
+   * 语义：agent 已跑到正确代码、即将做破坏性编辑前，把当前状态存为最优检查点。
+   */
+  async markBest(
+    projectRoot: string,
+    sessionId: string,
+    filePath: string,
+    label?: string,
+  ): Promise<string | null> {
+    const file = path.resolve(filePath);
+    const matches = this.history.filter((e) => e.sessionId === sessionId && path.resolve(e.filePath) === file);
+    if (matches.length === 0) return null;
+    for (const e of matches) {
+      e.best = false;
+      delete e.bestLabel;
+    }
+    const entry = matches[matches.length - 1];
+    entry.best = true;
+    if (label) entry.bestLabel = label;
+    await this.saveHistory(this.getSnapshotDir(projectRoot));
+    return entry.id;
+  }
+
+  /** 恢复到标记的最佳补丁（只移除该条历史，不截断后续备份）。 */
+  async restoreBest(
+    projectRoot: string,
+    sessionId: string,
+    filePath: string,
+  ): Promise<{ ok: boolean; restoredId?: string }> {
+    const file = path.resolve(filePath);
+    const entry = [...this.history].reverse().find(
+      (e) => e.sessionId === sessionId && path.resolve(e.filePath) === file && e.best,
+    );
+    if (!entry) return { ok: false };
+    const ok = await this.restoreEntry(entry.id, projectRoot);
+    return ok ? { ok: true, restoredId: entry.id } : { ok: false };
+  }
+
+  listBest(projectRoot: string, sessionId?: string): UndoEntry[] {
+    const root = path.resolve(projectRoot);
+    return this.history
+      .filter((e) => {
+        if (!e.best) return false;
+        if (sessionId && e.sessionId !== sessionId) return false;
+        const p = path.resolve(e.filePath);
+        return p === root || p.startsWith(root + path.sep);
+      })
+      .map((e) => ({ ...e, filePath: e.filePath.replace(/\\/g, '/') }));
   }
 
   /**
@@ -345,6 +399,41 @@ export function registerUndoIpc() {
       const ok = await undoManager.undoFile(fileId, projectRoot);
       if (!ok) return { ok: false, error: '备份不存在或恢复失败' };
       return { ok: true };
+    } catch (error: any) { return { ok: false, error: error.message }; }
+  });
+
+  ipcMain.handle('undo:markBest', async (_event, params: {
+    projectRoot: string; sessionId: string; filePath: string; label?: string;
+  }) => {
+    try {
+      const id = await undoManager.markBest(
+        params.projectRoot,
+        params.sessionId,
+        params.filePath,
+        params.label,
+      );
+      if (!id) return { ok: false, error: '未找到该会话的文件备份' };
+      return { ok: true, data: { id } };
+    } catch (error: any) { return { ok: false, error: error.message }; }
+  });
+
+  ipcMain.handle('undo:restoreBest', async (_event, params: {
+    projectRoot: string; sessionId: string; filePath: string;
+  }) => {
+    try {
+      const result = await undoManager.restoreBest(
+        params.projectRoot,
+        params.sessionId,
+        params.filePath,
+      );
+      if (!result.ok) return { ok: false, error: '未找到最佳补丁检查点' };
+      return { ok: true, data: result };
+    } catch (error: any) { return { ok: false, error: error.message }; }
+  });
+
+  ipcMain.handle('undo:listBest', async (_event, params: { projectRoot: string; sessionId?: string }) => {
+    try {
+      return { ok: true, data: undoManager.listBest(params.projectRoot, params.sessionId) };
     } catch (error: any) { return { ok: false, error: error.message }; }
   });
 }

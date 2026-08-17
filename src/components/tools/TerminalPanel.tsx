@@ -246,7 +246,6 @@ export default function TerminalPanel({ onClose }: { onClose?: () => void }) {
   const termIdRef = useRef<string | null>(null);
   const tasks = useTerminalTasksStore((s) => s.tasks);
   const stopTask = useTerminalTasksStore((s) => s.stopTask);
-  const clearTasks = useTerminalTasksStore((s) => s.clearTasks);
   const currentAgentId = useAgentStore((s) => s.currentAgentId);
   const currentAgent = useAgentStore((s) => s.agents.find((a) => a.id === s.currentAgentId));
   const agentCandidates = useAgentStore((s) =>
@@ -313,11 +312,11 @@ export default function TerminalPanel({ onClose }: { onClose?: () => void }) {
         </span>
         <span className="text-xs font-semibold text-text-primary">{t('terminal.title')}</span>
         {currentAgentId && (
-          <div className="flex items-center gap-0.5 h-5 px-0.5 rounded-full bg-[var(--color-bg-inset)]">
+          <div className="flex items-center gap-1 h-6">
             <button
               type="button"
               className={clsx(
-                'h-[18px] px-1.5 rounded-full text-2xs font-medium border-none cursor-pointer transition-colors duration-150',
+                'flex-1 min-w-[56px] h-5 px-2 rounded-full text-2xs font-medium border-none cursor-pointer transition-colors duration-150',
                 viewMode === 'local' ? 'bg-[var(--color-bg-elevated)] text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary',
               )}
               onClick={() => setViewMode('local')}
@@ -327,7 +326,7 @@ export default function TerminalPanel({ onClose }: { onClose?: () => void }) {
             <button
               type="button"
               className={clsx(
-                'h-[18px] px-1.5 rounded-full text-2xs font-medium border-none cursor-pointer transition-colors duration-150',
+                'flex-1 min-w-[56px] h-5 px-2 rounded-full text-2xs font-medium border-none cursor-pointer transition-colors duration-150',
                 viewMode === 'agent' ? 'bg-[var(--color-bg-elevated)] text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary',
               )}
               onClick={() => setViewMode('agent')}
@@ -393,13 +392,6 @@ export default function TerminalPanel({ onClose }: { onClose?: () => void }) {
                 <span className="text-2xs font-semibold text-text-secondary">{t('terminal.tasks')}</span>
                 <span className="text-2xs text-text-faint tabular-nums">{tasks.length}</span>
               </button>
-              <button
-                type="button"
-                className="ml-auto text-2xs text-text-faint cursor-pointer border-none bg-transparent hover:text-text-secondary"
-                onClick={() => void clearTasks()}
-              >
-                {t('terminal.clearTasks')}
-              </button>
             </div>
             {tasksOpen && (
               <div className="max-h-[132px] overflow-y-auto border-t border-[var(--color-border-dim)]/60">
@@ -411,7 +403,7 @@ export default function TerminalPanel({ onClose }: { onClose?: () => void }) {
                     <div
                       key={task.id}
                       className={clsx(
-                        'flex items-center gap-2 px-3 min-h-[34px] hover:bg-[var(--color-hover)]',
+                        'flex items-center gap-2 px-3 h-8 hover:bg-[var(--color-hover)]',
                         i > 0 && 'border-t border-[var(--color-border-dim)]/40',
                       )}
                     >

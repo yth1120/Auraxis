@@ -5,12 +5,15 @@ import { statSync } from 'fs';
 import { createOutputDecoder } from '../text-encoding';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { isPathInside, normalizeWinPath, SAFE_EXTENSIONS, EXCLUDED_DIRS, devLog } from './shared';
-import type { PermissionMode } from '../types';
+import { isPathInside, normalizeWinPath, SAFE_EXTENSIONS, EXCLUDED_DIRS, devLog, isDocumentExtension } from './shared';
+import type { ApprovalPolicy } from '../types';
 import { shouldAutoApprove } from './permission-handlers';
+import { checkPermission as checkPermissionRules } from './permission-handlers';
+import { shouldAskForWorkTier } from '../tool-risk';
+import { workDocsOnlyVerdict, type WorkSurface } from '../work-docs-policy';
 import type { PermissionContext } from './permission-handlers';
 import { getMainWindowRef } from './window-ref';
-import { ensureSkillsDirectory, listSkills, readSkill } from '../skill-store';
+import { ensureSkillsDirectory, listSkills, readSkill, seedBuiltinSkills } from '../skill-store';
 import { sessionQuerySearch } from '../fts';
 import { readSpill } from '../spill';
 import { queryLsp } from '../lsp-client';
@@ -18,6 +21,8 @@ import { askUser } from './ask-handlers';
 import { runPtyTool } from './pty-tool';
 import { runBashPersistent } from './bash-session';
 import { verifyVersionGuard, hashContent } from '../version-guard';
+import { workspaceDrift } from '../workspace-drift';
+import { validateSkill } from '../skill-gate';
 import { writeSkill } from '../skill-store';
 import { inspectRuntime } from '../runtime-inspect';
 import type { SandboxMode } from '../sandbox-policy';
@@ -73,20 +78,62 @@ function resolvePath(filePath: string, projectRoot: string): string {
  * root. Throws if the resolved path escapes (e.g. ../../../etc/hosts).
  * `checkPermission` catches this and auto-denies the tool call.
  */
-function ensureSafePath(filePath: string, projectRoot: string): string {
+function ensureSafePath(filePath: string, projectRoot: string, allowedRoots?: string[]): string {
   const resolved = resolvePath(filePath, projectRoot);
-  const root = path.resolve(projectRoot);
-  if (!resolved.startsWith(root + path.sep) && resolved !== root) {
-    throw new Error(`路径越界: "${filePath}" 不在项目目录内`);
+  const roots = allowedRoots && allowedRoots.length > 0
+    ? allowedRoots.map((r) => path.resolve(r))
+    : [path.resolve(projectRoot)];
+  if (!roots.some((root) => resolved === root || resolved.startsWith(root + path.sep))) {
+    throw new Error(`路径越界: "${filePath}" 不在项目工作区目录内`);
   }
   return resolved;
 }
 
 /** Full access may reach outside the project root; confined modes may not. */
-function resolveToolPath(filePath: string, projectRoot: string, sandboxMode?: SandboxMode): string {
+function resolveToolPath(
+  filePath: string,
+  projectRoot: string,
+  sandboxMode?: SandboxMode,
+  allowedRoots?: string[],
+): string {
   return sandboxMode === 'full'
     ? resolvePath(filePath, projectRoot)
-    : ensureSafePath(filePath, projectRoot);
+    : ensureSafePath(filePath, projectRoot, allowedRoots);
+}
+
+/** 项目工作区根目录（含主根）；工具读写边界由它界定。 */
+function workspaceRootsOf(ctx: ToolContext): string[] {
+  const roots = [ctx.projectRoot, ...(ctx.workspaceRoots ?? [])]
+    .map((r) => (r ? path.resolve(r) : ''))
+    .filter((r): r is string => !!r)
+    .filter((r, i, arr) => arr.indexOf(r) === i);
+  return roots.length > 0 ? roots : [path.resolve(ctx.projectRoot)];
+}
+
+/** 项目可写根目录（默认 = 全部工作区根）。 */
+function writableRootsOf(ctx: ToolContext): string[] {
+  const roots = (ctx.writableRoots && ctx.writableRoots.length > 0
+    ? ctx.writableRoots
+    : ctx.workspaceRoots ?? [])
+    .map((r) => (r ? path.resolve(r) : ''))
+    .filter((r): r is string => !!r)
+    .filter((r, i, arr) => arr.indexOf(r) === i);
+  return roots.length > 0 ? roots : workspaceRootsOf(ctx);
+}
+
+function isInsideAnyRoot(target: string, roots: string[]): boolean {
+  return roots.some((root) => target === root || isPathInside(target, root));
+}
+
+/**
+ * 多根边界：读工具须在工作区内，写工具还须在可写根内。
+ * full 沙箱与 autoApprove 保持原有放行语义。
+ */
+function outsideWorkspace(resolved: string, ctx: ToolContext, write: boolean): string | null {
+  if (ctx.sandboxMode === 'full' || ctx.autoApprove) return null;
+  if (!isInsideAnyRoot(resolved, workspaceRootsOf(ctx))) return '路径越权';
+  if (write && !isInsideAnyRoot(resolved, writableRootsOf(ctx))) return '写入越权';
+  return null;
 }
 
 function isSafeExtension(filePath: string): boolean {
@@ -107,13 +154,21 @@ export interface ToolContext {
   autoApprove?: boolean;
   /** Parent abort signal — propagated to child agents so they stop when parent is cancelled. */
   abortSignal?: AbortSignal;
-  mode: PermissionMode;
+  mode: ApprovalPolicy;
   approvedPlanSteps?: string[];
+  /** Work 模式执行自主度档位（smart/full 走分级门禁）。 */
+  workTier?: 'plan' | 'smart' | 'full';
+  /** 项目工作区根目录（含主根）。 */
+  workspaceRoots?: string[];
+  /** 项目可写根目录（roots 的子集）。 */
+  writableRoots?: string[];
   /** Sub-agent recursion depth. Top-level chat tools omit it (treated as 0);
    *  the Agent tool passes ctx.depth+1 so runSubAgent can enforce the limit. */
   depth?: number;
   /** Per-call sandbox mode ('read' hard-denies mutations). Defaults to full. */
   sandboxMode?: SandboxMode;
+  /** Which UI surface created this run — 'work' enforces docs-only writes. */
+  surface?: WorkSurface;
 }
 
 // ─── Abort registry for running tools ──────────────────
@@ -149,6 +204,9 @@ function markFileObserved(ctx: ToolContext, filePath: string): void {
     observedFiles.set(scope, set);
   }
   set.add(path.resolve(filePath));
+  // SWE-Touch：登记工作区漂移基线（以项目根为 scope，供 agent 循环检测）。
+  const driftScope = ctx.projectRoot || scope;
+  void workspaceDrift.observe(driftScope, filePath).catch(() => { /* best-effort */ });
   if (observedFiles.size > 500) {
     const oldest = observedFiles.keys().next().value;
     if (oldest) observedFiles.delete(oldest);
@@ -692,10 +750,11 @@ async function spawnBashSandboxed(
 // ─── Read ──────────────────────────────────────────────
 async function runRead(params: { file_path: string; offset?: number; limit?: number }, ctx: ToolContext): Promise<ToolResult> {
   if (ctx.abortSignal?.aborted) return { output: null, error: '操作已取消' };
-  const resolved = resolveToolPath(params.file_path, ctx.projectRoot, ctx.sandboxMode);
+  const resolved = resolveToolPath(params.file_path, ctx.projectRoot, ctx.sandboxMode, workspaceRootsOf(ctx));
 
-  if (ctx.sandboxMode !== 'full' && !ctx.autoApprove && !isPathInside(resolved, ctx.projectRoot)) {
-    return { output: null, error: `路径越权: ${params.file_path}` };
+  const boundary = outsideWorkspace(resolved, ctx, false);
+  if (boundary) {
+    return { output: null, error: `${boundary}: ${params.file_path}` };
   }
 
   try {
@@ -727,10 +786,11 @@ async function runRead(params: { file_path: string; offset?: number; limit?: num
 // ─── ReadImage ─────────────────────────────────────────
 async function runReadImage(params: { file_path: string }, ctx: ToolContext): Promise<ToolResult> {
   if (ctx.abortSignal?.aborted) return { output: null, error: '操作已取消' };
-  const resolved = resolveToolPath(params.file_path, ctx.projectRoot, ctx.sandboxMode);
+  const resolved = resolveToolPath(params.file_path, ctx.projectRoot, ctx.sandboxMode, workspaceRootsOf(ctx));
 
-  if (ctx.sandboxMode !== 'full' && !ctx.autoApprove && !isPathInside(resolved, ctx.projectRoot)) {
-    return { output: null, error: `路径越权: ${params.file_path}` };
+  const boundary = outsideWorkspace(resolved, ctx, false);
+  if (boundary) {
+    return { output: null, error: `${boundary}: ${params.file_path}` };
   }
 
   try {
@@ -766,14 +826,18 @@ async function runReadImage(params: { file_path: string }, ctx: ToolContext): Pr
 // ─── Write ─────────────────────────────────────────────
 async function runWrite(params: { file_path: string; content: string; version?: string }, ctx: ToolContext): Promise<ToolResult> {
   if (ctx.abortSignal?.aborted) return { output: null, error: '操作已取消' };
-  const resolved = resolveToolPath(params.file_path, ctx.projectRoot, ctx.sandboxMode);
+  const resolved = resolveToolPath(params.file_path, ctx.projectRoot, ctx.sandboxMode, workspaceRootsOf(ctx));
 
-  if (ctx.sandboxMode !== 'full' && !ctx.autoApprove && !isPathInside(resolved, ctx.projectRoot)) {
-    return { output: null, error: `路径越权: ${params.file_path}` };
+  const boundary = outsideWorkspace(resolved, ctx, true);
+  if (boundary) {
+    return { output: null, error: `${boundary}: ${params.file_path}` };
   }
 
   if (!ctx.autoApprove && !isSafeExtension(resolved)) {
     return { output: null, error: `不允许的文件类型: ${path.extname(resolved)}` };
+  }
+  if (isDocumentExtension(resolved)) {
+    return { output: null, error: '文档文件（.docx/.xlsx/.pptx/.pdf）请使用 WriteDocument 工具生成' };
   }
 
   if (!ctx.autoApprove && hasReservedFileName(resolved)) {
@@ -812,10 +876,14 @@ async function runWrite(params: { file_path: string; content: string; version?: 
 // ─── Edit ──────────────────────────────────────────────
 async function runEdit(params: { file_path: string; old_string: string; new_string: string; version?: string }, ctx: ToolContext): Promise<ToolResult> {
   if (ctx.abortSignal?.aborted) return { output: null, error: '操作已取消' };
-  const resolved = resolveToolPath(params.file_path, ctx.projectRoot, ctx.sandboxMode);
+  const resolved = resolveToolPath(params.file_path, ctx.projectRoot, ctx.sandboxMode, workspaceRootsOf(ctx));
 
-  if (ctx.sandboxMode !== 'full' && !ctx.autoApprove && !isPathInside(resolved, ctx.projectRoot)) {
-    return { output: null, error: `路径越权: ${params.file_path}` };
+  const boundary = outsideWorkspace(resolved, ctx, true);
+  if (boundary) {
+    return { output: null, error: `${boundary}: ${params.file_path}` };
+  }
+  if (isDocumentExtension(resolved)) {
+    return { output: null, error: '文档文件（.docx/.xlsx/.pptx/.pdf）请使用 ReadDocument / WriteDocument 工具处理' };
   }
 
   const guard = await verifyVersionGuard(params.file_path, params.version, ctx.projectRoot);
@@ -876,9 +944,11 @@ async function runStrReplaceEditor(
 ): Promise<ToolResult> {
   if (ctx.abortSignal?.aborted) return { output: null, error: '操作已取消' };
   if (!params.path) return { output: null, error: '缺少 path 参数' };
-  const resolved = resolveToolPath(params.path, ctx.projectRoot, ctx.sandboxMode);
-  if (ctx.sandboxMode !== 'full' && !ctx.autoApprove && !isPathInside(resolved, ctx.projectRoot)) {
-    return { output: null, error: `路径越权: ${params.path}` };
+  const resolved = resolveToolPath(params.path, ctx.projectRoot, ctx.sandboxMode, workspaceRootsOf(ctx));
+  const isWriteCmd = params.command !== 'view';
+  const boundary = outsideWorkspace(resolved, ctx, isWriteCmd);
+  if (boundary) {
+    return { output: null, error: `${boundary}: ${params.path}` };
   }
 
   switch (params.command) {
@@ -958,14 +1028,15 @@ async function runDelete(params: { file_path: string; recursive?: boolean }, ctx
   if (ctx.abortSignal?.aborted) return { output: null, error: '操作已取消' };
   const { file_path, recursive } = params;
   if (!file_path) return { output: null, error: '缺少 file_path 参数' };
-  const resolved = resolvePath(normalizeWinPath(file_path), ctx.projectRoot);
-  if (ctx.projectRoot) {
-    const root = path.resolve(ctx.projectRoot);
-    // isPathInside(root, root) is true — the project/sandbox root itself must
-    // never be a delete target (recursive delete would wipe the whole project).
-    if (resolved === root || !isPathInside(resolved, root)) {
-      return { output: null, error: '路径越权：不能删除项目目录本身或目录外的文件' };
-    }
+  const resolved = resolveToolPath(normalizeWinPath(file_path), ctx.projectRoot, ctx.sandboxMode, workspaceRootsOf(ctx));
+  // 删除永远不能逃出工作区根（full/autoApprove 也不例外），
+  // 防止误删项目目录之外的文件。
+  if (!isInsideAnyRoot(resolved, workspaceRootsOf(ctx))) {
+    return { output: null, error: `路径越权: ${file_path}` };
+  }
+  // 任一工作区根本身都不能作为删除目标（递归删除会清空整个根）。
+  if (workspaceRootsOf(ctx).some((root) => resolved === root)) {
+    return { output: null, error: '路径越权：不能删除项目目录本身或目录外的文件' };
   }
   try {
     const s = statSync(resolved);
@@ -1012,7 +1083,7 @@ async function runGrep(params: { pattern: string; path?: string; include?: strin
   if (ctx.abortSignal?.aborted) return { output: null, error: '操作已取消' };
   const searchRoot = params.path ? resolvePath(params.path, ctx.projectRoot) : ctx.projectRoot;
 
-  if (!ctx.autoApprove && !isPathInside(searchRoot, ctx.projectRoot)) {
+  if (!ctx.autoApprove && !isInsideAnyRoot(searchRoot, workspaceRootsOf(ctx))) {
     return { output: null, error: `路径越权: ${params.path}` };
   }
 
@@ -1090,7 +1161,7 @@ async function runGlob(params: { pattern: string; path?: string }, ctx: ToolCont
   if (ctx.abortSignal?.aborted) return { output: null, error: '操作已取消' };
   const searchRoot = params.path ? resolvePath(params.path, ctx.projectRoot) : ctx.projectRoot;
 
-  if (!ctx.autoApprove && !isPathInside(searchRoot, ctx.projectRoot)) {
+  if (!ctx.autoApprove && !isInsideAnyRoot(searchRoot, workspaceRootsOf(ctx))) {
     return { output: null, error: `路径越权: ${params.path}` };
   }
 
@@ -1291,8 +1362,11 @@ async function runAgentTool(
       projectRoot: ctx.projectRoot,
       requestId: ctx.requestId,
       depth: (ctx.depth ?? 0) + 1,
+      surface: ctx.surface,
       checkPermission: ctx.checkPermission,
       autoApprove: ctx.autoApprove,
+      workspaceRoots: ctx.workspaceRoots,
+      writableRoots: ctx.writableRoots,
       parentSignal: ctx.abortSignal,
       agentId: params._agentId,
       background: params.background === true,
@@ -1490,12 +1564,12 @@ async function runEnterPlanMode(params: { goal: string; context?: string }, ctx:
     const { waitForPlanApproval } = await import('./plan-handlers');
     const { llmClientInvoke } = await import('./agent-loop');
     const { readSettings } = await import('./settings-store');
-    const { resolveApiBase } = await import('./model-config');
+    const { resolveModelApiBase, resolveModelApiKey } = await import('./model-config');
 
     const settings: Record<string, any> = await readSettings();
     const model = settings.selectedModel || 'deepseek-v4-pro';
-    const apiBase = resolveApiBase(model);
-    const apiKey = settings.deepseekApiKey || process.env.DEEPSEEK_API_KEY || '';
+    const apiBase = await resolveModelApiBase(model);
+    const apiKey = (await resolveModelApiKey(model)) || settings.deepseekApiKey || process.env.DEEPSEEK_API_KEY || '';
 
     if (!apiKey) return { output: null, error: '未配置 API Key' };
 
@@ -1582,10 +1656,11 @@ async function runNotebookEdit(params: {
   source?: string;
   cell_type?: 'code' | 'markdown';
 }, ctx: ToolContext): Promise<ToolResult> {
-  const resolved = resolveToolPath(params.file_path, ctx.projectRoot, ctx.sandboxMode);
+  const resolved = resolveToolPath(params.file_path, ctx.projectRoot, ctx.sandboxMode, workspaceRootsOf(ctx));
 
-  if (ctx.sandboxMode !== 'full' && !ctx.autoApprove && !isPathInside(resolved, ctx.projectRoot)) {
-    return { output: null, error: `路径越权: ${params.file_path}` };
+  const boundary = outsideWorkspace(resolved, ctx, (params.action ?? 'read') !== 'read');
+  if (boundary) {
+    return { output: null, error: `${boundary}: ${params.file_path}` };
   }
 
   if (!resolved.endsWith('.ipynb')) {
@@ -2325,6 +2400,11 @@ async function dynamicPluginExecutor(toolName: string): Promise<ToolExecutor | n
 async function runListSkills(_params: unknown, _ctx: ToolContext): Promise<ToolResult> {
   const root = path.join(app.getPath('userData'), 'skills');
   await ensureSkillsDirectory(root);
+  try {
+    await seedBuiltinSkills(root);
+  } catch {
+    // Best-effort — user skills remain discoverable even if seeding fails.
+  }
   const { skills } = await listSkills(root);
   return {
     output: {
@@ -2515,6 +2595,14 @@ const toolRegistry: Record<string, ToolExecutor> = {
   SessionQuery: runSessionQuery,
   ReadSpill: runReadSpill,
   AskUser: runAskUser,
+  ReadDocument: runReadDocument,
+  WriteDocument: runWriteDocument,
+  SlackListChannels: runSlackListChannels,
+  SlackPostMessage: runSlackPostMessage,
+  DriveList: runDriveList,
+  DriveRead: runDriveRead,
+  NotionSearch: runNotionSearch,
+  NotionCreatePage: runNotionCreatePage,
   Pty: runPtyToolHandler,
   TerminalOpen: runTerminalOpen,
   TerminalList: runTerminalList,
@@ -3123,6 +3211,124 @@ async function runAskUser(params: { question?: string; options?: string[] }, _ct
   return { output: { question, answer } };
 }
 
+// ─── Professional document tools ─────────────────────────
+
+async function runReadDocument(params: { file_path?: unknown }, ctx: ToolContext): Promise<ToolResult> {
+  const filePath = typeof params?.file_path === 'string' && params.file_path.trim() ? params.file_path.trim() : '';
+  if (!filePath) return { output: null, error: 'file_path 不能为空' };
+  let resolved: string;
+  try {
+    resolved = resolveToolPath(filePath, ctx.projectRoot, ctx.sandboxMode, workspaceRootsOf(ctx));
+  } catch (e: any) {
+    return { output: null, error: e?.message ?? String(e) };
+  }
+  try {
+    const { readDocument } = await import('../document-tools');
+    const data = await readDocument(resolved);
+    return { output: data };
+  } catch (e: any) {
+    return { output: null, error: `读取文档失败：${e?.message ?? e}` };
+  }
+}
+
+async function runWriteDocument(params: { file_path?: unknown; spec?: unknown }, ctx: ToolContext): Promise<ToolResult> {
+  const filePath = typeof params?.file_path === 'string' && params.file_path.trim() ? params.file_path.trim() : '';
+  const spec = params?.spec && typeof params.spec === 'object' ? params.spec as Record<string, unknown> : null;
+  if (!filePath) return { output: null, error: 'file_path 不能为空' };
+  if (!spec) return { output: null, error: 'spec 不能为空' };
+  let resolved: string;
+  try {
+    resolved = resolveToolPath(filePath, ctx.projectRoot, ctx.sandboxMode, writableRootsOf(ctx));
+  } catch (e: any) {
+    return { output: null, error: e?.message ?? String(e) };
+  }
+  try {
+    const { writeDocument } = await import('../document-tools');
+    const { format, bytes } = await writeDocument(resolved, spec as any);
+    markFileObserved(ctx, resolved);
+    return { output: { file_path: resolved, format, bytes } };
+  } catch (e: any) {
+    return { output: null, error: `写入文档失败：${e?.message ?? e}` };
+  }
+}
+
+// ─── Cloud connectors (Slack / Drive / Notion) ───────────
+
+async function runSlackListChannels(params: { limit?: unknown }, _ctx: ToolContext): Promise<ToolResult> {
+  try {
+    const { slackListChannels } = await import('../connectors');
+    const channels = await slackListChannels(Number(params?.limit) || 100);
+    return { output: { count: channels.length, channels } };
+  } catch (e: any) {
+    return { output: null, error: e?.message ?? String(e) };
+  }
+}
+
+async function runSlackPostMessage(params: { channel?: unknown; text?: unknown }, _ctx: ToolContext): Promise<ToolResult> {
+  const channel = typeof params?.channel === 'string' ? params.channel.trim() : '';
+  const text = typeof params?.text === 'string' ? params.text : '';
+  if (!channel || !text) return { output: null, error: 'SlackPostMessage 需要 channel 和 text' };
+  try {
+    const { slackPostMessage } = await import('../connectors');
+    const sent = await slackPostMessage(channel, text);
+    return { output: { ok: true, ...sent } };
+  } catch (e: any) {
+    return { output: null, error: e?.message ?? String(e) };
+  }
+}
+
+async function runDriveList(params: { query?: unknown; page_size?: unknown }, _ctx: ToolContext): Promise<ToolResult> {
+  try {
+    const { driveList } = await import('../connectors');
+    const files = await driveList(
+      typeof params?.query === 'string' ? params.query : undefined,
+      Number(params?.page_size) || 50,
+    );
+    return { output: { count: files.length, files } };
+  } catch (e: any) {
+    return { output: null, error: e?.message ?? String(e) };
+  }
+}
+
+async function runDriveRead(params: { file_id?: unknown }, _ctx: ToolContext): Promise<ToolResult> {
+  const fileId = typeof params?.file_id === 'string' && params.file_id.trim() ? params.file_id.trim() : '';
+  if (!fileId) return { output: null, error: 'file_id 不能为空' };
+  try {
+    const { driveRead } = await import('../connectors');
+    const data = await driveRead(fileId);
+    return { output: data };
+  } catch (e: any) {
+    return { output: null, error: e?.message ?? String(e) };
+  }
+}
+
+async function runNotionSearch(params: { query?: unknown; page_size?: unknown }, _ctx: ToolContext): Promise<ToolResult> {
+  try {
+    const { notionSearch } = await import('../connectors');
+    const results = await notionSearch(
+      typeof params?.query === 'string' ? params.query : undefined,
+      Number(params?.page_size) || 10,
+    );
+    return { output: { count: results.length, results } };
+  } catch (e: any) {
+    return { output: null, error: e?.message ?? String(e) };
+  }
+}
+
+async function runNotionCreatePage(params: { parent_page_id?: unknown; title?: unknown; markdown?: unknown }, _ctx: ToolContext): Promise<ToolResult> {
+  const parent = typeof params?.parent_page_id === 'string' ? params.parent_page_id.trim() : '';
+  const title = typeof params?.title === 'string' ? params.title.trim() : '';
+  const markdown = typeof params?.markdown === 'string' ? params.markdown : undefined;
+  if (!parent || !title) return { output: null, error: 'NotionCreatePage 需要 parent_page_id 和 title' };
+  try {
+    const { notionCreatePage } = await import('../connectors');
+    const page = await notionCreatePage(parent, title, markdown);
+    return { output: { ok: true, ...page } };
+  } catch (e: any) {
+    return { output: null, error: e?.message ?? String(e) };
+  }
+}
+
 async function runPtyToolHandler(params: { action?: string }, ctx: ToolContext): Promise<ToolResult> {
   const action = typeof params?.action === 'string' ? params.action : '';
   const owner = ctx.agentId ?? 'chat';
@@ -3199,16 +3405,25 @@ async function runWriteSkill(params: { name?: string; content?: string }, _ctx: 
   const name = typeof params?.name === 'string' ? params.name.trim() : '';
   const content = typeof params?.content === 'string' ? params.content.trim() : '';
   if (!name || !content) return { output: null, error: 'name 与 content 必填' };
+  // VaG pre-commit 门禁：结构/行为硬伤直接拒绝入库，语义问题以 warnings 返回。
+  const gate = validateSkill(name, content);
+  if (!gate.pass) {
+    return { output: null, error: `技能未通过入库门禁：${gate.blocking.join('；')}` };
+  }
   try {
     const root = path.join(app.getPath('userData'), 'skills');
     const file = await writeSkill(root, name, content);
-    return { output: { name, path: file } };
+    return { output: { name, path: file, warnings: gate.warnings } };
   } catch (e: any) {
     return { output: null, error: `写入技能失败: ${e?.message ?? e}` };
   }
 }
 
-const DANGEROUS_TOOLS = new Set(['Bash', 'Write', 'Edit', 'Delete', 'WebFetch', 'WebSearch', 'CronCreate', 'TaskStop', 'EnterWorktree', 'ReviewArtifact', 'GitCommit']);
+const DANGEROUS_TOOLS = new Set([
+  'Bash', 'Pwsh', 'Write', 'Edit', 'Delete', 'WebFetch', 'WebSearch',
+  'CronCreate', 'TaskStop', 'EnterWorktree', 'ReviewArtifact', 'GitCommit',
+  'WriteDocument', 'SlackPostMessage', 'NotionCreatePage',
+]);
 const FILE_MODIFY_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit', 'Delete']);
 
 // ─── Undo backup integration ────────────────────────────
@@ -3238,6 +3453,12 @@ export async function executeToolCall(
     return { output: null, error: `未知工具: ${toolName}` };
   }
 
+  // ── Work 模式文档门禁：只改文档/非代码文件，代码文件一律拒绝 ──
+  const workGate = workDocsOnlyVerdict(ctx.surface, toolName, input);
+  if (!workGate.allowed) {
+    return { output: null, error: workGate.reason };
+  }
+
   // ── Permission Profile 硬边界 ────────────────────
   // Resolve against the active worktree when present so absolute sandbox
   // paths still map to project-relative scopes. Denies block before any
@@ -3247,7 +3468,13 @@ export async function executeToolCall(
     ? (worktreeSessions.get(profileWorktreeKey) ?? ctx.projectRoot)
     : ctx.projectRoot;
   const { evaluateToolProfileGate } = await import('../permission-profile');
-  const profileGate = await evaluateToolProfileGate(toolName, input, effRoot);
+  const profileGate = await evaluateToolProfileGate(
+    toolName,
+    input,
+    effRoot,
+    [...new Set([effRoot, ...workspaceRootsOf(ctx)])],
+    ctx.projectRoot,
+  );
   if (!profileGate.allowed) {
     return { output: null, error: profileGate.reason };
   }
@@ -3293,16 +3520,37 @@ export async function executeToolCall(
 
   if (ruleAllows) {
     // Explicit prefix rule allowed the command — skip further approval.
-  } else if (shouldAutoApprove(toolName, ctx.toolCallId, permCtx) || safeBashInSandbox) {
-    // Mode-aware auto-approval — skip the full permission dialog.
-  } else if (DANGEROUS_TOOLS.has(toolName) && !ctx.autoApprove) {
-    // Falls through to checkPermission → requestPermission → user dialog.
-    if (!ctx.checkPermission) {
-      return { output: null, error: '权限检查未初始化，已阻止危险操作。请重新创建 Agent。' };
-    }
-    const allowed = await ctx.checkPermission(toolName, input, ctx.toolCallId);
-    if (!allowed) {
-      return { output: null, error: '用户拒绝了该工具调用权限' };
+  } else {
+    // Work 档位分级门禁：smart/full 决定“要不要问”，硬边界（沙箱/Profile/
+    // rules）始终先行，档位永远不能绕过 deny。
+    const tierAsk = shouldAskForWorkTier(ctx.workTier, toolName, input, ctx.autoApprove);
+    if (tierAsk === true) {
+      // 高危操作在 Work 全自动档位下仍询问（除非 autoApprove 整体豁免）。
+      if (!ctx.checkPermission) {
+        return { output: null, error: '权限检查未初始化，已阻止危险操作。请重新创建 Agent。' };
+      }
+      const allowed = await ctx.checkPermission(toolName, input, ctx.toolCallId);
+      if (!allowed) {
+        return { output: null, error: '用户拒绝了该工具调用权限' };
+      }
+    } else if (tierAsk === false || shouldAutoApprove(toolName, ctx.toolCallId, permCtx) || safeBashInSandbox) {
+      // 档位放行 / 模式放行 / 沙箱内安全 Bash —— 跳过权限弹窗。
+      // 但硬规则 deny 永远不能被档位绕过：自动放行前仍过规则层。
+      if (tierAsk === false) {
+        const ruleVerdict = checkPermissionRules(toolName, input);
+        if (ruleVerdict === 'deny') {
+          return { output: null, error: `工具被权限规则拒绝: ${toolName}` };
+        }
+      }
+    } else if (DANGEROUS_TOOLS.has(toolName) && !ctx.autoApprove) {
+      // Falls through to checkPermission → requestPermission → user dialog.
+      if (!ctx.checkPermission) {
+        return { output: null, error: '权限检查未初始化，已阻止危险操作。请重新创建 Agent。' };
+      }
+      const allowed = await ctx.checkPermission(toolName, input, ctx.toolCallId);
+      if (!allowed) {
+        return { output: null, error: '用户拒绝了该工具调用权限' };
+      }
     }
   }
 

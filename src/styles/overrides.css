@@ -198,6 +198,24 @@ select:hover {
   outline: none !important;
 }
 
+/* 点击聚焦同样静默：border 保持 hairline，不出现主题色描边或光晕。 */
+.ant-input:focus,
+.ant-input-focused,
+.ant-input-affix-wrapper:focus,
+.ant-input-affix-wrapper-focused,
+.ant-input-affix-wrapper:focus-within,
+.ant-input-number:focus,
+.ant-input-number-focused,
+.ant-picker-focused,
+.ant-select-focused .ant-select-selector,
+.ant-mentions-focused,
+textarea:focus,
+select:focus {
+  border-color: var(--color-border-default) !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
 input,
 textarea,
 select {
@@ -227,21 +245,54 @@ select:focus:not(:focus-visible),
   box-shadow: none !important;
 }
 
-/* Global search input: keep the pill shape and depth on hover/focus. */
-#global-search-input,
-#global-search-input:hover,
-#global-search-input:focus,
-#global-search-input:focus-visible {
-  border-radius: 9999px !important;
-  box-shadow: 0 1px 3px rgba(17, 20, 24, 0.12) !important;
-  outline: none !important;
+/* ── Flat controls: every custom button / icon rests on a transparent
+   background. Hover and selected states stay as interaction feedback;
+   antd dialog buttons keep their fills so modal actions remain usable. ── */
+button:not(.ant-btn),
+[role='button'] {
+  background-color: transparent !important;
 }
 
-.dark #global-search-input,
-.dark #global-search-input:hover,
-.dark #global-search-input:focus,
-.dark #global-search-input:focus-visible {
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45) !important;
+button:not(.ant-btn):hover:not(:disabled),
+[role='button']:hover {
+  background-color: var(--color-hover) !important;
+}
+
+button:not(.ant-btn)[data-active='true'],
+button:not(.ant-btn)[aria-checked='true'],
+button:not(.ant-btn)[aria-selected='true'],
+button:not(.ant-btn)[aria-pressed='true'],
+[role='button'][data-active='true'] {
+  background-color: var(--color-primary-soft) !important;
+}
+
+/* 模式切换 radiogroup：选中态由滑动滑块承载，按钮自身必须保持透明，
+   否则全局 aria-checked 规则会在滑块上再叠一层半透明底色。 */
+[role='radiogroup'] button[role='radio'][aria-checked='true'] {
+  background-color: transparent !important;
+}
+
+[class*='icon'] {
+  background-color: transparent !important;
+}
+
+/* Primary send button becomes a flat icon (kept visible via text color). */
+.ax-send-button {
+  color: var(--color-text-primary) !important;
+  box-shadow: none !important;
+}
+
+.ax-send-button:hover:not(:disabled) {
+  background-color: var(--color-primary-soft) !important;
+}
+
+.chat-input .send-btn-stop {
+  color: var(--color-text-primary) !important;
+}
+
+/* Account menu floats a bit higher above the sidebar footer. */
+.account-popup {
+  transform: translateY(-8px) !important;
 }
 
 /* ── FileTree ──────────────────────────────────────────── */

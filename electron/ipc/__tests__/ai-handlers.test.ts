@@ -35,9 +35,12 @@ vi.mock('../stats-handlers', () => ({
 }));
 vi.mock('../settings-store', () => ({
   readSettings: vi.fn(async () => ({ deepseekApiKey: 'sk-settings' })),
+  resolveMaxOutputTokens: vi.fn(() => 8192),
 }));
 vi.mock('../model-config', () => ({
   resolveApiBase: vi.fn(() => 'https://api.example/v1/chat/completions'),
+  resolveModelApiBase: vi.fn(async () => 'https://api.example/v1/chat/completions'),
+  resolveModelApiKey: vi.fn(async () => undefined),
 }));
 vi.mock('../tool-handlers', () => ({
   executeToolCall: vi.fn(async () => ({ output: { results: [] }, error: null })),
@@ -45,6 +48,9 @@ vi.mock('../tool-handlers', () => ({
 }));
 vi.mock('../event-bridge', () => ({
   toToolStreamEvent: vi.fn(() => null),
+}));
+vi.mock('../query-context', () => ({
+  clearLlmContext: vi.fn(async () => {}),
 }));
 vi.mock('../../credentials', () => ({
   resolveCredential: vi.fn(async () => null),
@@ -55,9 +61,10 @@ import { registerAiHandlers, cleanupWindowStreams } from '../ai-handlers';
 import { runQuery } from '../query-engine';
 import { requestPermission } from '../permission-handlers';
 import { readSettings } from '../settings-store';
-import { resolveApiBase } from '../model-config';
+import { resolveModelApiBase, resolveModelApiKey } from '../model-config';
 import { executeToolCall } from '../tool-handlers';
 import { toToolStreamEvent } from '../event-bridge';
+import { clearLlmContext } from '../query-context';
 import { resolveCredential } from '../../credentials';
 import { readErrorBody } from '../agent-loop';
 
@@ -126,6 +133,63 @@ describe('ai:chatStream', () => {
     expect(sends.filter((c: any) => c[1].type === 'done')).toHaveLength(1);
   });
 
+  it('DeepSeek thinking 的 reasoning_content 以 thinking 事件转发', async () => {
+    vi.mocked(axios.post).mockResolvedValue({
+      data: sse(
+        'data: {"choices":[{"delta":{"reasoning_content":"推理"}}]}\n\n',
+        'data: {"choices":[{"delta":{"content":"答案"}}]}\n\n',
+        'data: [DONE]\n\n',
+      ),
+    } as any);
+    await handler('ai:chatStream')({ sender: { send: vi.fn() } }, chatPayload({ isDeepThink: true }));
+    const sends = h.win.webContents.send.mock.calls.filter((c: any) => c[0] === 'ai:chunk:r1');
+    expect(sends.filter((c: any) => c[1].type === 'thinking').map((c: any) => c[1].text)).toEqual(['推理']);
+    expect(sends.filter((c: any) => c[1].type === 'chunk').map((c: any) => c[1].text)).toEqual(['答案']);
+  });
+
+  it('流式末尾 usage 块以 usage 事件转发（含缓存命中）', async () => {
+    vi.mocked(axios.post).mockResolvedValue({
+      data: sse(
+        'data: {"choices":[{"delta":{"content":"答案"}}]}\n\n',
+        'data: {"choices":[],"usage":{"prompt_tokens":50,"completion_tokens":10,"prompt_cache_hit_tokens":30,"prompt_cache_miss_tokens":20,"completion_tokens_details":{"reasoning_tokens":8}}}\n\n',
+        'data: [DONE]\n\n',
+      ),
+    } as any);
+    await handler('ai:chatStream')({ sender: { send: vi.fn() } }, chatPayload());
+    const sends = h.win.webContents.send.mock.calls.filter((c: any) => c[0] === 'ai:chunk:r1');
+    expect(sends.find((c: any) => c[1].type === 'usage')?.[1].usage).toEqual({
+      inputTokens: 50,
+      outputTokens: 10,
+      reasoningTokens: 8,
+      cacheHitTokens: 30,
+      cacheMissTokens: 20,
+    });
+  });
+
+  it('Chat 请求体包含 include_usage', async () => {
+    await handler('ai:chatStream')({ sender: { send: vi.fn() } }, chatPayload());
+    const body = vi.mocked(axios.post).mock.calls[0][1] as any;
+    expect(body.stream_options).toEqual({ include_usage: true });
+  });
+
+  it('prefix 续写：追加 assistant 前缀消息并设置 stop', async () => {
+    vi.mocked(axios.post).mockResolvedValue({
+      data: sse(
+        'data: {"choices":[{"delta":{"content":"more"}}]}\n\n',
+        'data: [DONE]\n\n',
+      ),
+    } as any);
+    await handler('ai:chatStream')({ sender: { send: vi.fn() } }, chatPayload({
+      prefix: { content: '```ts\nconst x = 1;', stop: ['```'] },
+    }));
+    const body = vi.mocked(axios.post).mock.calls[0][1] as any;
+    const last = body.messages.at(-1);
+    expect(last.role).toBe('assistant');
+    expect(last.prefix).toBe(true);
+    expect(last.content).toBe('```ts\nconst x = 1;');
+    expect(body.stop).toEqual(['```']);
+  });
+
   it('isDeepThink 时注入 thinking 参数', async () => {
     await handler('ai:chatStream')({ sender: { send: vi.fn() } }, chatPayload({ isDeepThink: true }));
     const body = vi.mocked(axios.post).mock.calls[0][1] as any;
@@ -158,6 +222,9 @@ describe('ai:chatStream', () => {
       [{ code: 'ECONNABORTED', message: 'timeout' }, /请求超时/],
       [{ response: { status: 401 } }, /API Key 无效/],
       [{ response: { status: 429 } }, /请求过于频繁/],
+      [{ response: { status: 402 } }, /余额不足/],
+      [{ response: { status: 503 } }, /服务繁忙/],
+      [{ response: { status: 500 } }, /服务器故障/],
       [{ response: { status: 422, statusText: 'x' } }, /API 错误 \(422\)/],
       [new Error('ECONNRESET'), /网络错误: ECONNRESET/],
     ];
@@ -168,6 +235,32 @@ describe('ai:chatStream', () => {
       const errorSend = h.win.webContents.send.mock.calls.find((c: any) => c[1].type === 'error');
       expect(errorSend?.[1].error).toMatch(pattern);
     }
+  });
+});
+
+describe('ai:fim', () => {
+  it('走 /completions 并返回补全文本', async () => {
+    vi.mocked(axios.post).mockResolvedValue({
+      data: { choices: [{ text: '  return fib(a-1) + fib(a-2)' }] },
+    } as any);
+    const result = await handler('ai:fim')({}, {
+      model: 'deepseek-v4-pro',
+      prompt: 'def fib(a):',
+      suffix: ' return fib(a-1) + fib(a-2)',
+    });
+    expect(result.ok).toBe(true);
+    expect(result.data.text).toContain('return fib');
+    const [url, body] = vi.mocked(axios.post).mock.calls.at(-1)! as any;
+    expect(url).toMatch(/\/completions$/);
+    expect(body.prompt).toBe('def fib(a):');
+    expect(body.suffix).toContain('return fib');
+  });
+
+  it('未配置 API Key 时拒绝', async () => {
+    vi.mocked(readSettings).mockResolvedValue({ deepseekApiKey: '' });
+    const result = await handler('ai:fim')({}, { model: 'deepseek-v4-pro', prompt: 'x' });
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('API Key');
   });
 });
 
@@ -221,6 +314,16 @@ describe('ai:sendQuery / abortQuery / abortTool / retryTool', () => {
     expect(h.win.webContents.send).toHaveBeenCalledWith('ai:queryEvent:q1', { type: 'tool_start' });
   });
 
+  it('memoryContext 与 sessionId 透传给 runQuery', async () => {
+    await handler('ai:sendQuery')(
+      { sender: { send: vi.fn() } },
+      { ...queryPayload(), sessionId: 'session-1', memoryContext: '## 项目记忆（带证据溯源，来自之前的会话）\nFACT' },
+    );
+    const req = vi.mocked(runQuery).mock.calls[0][0] as any;
+    expect(req.sessionId).toBe('session-1');
+    expect(req.memoryContext).toContain('## 项目记忆');
+  });
+
   it('sandboxMode 来自设置并归一化', async () => {
     vi.mocked(readSettings).mockResolvedValue({ sandboxMode: 'read', deepseekApiKey: 'sk' });
     await handler('ai:sendQuery')({ sender: { send: vi.fn() } }, queryPayload());
@@ -261,6 +364,12 @@ describe('ai:sendQuery / abortQuery / abortTool / retryTool', () => {
     const { abortTool } = await import('../tool-handlers');
     vi.mocked(abortTool).mockReturnValueOnce(false);
     expect(await handler('ai:abortTool')({}, 'q1', 'c2')).toEqual({ ok: false });
+  });
+
+  it('ai:clearQueryContext 作废规范上下文', async () => {
+    await handler('ai:clearQueryContext')({}, 'session-1');
+    expect(clearLlmContext).toHaveBeenCalledWith('session-1');
+    expect(await handler('ai:clearQueryContext')({}, 'session-2')).toEqual({ ok: true });
   });
 });
 

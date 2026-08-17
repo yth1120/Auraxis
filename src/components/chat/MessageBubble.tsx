@@ -19,10 +19,9 @@ import InlinePermissionCard from '../permissions/InlinePermissionCard';
 interface MessageBubbleProps {
   message: Message;
   searchQuery?: string;
-  isLastAssistant?: boolean;
 }
 
-export default memo(function MessageBubble({ message, searchQuery, isLastAssistant }: MessageBubbleProps) {
+export default memo(function MessageBubble({ message, searchQuery }: MessageBubbleProps) {
   const t = useT();
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -96,7 +95,6 @@ export default memo(function MessageBubble({ message, searchQuery, isLastAssista
         <AssistantMessage
           message={message}
           searchQuery={searchQuery}
-          isLastAssistant={isLastAssistant}
         />
       )}
       {!message.permissionRequest && message.role === 'system' && <SystemMessage message={message} />}

@@ -15,7 +15,7 @@ describe('i18n', () => {
   });
 
   it('substitutes variables', () => {
-    expect(t('composer.queued', { n: 3 })).toBe('3 条待发送');
+    expect(t('composer.sendAfterStop')).toBe('停止并发送');
     expect(t('composer.placeholder.followup', { name: '修复登录' })).toContain('修复登录');
   });
 

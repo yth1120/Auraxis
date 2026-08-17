@@ -73,7 +73,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
     key: '1',
     ctrl: true,
     shift: true,
-    description: '右侧面板：计划',
+    description: '右侧面板：执行详情',
     category: 'navigation',
   },
   {
@@ -94,14 +94,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
     key: '4',
     ctrl: true,
     shift: true,
-    description: '工作台：变更',
-    category: 'navigation',
-  },
-  {
-    key: '5',
-    ctrl: true,
-    shift: true,
-    description: '工作台：预览',
+    description: '右侧面板：预览',
     category: 'navigation',
   },
   {

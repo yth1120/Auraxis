@@ -5,12 +5,15 @@ import type { InstalledPlugin, Plugin } from '../types/plugin';
 export interface PluginStore {
   installedPlugins: InstalledPlugin[];
   activePlugins: Plugin[];
+  /** 内置示例插件是否已完成首次静默装配（避免每次启动重复补装/弹窗）。 */
+  seededBuiltins: boolean;
 
   installPlugin: (info: InstalledPlugin, plugin: Plugin) => void;
   uninstallPlugin: (id: string) => void;
   enablePlugin: (id: string) => void;
   disablePlugin: (id: string) => void;
   setActivePlugins: (plugins: Plugin[]) => void;
+  markBuiltinsSeeded: () => void;
 }
 
 export const usePluginStore = create<PluginStore>()(
@@ -18,6 +21,7 @@ export const usePluginStore = create<PluginStore>()(
     (set, get) => ({
       installedPlugins: [],
       activePlugins: [],
+      seededBuiltins: false,
 
       installPlugin: (info, plugin) =>
         set((s) => ({
@@ -52,12 +56,17 @@ export const usePluginStore = create<PluginStore>()(
         }),
 
       setActivePlugins: (plugins) => set({ activePlugins: plugins }),
+
+      markBuiltinsSeeded: () => set({ seededBuiltins: true }),
     }),
     {
       name: 'auraxis-plugin-storage',
       version: 1,
       migrate: (persisted) => persisted as any,
-      partialize: (s) => ({ installedPlugins: s.installedPlugins }),
+      partialize: (s) => ({
+        installedPlugins: s.installedPlugins,
+        seededBuiltins: s.seededBuiltins,
+      }),
       onRehydrateStorage: () => (state) => {
         // Apply CLI-managed plugin state (userData/plugin-state.json).
         const api = typeof window !== 'undefined' ? window.electronAPI?.pluginState : undefined;

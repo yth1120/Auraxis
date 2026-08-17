@@ -1,11 +1,14 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Message, ChatStore, CodeBlock } from '../types/chat';
-import { getContentText } from '../types/chat';
+import { getContentText, mapThinkingLevelToEffort } from '../types/chat';
+import { createDebouncedStorage } from './debouncedStorage';
+export { createDebouncedStorage } from './debouncedStorage';
 import { streamChat } from '../services/ai-service';
 import type { AIStreamSubscription } from '../types/electron-api';
 import type { ToolStreamEvent, ToolCall } from '../types/tools';
 import { getApiKeyFromStore, useSettingsStore } from './useSettingsStore';
+import { PERMISSION_PRESETS } from '../types/advanced';
 import { useSessionStore, isSessionDeleted } from './useSessionStore';
 import { useUndoStore } from './useUndoStore';
 import { useAppStore } from './useAppStore';
@@ -18,19 +21,23 @@ let ipcSubscription: AIStreamSubscription | null = null;
 let isQueryStream = false;
 let stopping = false;
 const STREAM_TIMEOUT_MS = 300_000; // 5 min
-const usageAcc = { input: 0, output: 0, reasoning: 0 };
+const usageAcc = { input: 0, output: 0, reasoning: 0, cacheHit: 0, cacheMiss: 0 };
 
 function flushUsageToStore() {
-  if (usageAcc.input === 0 && usageAcc.output === 0 && usageAcc.reasoning === 0) return;
+  if (usageAcc.input === 0 && usageAcc.output === 0 && usageAcc.reasoning === 0 && usageAcc.cacheHit === 0 && usageAcc.cacheMiss === 0) return;
   // write directly via useChatStore.getState()—no subscribe trigger
   useChatStore.setState((s) => ({
     exactInputTokens: s.exactInputTokens + usageAcc.input,
     exactOutputTokens: s.exactOutputTokens + usageAcc.output,
     reasoningOutputTokens: s.reasoningOutputTokens + usageAcc.reasoning,
+    cacheHitTokens: s.cacheHitTokens + usageAcc.cacheHit,
+    cacheMissTokens: s.cacheMissTokens + usageAcc.cacheMiss,
   }));
   usageAcc.input = 0;
   usageAcc.output = 0;
   usageAcc.reasoning = 0;
+  usageAcc.cacheHit = 0;
+  usageAcc.cacheMiss = 0;
 }
 let streamTimeout: ReturnType<typeof setTimeout> | null = null;
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
@@ -176,46 +183,6 @@ function appendToolProgress(assistantId: string, toolCallId: string, chunk: stri
   });
 }
 
-// ── Debounced localStorage to avoid I/O thrashing during streaming ──
-// Zustand persist calls setItem synchronously on every set() — during
-// streaming at ~33 Hz, that's 33+ serialise+write cycles per second for
-// potentially large message arrays.  This wrapper coalesces writes so we
-// hit localStorage at most once per second.
-
-interface DebouncedStorage {
-  getItem(name: string): string | null;
-  setItem(name: string, value: string): void;
-  removeItem(name: string): void;
-}
-
-export function createDebouncedStorage(delayMs = 1000): DebouncedStorage {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  const pending = new Map<string, string>();
-
-  return {
-    getItem: (name: string): string | null => {
-      if (pending.has(name)) return pending.get(name)!;
-      try { return localStorage.getItem(name); } catch { return null; }
-    },
-    setItem: (name: string, value: string) => {
-      pending.set(name, value);
-      if (!timer) {
-        timer = setTimeout(() => {
-          timer = null;
-          for (const [k, v] of pending) {
-            try { localStorage.setItem(k, v); } catch { /* quota exceeded */ }
-          }
-          pending.clear();
-        }, delayMs);
-      }
-    },
-    removeItem: (name: string) => {
-      pending.delete(name);
-      try { localStorage.removeItem(name); } catch { /* ignore */ }
-    },
-  };
-}
-
 const debouncedStorage = createDebouncedStorage(1000);
 
 // ── Durable chat event log (event-sourcing-lite) ──
@@ -238,6 +205,13 @@ function queueChatLog(
   }
 }
 
+/** Invalidate the main-process canonical context after renderer history edits. */
+function clearQueryContextForSession(): void {
+  const sessionId = useSessionStore.getState().currentSessionId;
+  if (!sessionId || typeof window === 'undefined') return;
+  void window.electronAPI?.ai.clearQueryContext?.(sessionId)?.catch?.(() => {});
+}
+
 async function flushChatLog() {
   if (chatLogTimer) { clearTimeout(chatLogTimer); chatLogTimer = null; }
   const entries = [...chatLogBuffer.entries()];
@@ -245,7 +219,10 @@ async function flushChatLog() {
   for (const [sessionId, events] of entries) {
     if (!window.electronAPI?.chatLog) continue;
     try {
-      await window.electronAPI.chatLog.append(sessionId, events);
+      const projectPath = useChatStore.getState().currentProjectPath
+        || useSettingsStore.getState().projectPath
+        || undefined;
+      await window.electronAPI.chatLog.append(sessionId, events, projectPath);
     } catch {
       const prev = chatLogBuffer.get(sessionId) || [];
       chatLogBuffer.set(sessionId, [...prev, ...events]);
@@ -265,15 +242,18 @@ export const useChatStore = create<ChatStore>()(
   persist(
     (set, get) => ({
       messages: [],
-      commands: [],
       isStreaming: false,
       inputValue: '',
-      isDeepThink: false,
-      reasoningEffort: 'medium' as const,
+      drafts: {},
+      modelPanelRequest: 0,
+      isDeepThink: true,
+      reasoningEffort: 'high' as const,
+      modeThinkingPrefs: {},
       isWebSearch: false,
       autoApprove: false,
       taskPriority: 'normal' as const,
       pendingPlanMode: false,
+      pendingToolChoice: null,
       agentQueue: [],
       goal: null,
       memoriesEnabled: true,
@@ -285,26 +265,42 @@ export const useChatStore = create<ChatStore>()(
       exactInputTokens: 0,
       exactOutputTokens: 0,
       reasoningOutputTokens: 0,
+      cacheHitTokens: 0,
+      cacheMissTokens: 0,
       lastCompression: null,
       lastUserMessage: null,
       composerFocusTick: 0,
       pendingNewTask: false,
 
-      setInputValue: (value: string) => set({ inputValue: value }),
-      appendCommand: (cmd) => set((s) => ({
-        commands: [...(s.commands ?? []), { id: `cmd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, ...cmd }].slice(-50),
-      })),
+      setInputValue: (value: string) => set((s) => {
+        const sid = useSessionStore.getState().currentSessionId;
+        return {
+          inputValue: value,
+          drafts: sid ? { ...s.drafts, [sid]: value } : s.drafts,
+        };
+      }),
+
+      requestModelPanel: () => set((s) => ({ modelPanelRequest: s.modelPanelRequest + 1 })),
+      consumeModelPanelRequest: () => set({ modelPanelRequest: 0 }),
       requestComposerFocus: () => set((s) => ({ composerFocusTick: s.composerFocusTick + 1 })),
       setPendingNewTask: (v: boolean) => set({ pendingNewTask: v }),
 
-      toggleDeepThink: () => set((s) => ({ isDeepThink: !s.isDeepThink })),
+      // DeepSeek 风格：Chat 只有开关，开启时思考强度固定为 high。
+      toggleDeepThink: () =>
+        set((s) => ({
+          isDeepThink: !s.isDeepThink,
+          ...(!s.isDeepThink ? { reasoningEffort: 'high' as const } : {}),
+        })),
       setReasoningEffort: (effort) => set({ reasoningEffort: effort, isDeepThink: true }),
 
       toggleWebSearch: () => set((s) => ({ isWebSearch: !s.isWebSearch })),
 
+      // Legacy flag — kept for type compatibility; the permission preset
+      // (useSettingsStore.permissionPreset) is the single source of truth.
       toggleAutoApprove: () => set((s) => ({ autoApprove: !s.autoApprove })),
 
       setPendingPlanMode: (enabled) => set({ pendingPlanMode: enabled }),
+      setPendingToolChoice: (choice) => set({ pendingToolChoice: choice }),
       setTaskPriority: (priority) => set({ taskPriority: priority }),
 
       enqueueAgentMessage: (text: string) => {
@@ -351,12 +347,16 @@ export const useChatStore = create<ChatStore>()(
         // doesn't control an invisible request.
         if (get().isStreaming) get().stopStreaming();
         useInspectorStore.getState().clear();
+        const sid = useSessionStore.getState().currentSessionId;
         set({
           messages: [],
-          commands: [],
+          inputValue: '',
+          drafts: sid ? { ...get().drafts, [sid]: '' } : get().drafts,
           exactInputTokens: 0,
           exactOutputTokens: 0,
           reasoningOutputTokens: 0,
+          cacheHitTokens: 0,
+          cacheMissTokens: 0,
           toolCallMap: {},
         });
       },
@@ -376,6 +376,7 @@ export const useChatStore = create<ChatStore>()(
         if (currentId === id && messages.length > 0) return;
         const session = useSessionStore.getState().loadSession(id);
         if (!session) return;
+        const draft = get().drafts[id] ?? '';
         // Opening a session must bring its project context along, otherwise
         // the composer, @file mentions and tool calls would still target the
         // previously selected directory.
@@ -388,6 +389,7 @@ export const useChatStore = create<ChatStore>()(
         // (session.mode may be 'code' from legacy sends; forcing 'code' there
         // would land on a blank Agent surface with no clickable history.)
         useAppStore.getState().setSidebarMode('chat');
+        useAppStore.getState().setActiveToolView('none');
         useSessionStore.setState({ pendingMode: 'chat' });
         // Rebuild toolCallMap from loaded session messages so that
         // ToolCallCardWrapper can look up ToolCalls by ID (needed for
@@ -402,29 +404,19 @@ export const useChatStore = create<ChatStore>()(
         }
         set({
           messages: session.messages,
-          commands: [],
+          inputValue: draft,
           ...(sessionProject ? { currentProjectPath: sessionProject } : {}),
           exactInputTokens: 0,
           exactOutputTokens: 0,
           reasoningOutputTokens: 0,
+          cacheHitTokens: 0,
+          cacheMissTokens: 0,
           toolCallMap: map,
           selectedModel: session.model || chatModel,
           currentIteration: null,
           maxIterations: null,
           lastCompression: null,
         });
-        void window.electronAPI?.chatLog?.read(id).then((r) => {
-          if (!r?.ok || !r.data) return;
-          const commands = r.data
-            .filter((e) => e.type === 'command')
-            .map((e) => ({
-              id: `cmd-log-${e.seq}`,
-              name: String((e.data as { name?: unknown })?.name ?? ''),
-              args: String((e.data as { args?: unknown })?.args ?? ''),
-              ts: e.ts,
-            }));
-          if (commands.length > 0) set({ commands });
-        }).catch(() => {});
       },
 
       stopStreaming: () => {
@@ -453,6 +445,117 @@ export const useChatStore = create<ChatStore>()(
         }
         abortController = null;
         void flushChatLog();
+      },
+
+      // 对话前缀续写（Beta）：模型从已有代码块继续输出，流式渲染为新的助手消息。
+      continueCode: (language: string, code: string, instruction?: string) => {
+        if (get().isStreaming) return;
+        const { selectedModel, messages } = get();
+        const userContent = instruction?.trim()
+          ? instruction.trim()
+          : `请继续写下面的 ${language} 代码。只输出后续代码，不要重复开头的代码块标记和已有内容。\n\n\`\`\`${language}\n${code}\n\`\`\``;
+        const userMessage: Message = {
+          id: `user-${Date.now()}`,
+          role: 'user',
+          content: userContent,
+          timestamp: Date.now(),
+        };
+        const assistantId = `assistant-${Date.now()}`;
+        const assistantMessage: Message = {
+          id: assistantId,
+          role: 'assistant',
+          content: '',
+          timestamp: Date.now(),
+          isStreaming: true,
+          thinkingEnabled: false,
+        };
+        const sessionStore = useSessionStore.getState();
+        if (!sessionStore.currentSessionId) {
+          sessionStore.newSession(useAppStore.getState().sidebarMode);
+        }
+        sessionStore.touchCurrentSession(messages.length + 2);
+        const logSessionId = useSessionStore.getState().currentSessionId || sessionStore.currentSessionId;
+        queueChatLog(logSessionId, 'user', { text: userContent, kind: 'continue_code' });
+        stopping = false;
+        set({ messages: [...messages, userMessage, assistantMessage], isStreaming: true, lastUserMessage: userContent });
+
+        const electronAI = window.electronAPI?.ai;
+        if (!electronAI) {
+          set((s) => ({
+            messages: s.messages.map((m) =>
+              m.id === assistantId
+                ? { ...m, content: 'Error: 前缀续写需要 Electron 主进程支持', isStreaming: false }
+                : m,
+            ),
+            isStreaming: false,
+          }));
+          return;
+        }
+        try {
+          const acc = { text: '' };
+          isQueryStream = false;
+          const subscription = electronAI.chatStream(
+            {
+              model: selectedModel,
+              messages: [{ role: 'user', content: userContent }],
+              isDeepThink: false,
+              reasoningEffort: 'high',
+              isWebSearch: false,
+              apiKey: getApiKey() || undefined,
+              surface: 'chat',
+              prefix: { content: `\`\`\`${language}\n${code}`, stop: ['```'] },
+            },
+            {
+              onChunk: (chunk: string) => {
+                acc.text += chunk;
+                set((s) => ({
+                  messages: s.messages.map((m) =>
+                    m.id === assistantId ? { ...m, content: acc.text } : m,
+                  ),
+                }));
+              },
+              onUsage: (usage) => {
+                set((s) => ({
+                  exactInputTokens: s.exactInputTokens + (usage.inputTokens || 0),
+                  exactOutputTokens: s.exactOutputTokens + (usage.outputTokens || 0),
+                  reasoningOutputTokens: s.reasoningOutputTokens + (usage.reasoningTokens || 0),
+                  cacheHitTokens: s.cacheHitTokens + (usage.cacheHitTokens || 0),
+                  cacheMissTokens: s.cacheMissTokens + (usage.cacheMissTokens || 0),
+                }));
+              },
+              onDone: () => {
+                ipcSubscription?.unsubscribe();
+                ipcSubscription = null;
+                const wrapped = acc.text.includes('```')
+                  ? acc.text
+                  : `\`\`\`${language}\n${acc.text.trim()}\n\`\`\``;
+                set((s) => ({
+                  ...setAssistantDone(assistantId)(s),
+                  messages: s.messages.map((m) =>
+                    m.id === assistantId ? { ...m, content: wrapped } : m,
+                  ),
+                  isStreaming: false,
+                }));
+                void flushChatLog();
+              },
+              onError: (error: string) => {
+                ipcSubscription?.unsubscribe();
+                ipcSubscription = null;
+                set((s) => ({
+                  ...setAssistantError(assistantId, `Error: ${error}`)(s),
+                  isStreaming: false,
+                }));
+                void flushChatLog();
+              },
+            },
+          );
+          ipcSubscription = subscription;
+        } catch (err: any) {
+          set((s) => ({
+            ...setAssistantError(assistantId, `Error: ${err.message}`)(s),
+            isStreaming: false,
+          }));
+        }
       },
 
       retryLastMessage: () => {
@@ -488,8 +591,68 @@ export const useChatStore = create<ChatStore>()(
           return { messages: msgs, currentIteration: null, maxIterations: null, lastCompression: null };
         });
 
+        clearQueryContextForSession();
+
         // Re-set input and trigger send
         get().setInputValue(lastUser);
+        get().sendMessage();
+      },
+
+      regenerateFromMessage: (messageId: string) => {
+        const state = get();
+        if (state.isStreaming) return;
+        const msgs = [...state.messages];
+        const assistantIdx = msgs.findIndex((m) => m.id === messageId);
+        if (assistantIdx < 0) return;
+        let userIdx = assistantIdx - 1;
+        while (userIdx >= 0 && msgs[userIdx].role !== 'user') userIdx--;
+        if (userIdx < 0) return;
+        const userText = getContentText(msgs[userIdx].content);
+        const removedMsgs = msgs.slice(userIdx);
+        const sessionId = useSessionStore.getState().currentSessionId ?? '';
+        const restoreFrom = userIdx;
+
+        // Stop any in-flight request
+        if (ipcSubscription) {
+          const api = window.electronAPI?.ai;
+          if (api && ipcSubscription.requestId) {
+            if (isQueryStream) api.abortQuery(ipcSubscription.requestId);
+            else api.abortStream(ipcSubscription.requestId);
+          }
+          ipcSubscription.unsubscribe();
+          ipcSubscription = null;
+        }
+        abortController?.abort();
+        abortController = null;
+
+        // 截断到该用户消息之前（保留历史，丢弃本条助手回复与后续内容）
+        set((s) => ({
+          messages: s.messages.slice(0, userIdx),
+          currentIteration: null,
+          maxIterations: null,
+          lastCompression: null,
+        }));
+
+        clearQueryContextForSession();
+
+        // 重新生成属于破坏性操作：注册撤销，可恢复被截断的对话。
+        useUndoStore.getState().addUndo({
+          id: `undo-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          sessionId,
+          timestamp: Date.now(),
+          type: 'message:regenerate',
+          description: `重新生成（截断 ${removedMsgs.length} 条消息）`,
+          revert: async () => {
+            const s = useChatStore.getState();
+            // 用旧片段替换 userIdx 之后的内容，而不是追加——否则新回复与旧回复会乱序共存。
+            const combined = [...s.messages.slice(0, restoreFrom), ...removedMsgs];
+            useChatStore.setState({ messages: combined });
+            syncCurrentSessionMessages(combined);
+            clearQueryContextForSession();
+          },
+        });
+
+        get().setInputValue(userText);
         get().sendMessage();
       },
 
@@ -534,6 +697,8 @@ export const useChatStore = create<ChatStore>()(
           lastCompression: null,
         });
 
+        clearQueryContextForSession();
+
         // Re-send with the edited content
         get().setInputValue(newContent);
         get().sendMessage();
@@ -558,6 +723,7 @@ export const useChatStore = create<ChatStore>()(
           maxIterations: null,
           lastCompression: null,
         });
+        clearQueryContextForSession();
         syncCurrentSessionMessages(remaining);
 
         // Register message-delete undo entry
@@ -572,6 +738,7 @@ export const useChatStore = create<ChatStore>()(
             const combined = [...s.messages, ...removedMsgs];
             useChatStore.setState({ messages: combined });
             syncCurrentSessionMessages(combined);
+            clearQueryContextForSession();
           },
         });
       },
@@ -589,6 +756,7 @@ export const useChatStore = create<ChatStore>()(
         const assistantId = `assistant-${Date.now()}`;
         const assistantMessage: Message = {
           id: assistantId, role: 'assistant', content: '', timestamp: Date.now(), isStreaming: true,
+          thinkingEnabled: isDeepThink,
         };
 
         const newMessages = [...messages, userMessage, assistantMessage];
@@ -604,6 +772,9 @@ export const useChatStore = create<ChatStore>()(
         stopping = false;
         usageAcc.input = 0; usageAcc.output = 0; usageAcc.reasoning = 0;
         set({ messages: newMessages, inputValue: '', isStreaming: true, lastUserMessage: content });
+        // 发送成功后清除当前会话草稿。
+        const sentSid = useSessionStore.getState().currentSessionId;
+        if (sentSid) get().setInputValue('');
         abortController = new AbortController();
 
         // Guard against dropped connections — auto-stop after timeout
@@ -678,37 +849,27 @@ export const useChatStore = create<ChatStore>()(
         }
 
         // Inject relevant memories from previous sessions (Code/agent mode only).
+        // Eywa M3: 走确定性 readForQuery，返回 context + policy + diagnostics。
+        let memoryContext: string | undefined;
         if (projectPath && appMode !== 'chat' && window.electronAPI?.memory) {
           try {
-            const memResult = await window.electronAPI.memory.getByProject(projectPath);
-            if (memResult.ok && memResult.data && memResult.data.length > 0) {
-              const memoryItems = memResult.data;
-              // Build a simple inline memory preamble (avoids electron-rootdir import)
-              const preambleParts: string[] = ['## 项目记忆（来自之前的会话）'];
-              const groups: Record<string, typeof memResult.data> = {};
-              for (const m of memoryItems) {
-                (groups[m.type] ||= []).push(m);
-              }
-              const labels: Record<string, string> = {
-                decision: '关键决策',
-                architecture: '架构信息',
-                progress: '上次进度',
-                preference: '用户偏好',
-                problem: '已知问题',
-                context: '上下文信息',
-              };
-              for (const [type, label] of Object.entries(labels)) {
-                const items = groups[type] || [];
-                if (items.length > 0) {
-                  preambleParts.push(`\n### ${label}`);
-                  for (const m of items.slice(0, 3)) {
-                    preambleParts.push(`- ${m.content.slice(0, 200)}（${new Date(m.timestamp).toISOString().slice(0, 10)}）`);
-                  }
-                }
-              }
-              preambleParts.push('\n请利用以上记忆理解用户当前任务，避免重复已有的决策和偏好。');
+            const memResult = await window.electronAPI.memory.readForQuery(
+              projectPath,
+              content.slice(0, 400),
+              { budgetTokens: 900 },
+            );
+            if (memResult.ok && memResult.data && memResult.data.context.length > 0) {
+              const read = memResult.data;
+              const preambleParts: string[] = ['## 项目记忆（带证据溯源，来自之前的会话）'];
+              preambleParts.push(...read.facts.slice(0, 20));
+              preambleParts.push(`引用要求：${read.policy.requireCitation ? '必须引用记忆来源' : '可选引用'}；不确定时拒答。`);
+              if (read.diagnostics.staleState) preambleParts.push('警告：存在已过期的记忆版本，引用前请核对。');
+              if (read.diagnostics.unsupportedExtraction) preambleParts.push('警告：部分记忆缺少证据支持，仅作参考。');
               const preamble = preambleParts.join('\n');
-              chatHistory.unshift({ role: 'user', content: preamble });
+              // Cache-aligned: memory travels as a dedicated field and the
+              // backend appends it near the request tail instead of unshifting
+              // it into the conversation head (prefix-stable layout).
+              memoryContext = preamble;
               set((s) => ({
                 messages: [
                   ...s.messages,
@@ -721,7 +882,7 @@ export const useChatStore = create<ChatStore>()(
                     disclosure: {
                       source: 'memory' as const,
                       producer: '记忆库',
-                      detail: `${memoryItems.length} 条跨会话记忆`,
+                      detail: `${read.context.length} 条跨会话记忆（溯源检索）`,
                       content: preamble.slice(0, 2000),
                     },
                   },
@@ -855,12 +1016,17 @@ export const useChatStore = create<ChatStore>()(
 
             const subscription = electronAI.sendQuery(
               {
+                sessionId: useSessionStore.getState().currentSessionId || undefined,
                 model: selectedModel,
                 messages: apiMessages,
+                memoryContext,
                 isDeepThink,
-                reasoningEffort: reasoningEffort === 'low' ? 'high' : reasoningEffort === 'medium' ? 'high' : 'max',
+                reasoningEffort: mapThinkingLevelToEffort(reasoningEffort),
                 projectRoot: projectPath,
-                autoApprove: get().autoApprove,
+                // The unified query path honors the selected permission preset
+                // instead of the legacy chat autoApprove flag.
+                autoApprove: PERMISSION_PRESETS[useSettingsStore.getState().permissionPreset].autoApprove,
+                mode: PERMISSION_PRESETS[useSettingsStore.getState().permissionPreset].mode,
                 apiKey: getApiKey() || undefined,
                 surface: appMode,
               },
@@ -1000,6 +1166,8 @@ export const useChatStore = create<ChatStore>()(
                       usageAcc.input += event.inputTokens;
                       usageAcc.output += event.outputTokens;
                       usageAcc.reasoning += event.reasoningTokens || 0;
+                      usageAcc.cacheHit += event.cacheHitTokens || 0;
+                      usageAcc.cacheMiss += event.cacheMissTokens || 0;
                       break;
                     case 'context_compressed':
                       {
@@ -1084,6 +1252,7 @@ export const useChatStore = create<ChatStore>()(
         if (electronAI) {
           try {
             const acc = { text: '' };
+            const thinkingAcc = { text: '' };
             isQueryStream = false;
 
             const subscription = electronAI.chatStream(
@@ -1091,13 +1260,34 @@ export const useChatStore = create<ChatStore>()(
                 model: selectedModel,
                 messages: apiMessages,
                 isDeepThink,
-                reasoningEffort: reasoningEffort === 'low' ? 'high' : reasoningEffort === 'medium' ? 'high' : 'max',
+                // Chat 固定 high（DeepSeek 风格）：直接对应 API high，不再升到 max。
+                reasoningEffort: 'high',
                 isWebSearch,
                 apiKey: getApiKey() || undefined,
                 surface: appMode,
               },
               {
                 onChunk: makeOnChunk(acc),
+                onThinking: (chunk: string) => {
+                  if (!chunk) return;
+                  thinkingAcc.text += chunk;
+                  set((s) => ({
+                    messages: s.messages.map((m) =>
+                      m.id === assistantId
+                        ? { ...m, thinkingBlocks: [{ content: thinkingAcc.text }] }
+                        : m,
+                    ),
+                  }));
+                },
+                onUsage: (usage) => {
+                  set((s) => ({
+                    exactInputTokens: s.exactInputTokens + (usage.inputTokens || 0),
+                    exactOutputTokens: s.exactOutputTokens + (usage.outputTokens || 0),
+                    reasoningOutputTokens: s.reasoningOutputTokens + (usage.reasoningTokens || 0),
+                    cacheHitTokens: s.cacheHitTokens + (usage.cacheHitTokens || 0),
+                    cacheMissTokens: s.cacheMissTokens + (usage.cacheMissTokens || 0),
+                  }));
+                },
                 onDone: makeOnDone,
                 onError: makeOnError,
               }
@@ -1114,10 +1304,29 @@ export const useChatStore = create<ChatStore>()(
         // ─── Browser fallback ───
         try {
           const acc = { text: '' };
+          const thinkingAcc = { text: '' };
           await streamChat(
-            { model: selectedModel, messages: apiMessages, isDeepThink, reasoningEffort: reasoningEffort === 'low' ? 'high' : reasoningEffort === 'medium' ? 'high' : 'max', isWebSearch },
+            {
+              model: selectedModel,
+              messages: apiMessages,
+              isDeepThink,
+              reasoningEffort: 'high',
+              isWebSearch,
+              maxOutputTokens: useSettingsStore.getState().maxOutputTokens,
+            },
             makeOnChunk(acc),
             abortController.signal,
+            (chunk: string) => {
+              if (!chunk) return;
+              thinkingAcc.text += chunk;
+              set((s) => ({
+                messages: s.messages.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, thinkingBlocks: [{ content: thinkingAcc.text }] }
+                    : m,
+                ),
+              }));
+            },
           );
           set((s) => ({ ...setAssistantDone(assistantId)(s), isStreaming: false }));
         } catch (err: any) {
@@ -1128,13 +1337,29 @@ export const useChatStore = create<ChatStore>()(
     }),
     {
       name: 'auraxis-chat-storage',
-      version: 1,
-      migrate: (persisted) => persisted as any,
+      version: 2,
+      // v2：Chat 改为 DeepSeek 风格 —— 默认思考开启、强度固定 high。
+      // 同时重置 Chat 的快照，避免旧存档把开关恢复成关闭。
+      migrate: (persisted: any) => {
+        const stored = persisted?.state ?? {};
+        const prefs = { ...(stored.modeThinkingPrefs ?? {}) };
+        if (prefs.chat) prefs.chat = { isDeepThink: true, reasoningEffort: 'high' };
+        return {
+          ...(persisted ?? {}),
+          state: {
+            ...stored,
+            isDeepThink: true,
+            reasoningEffort: 'high',
+            modeThinkingPrefs: prefs,
+          },
+        };
+      },
       // debouncedStorage speaks the raw-string StateStorage API; wrap it with
       // createJSONStorage so zustand's persist (which expects the parsed
       // StorageValue API in 4.5) can hydrate/round-trip correctly.
       storage: createJSONStorage(() => debouncedStorage),
       partialize: (state) => ({
+        drafts: state.drafts,
         messages: state.messages
           // Permission cards are live IPC artifacts — their requestId dies
           // with the backend process. Persisting them resurrects dead cards.
@@ -1144,6 +1369,7 @@ export const useChatStore = create<ChatStore>()(
         selectedModel: state.selectedModel,
         isDeepThink: state.isDeepThink,
         reasoningEffort: state.reasoningEffort,
+        modeThinkingPrefs: state.modeThinkingPrefs,
         isWebSearch: state.isWebSearch,
         taskPriority: state.taskPriority,
         memoriesEnabled: state.memoriesEnabled,
@@ -1161,17 +1387,58 @@ export const useChatStore = create<ChatStore>()(
             }
           }
           state.toolCallMap = map;
+          const sid = useSessionStore.getState().currentSessionId ?? '';
+          state.inputValue = state.drafts?.[sid] ?? '';
         }
       },
     }
   )
 );
 
-// Switching to chat mode cancels an armed /plan — plan mode belongs to the
-// Agent surface and must not leak back after a mode round-trip.
+// Mode ⇄ plan-mode coupling + per-mode thinking snapshots:
+// - Switching to chat cancels an armed /plan (plan mode belongs to the agent
+//   surfaces and must not leak back after a mode round-trip).
+// - Switching to Work arms plan mode (plan-driven by default); leaving Work
+//   for code or chat cancels it so surfaces keep their own personality.
+// - Thinking state is saved per mode: Chat 记住自己的思考开关，Work/Code 默认
+//   思考开启且各自记住深度；切走再切回时恢复该模式自己的状态。
 useAppStore.subscribe((state, prev) => {
-  if (state.sidebarMode === 'chat' && prev.sidebarMode !== 'chat') {
-    useChatStore.getState().setPendingPlanMode(false);
+  const chat = useChatStore.getState();
+  // 一次性工具策略是模式作用域：切换模式即失效，避免 Code 武装的 /tool 泄漏到 Work/Chat。
+  if (state.sidebarMode !== prev.sidebarMode) chat.setPendingToolChoice(null);
+  if (state.sidebarMode === 'chat' && prev.sidebarMode !== 'chat') chat.setPendingPlanMode(false);
+  if (state.sidebarMode === 'code' && prev.sidebarMode === 'work') chat.setPendingPlanMode(false);
+  if (state.sidebarMode === 'work' && prev.sidebarMode !== 'work') chat.setPendingPlanMode(true);
+  if (state.sidebarMode === prev.sidebarMode) return;
+
+  // 1) 把离开的模式当前状态快照存下来
+  const prevPref = {
+    isDeepThink: chat.isDeepThink,
+    reasoningEffort: chat.reasoningEffort,
+  };
+  // 2) 恢复进入的模式自己保存的状态；没有快照时默认思考开启。
+  //    Chat 已去掉思考深度，进入 Chat 时强度固定为 high。
+  const enteringChat = state.sidebarMode === 'chat';
+  const savedPref = chat.modeThinkingPrefs[state.sidebarMode];
+  useChatStore.setState({
+    modeThinkingPrefs: {
+      ...chat.modeThinkingPrefs,
+      [prev.sidebarMode]: prevPref,
+    },
+    isDeepThink: savedPref?.isDeepThink ?? true,
+    reasoningEffort: enteringChat ? 'high' : (savedPref?.reasoningEffort ?? chat.reasoningEffort),
+  });
+});
+
+// A brand-new task in Work mode re-arms plan mode — each work item is expected
+// to start with a plan. (The user can still cancel the pill for one send.)
+useChatStore.subscribe((state, prev) => {
+  if (
+    state.pendingNewTask
+    && !prev.pendingNewTask
+    && useAppStore.getState().sidebarMode === 'work'
+  ) {
+    useChatStore.getState().setPendingPlanMode(true);
   }
 });
 

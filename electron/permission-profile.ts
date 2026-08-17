@@ -1,7 +1,7 @@
 /**
  * permission-profile.ts — named permission profiles（命名权限档案）。
  *
- * A profile is a hard boundary layered on top of the ask/plan/afe autonomy
+ * A profile is a hard boundary layered on top of the ask/plan/auto autonomy
  * mode: file globs (read/write/deny) + network domain allow/deny. Denies are
  * enforced before any prompt; write-grants fall through to the normal mode
  * prompt flow so the built-in "标准" profile preserves current behavior.
@@ -9,8 +9,9 @@
 import { ipcMain } from 'electron';
 import path from 'path';
 import { readSettings, writeSettings } from './ipc/settings-store';
+import { normalizeApprovalPolicy } from './contracts/core';
 
-export type ToolPolicy = 'ask' | 'plan' | 'afe';
+export type ToolPolicy = 'ask' | 'plan' | 'auto';
 export type FileAccess = 'read' | 'write' | 'deny';
 export type NetworkAccess = 'allow' | 'deny';
 
@@ -58,7 +59,7 @@ export const BUILTIN_PROFILES: PermissionProfile[] = [
     name: '沙箱',
     description: '文件可写（由工作区沙箱收口），网络默认拒绝。',
     builtin: true,
-    toolPolicy: 'afe',
+    toolPolicy: 'auto',
     fileScopes: [{ pattern: '**', access: 'write' }],
     networkScopes: [{ pattern: '*', access: 'deny' }],
   },
@@ -67,20 +68,46 @@ export const BUILTIN_PROFILES: PermissionProfile[] = [
 export async function loadPermissionProfiles(): Promise<{
   profiles: PermissionProfile[];
   activeId: string;
+  overrides: Record<string, string>;
 }> {
   const settings = await readSettings();
   const custom = Array.isArray(settings.permissionProfiles)
-    ? (settings.permissionProfiles as PermissionProfile[]).filter((p) => p && p.id)
+    ? (settings.permissionProfiles as PermissionProfile[])
+        .map((p) => (p && p.id ? { ...p, toolPolicy: normalizeApprovalPolicy(p.toolPolicy) } : p))
+        .filter((p): p is PermissionProfile => !!p && !!p.id)
     : [];
   const profiles = [...BUILTIN_PROFILES, ...custom];
   const activeId = typeof settings.activePermissionProfile === 'string'
     ? settings.activePermissionProfile
     : 'standard';
-  return { profiles, activeId };
+  const overrides = settings.projectPermissionProfiles
+    && typeof settings.projectPermissionProfiles === 'object'
+    && !Array.isArray(settings.projectPermissionProfiles)
+    ? (settings.projectPermissionProfiles as Record<string, string>)
+    : {};
+  return { profiles, activeId, overrides };
 }
 
 export async function getActivePermissionProfile(): Promise<PermissionProfile | null> {
   const { profiles, activeId } = await loadPermissionProfiles();
+  return profiles.find((p) => p.id === activeId) ?? null;
+}
+
+/**
+ * 项目级权限 Profile：项目可覆盖全局预设（settings.projectPermissionProfiles，
+ * 键为项目绝对路径）。未指定或指定的 Profile 不存在时回退到全局 activeId。
+ */
+export async function getProfileForProject(
+  projectRoot?: string,
+): Promise<PermissionProfile | null> {
+  const { profiles, activeId, overrides } = await loadPermissionProfiles();
+  if (projectRoot) {
+    const overrideId = overrides[projectRoot];
+    if (overrideId) {
+      const p = profiles.find((x) => x.id === overrideId);
+      if (p) return p;
+    }
+  }
   return profiles.find((p) => p.id === activeId) ?? null;
 }
 
@@ -194,9 +221,14 @@ export function evaluateNetworkProfile(
   return { allowed: true };
 }
 
-const FILE_TOOL_READ = new Set(['Read', 'Grep', 'Glob']);
-const FILE_TOOL_WRITE = new Set(['Write', 'Edit', 'Delete', 'NotebookEdit']);
-const NETWORK_TOOLS = new Set(['WebFetch', 'WebSearch']);
+const FILE_TOOL_READ = new Set(['Read', 'Grep', 'Glob', 'ReadDocument']);
+const FILE_TOOL_WRITE = new Set(['Write', 'Edit', 'Delete', 'NotebookEdit', 'WriteDocument']);
+const NETWORK_TOOLS = new Set([
+  'WebFetch', 'WebSearch',
+  'SlackListChannels', 'SlackPostMessage',
+  'DriveList', 'DriveRead',
+  'NotionSearch', 'NotionCreatePage',
+]);
 
 /** Extract a scoped path from a tool input (file_path or path). */
 function inputPath(toolName: string, input: Record<string, unknown>): string | null {
@@ -216,18 +248,25 @@ export async function evaluateToolProfileGate(
   toolName: string,
   input: Record<string, unknown>,
   projectRoot?: string,
+  workspaceRoots?: string[],
+  /** Worktree 重定向后仍是原始主根，用于查项目级覆盖。 */
+  profileKeyRoot?: string,
 ): Promise<ProfileVerdict> {
   if (!projectRoot) return { allowed: true };
-  const profile = await getActivePermissionProfile();
+  const profile = await getProfileForProject(profileKeyRoot || projectRoot);
   if (!profile) return { allowed: true };
 
   if (FILE_TOOL_READ.has(toolName) || FILE_TOOL_WRITE.has(toolName)) {
     const filePath = inputPath(toolName, input);
     if (!filePath) return { allowed: true };
     const abs = path.isAbsolute(filePath) ? filePath : path.resolve(projectRoot, filePath);
-    const rel = path.relative(path.resolve(projectRoot), abs);
-    // Paths outside the project are out of profile scope — keep existing flow.
-    if (rel.startsWith('..') || path.isAbsolute(rel)) return { allowed: true };
+    // 多根：找到包含该文件的根目录（主根或附加工作区根）再按相对路径评估。
+    const roots = [projectRoot, ...(workspaceRoots ?? [])]
+      .map((r) => path.resolve(r))
+      .filter((r, i, arr) => arr.indexOf(r) === i);
+    const containing = roots.find((root) => abs === root || abs.startsWith(root + path.sep));
+    if (!containing) return { allowed: true }; // 所有工作区根之外 → 维持原流程
+    const rel = path.relative(containing, abs);
     return evaluateFileProfile(
       profile,
       rel,
@@ -248,6 +287,69 @@ export function registerPermissionProfileIpc() {
   ipcMain.handle('permission:listProfiles', async () => {
     try {
       return { ok: true, data: await loadPermissionProfiles() };
+    } catch (error: any) {
+      return { ok: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('permission:listProjectProfiles', async () => {
+    try {
+      return { ok: true, data: await loadPermissionProfiles() };
+    } catch (error: any) {
+      return { ok: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('permission:setProjectProfile', async (_event, params: {
+    path?: string;
+    profileId?: string | null;
+  }) => {
+    try {
+      const projectPath = typeof params?.path === 'string' ? params.path.trim() : '';
+      if (!projectPath) return { ok: false, error: '项目路径不能为空' };
+      const profileId = params.profileId || null;
+      if (profileId) {
+        const { profiles } = await loadPermissionProfiles();
+        if (!profiles.some((p) => p.id === profileId)) {
+          return { ok: false, error: '权限 Profile 不存在' };
+        }
+      }
+      const settings = await readSettings();
+      const overrides = {
+        ...(settings.projectPermissionProfiles as Record<string, string> | undefined),
+      };
+      if (profileId) {
+        overrides[projectPath] = profileId;
+      } else {
+        delete overrides[projectPath];
+      }
+      settings.projectPermissionProfiles = overrides;
+      await writeSettings(settings);
+      return { ok: true };
+    } catch (error: any) {
+      return { ok: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('permission:moveProjectProfile', async (_event, params: {
+    from?: string;
+    to?: string;
+  }) => {
+    try {
+      const from = typeof params?.from === 'string' ? params.from.trim() : '';
+      const to = typeof params?.to === 'string' ? params.to.trim() : '';
+      if (!from || !to) return { ok: false, error: '路径不能为空' };
+      const settings = await readSettings();
+      const overrides = {
+        ...(settings.projectPermissionProfiles as Record<string, string> | undefined),
+      };
+      if (from in overrides) {
+        overrides[to] = overrides[from];
+        delete overrides[from];
+      }
+      settings.projectPermissionProfiles = overrides;
+      await writeSettings(settings);
+      return { ok: true };
     } catch (error: any) {
       return { ok: false, error: error.message };
     }

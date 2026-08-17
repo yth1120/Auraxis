@@ -64,6 +64,11 @@ describe('event-bridge → ToolStreamEvent', () => {
     expect(toToolStreamEvent({ type: 'usage', inputTokens: 1, outputTokens: 2 }, RID)).toEqual({
       type: 'usage_update', requestId: RID, inputTokens: 1, outputTokens: 2,
     });
+    expect(toToolStreamEvent({
+      type: 'usage', inputTokens: 1, outputTokens: 2, reasoningTokens: 3, cacheHitTokens: 4, cacheMissTokens: 5,
+    }, RID)).toEqual({
+      type: 'usage_update', requestId: RID, inputTokens: 1, outputTokens: 2, reasoningTokens: 3, cacheHitTokens: 4, cacheMissTokens: 5,
+    });
     expect(toToolStreamEvent({ type: 'usage_update', inputTokens: 1, outputTokens: 2, reasoningTokens: 3 }, RID)).toEqual({
       type: 'usage_update', requestId: RID, inputTokens: 1, outputTokens: 2, reasoningTokens: 3,
     });

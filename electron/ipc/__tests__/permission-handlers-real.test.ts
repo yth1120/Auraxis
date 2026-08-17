@@ -19,6 +19,7 @@ import {
   loadPermissionRules, registerPermissionHandlers,
 } from '../permission-handlers';
 import { readSettings, writeSettings } from '../settings-store';
+import { approvalFatigue } from '../../approval-fatigue';
 
 const handler = (ch: string) => h.handlers.get(ch)! as any;
 const tmpRoot = mkdtempSync(path.join(os.tmpdir(), 'auraxis-perm-'));
@@ -41,8 +42,8 @@ afterEach(() => {
 });
 
 describe('shouldAutoApprove / checkPermission（真实实现）', () => {
-  it('模式判定：afe / plan 批准 / ask 只读', () => {
-    expect(shouldAutoApprove('Bash', 'c1', { mode: 'afe' })).toBe(true);
+  it('模式判定：auto / plan 批准 / ask 只读', () => {
+    expect(shouldAutoApprove('Bash', 'c1', { mode: 'auto' })).toBe(true);
     expect(shouldAutoApprove('Bash', 'c1', { mode: 'plan', approvedPlanSteps: ['s1'] })).toBe(true);
     expect(shouldAutoApprove('Bash', 'c1', { mode: 'plan', approvedPlanSteps: [] })).toBe(false);
     expect(shouldAutoApprove('Read', 'c1', { mode: 'ask' })).toBe(true);
@@ -62,9 +63,9 @@ describe('shouldAutoApprove / checkPermission（真实实现）', () => {
 });
 
 describe('requestPermission — 自动批准与规则', () => {
-  it('afe 模式直接放行，不弹窗', async () => {
+  it('auto 模式直接放行，不弹窗', async () => {
     const win = makeWin();
-    expect(await requestPermission('Bash', { command: 'ls' }, win, 'c1', { mode: 'afe' })).toBe(true);
+    expect(await requestPermission('Bash', { command: 'ls' }, win, 'c1', { mode: 'auto' })).toBe(true);
     expect(win.webContents.send).not.toHaveBeenCalled();
   });
 
@@ -85,6 +86,39 @@ describe('requestPermission — 自动批准与规则', () => {
 
   it('无窗口时拒绝', async () => {
     expect(await requestPermission('Bash', { command: 'ls' }, null, 'c1', { mode: 'ask' })).toBe(false);
+  });
+});
+
+describe('requestPermission — 审批疲劳统计（Oversight）', () => {
+  beforeEach(() => approvalFatigue.reset());
+
+  it('auto 自动放行计入 auto', async () => {
+    const win = makeWin();
+    await requestPermission('Bash', { command: 'ls' }, win, 'c1', { mode: 'auto', agentId: 'agent-a' });
+    expect(approvalFatigue.state('agent-a').auto).toBe(1);
+    expect(win.webContents.send).not.toHaveBeenCalled();
+  });
+
+  it('人工同意计入 approved', async () => {
+    const win = makeWin();
+    const p = requestPermission('Bash', { command: 'ls' }, win, 'c1', { mode: 'ask', agentId: 'agent-b' });
+    const sent = win.webContents.send.mock.calls[0][1] as any;
+    await handler('permission:respond')({}, sent.requestId, true);
+    await p;
+    const state = approvalFatigue.state('agent-b');
+    expect(state.approvals).toBe(1);
+    expect(state.rejections).toBe(0);
+  });
+
+  it('人工拒绝计入 rejected', async () => {
+    const win = makeWin();
+    const p = requestPermission('Write', { file_path: 'a.ts', content: 'x' }, win, 'c1', { mode: 'ask', agentId: 'agent-c' });
+    // Write 在发弹窗前有一次异步读文件，需等微任务完成。
+    await vi.waitFor(() => { expect(win.webContents.send).toHaveBeenCalled(); });
+    const sent = win.webContents.send.mock.calls[0][1] as any;
+    await handler('permission:respond')({}, sent.requestId, false);
+    await p;
+    expect(approvalFatigue.state('agent-c').rejections).toBe(1);
   });
 });
 

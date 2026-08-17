@@ -183,4 +183,28 @@ describe('tool-runner', () => {
     expect(onToolStart).toHaveBeenCalledTimes(1);
     expect(onToolResult).toHaveBeenCalledTimes(1);
   });
+
+  it('riskGate 拒绝信任不足的高危工具且不执行', async () => {
+    const exec = vi.fn(async () => ({ output: 'should-not-run' }));
+    const onToolResult = vi.fn();
+    const results = await runToolBatch(
+      [
+        { id: 'a', name: 'Write', input: { file_path: 'a.ts' } },
+        { id: 'b', name: 'Read', input: { file_path: 'a.ts' } },
+      ],
+      mkCtx({
+        executeTool: exec as any,
+        riskGate: async (name) => (name === 'Write'
+          ? { allowed: false, reason: '证据信任不足' }
+          : { allowed: true }),
+      }),
+      mkCallbacks({ onToolResult }),
+    );
+    expect(results[0].error).toContain('记忆风险门控拒绝');
+    expect(results[0].error).toContain('证据信任不足');
+    expect(results[1].output).toBe('should-not-run');
+    expect(exec).toHaveBeenCalledTimes(1);
+    expect(exec).toHaveBeenCalledWith('Read', expect.any(Object), expect.any(Object));
+    expect(onToolResult).toHaveBeenCalledTimes(2);
+  });
 });

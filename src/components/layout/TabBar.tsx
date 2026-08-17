@@ -76,7 +76,8 @@ export default function TabBar() {
             closeTab(key as string);
           }
         }}
-        type="card"
+        // antd v5：card 类型不渲染关闭按钮，必须用 editable-card 才能关标签。
+        type="editable-card"
         size="small"
         className="m-0 px-1 bg-secondary min-h-[40px]"
         addIcon={

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { Modal } from 'antd';
+import { Modal, message } from 'antd';
 import {
   NEW_CHAT_ICON,
   SidebarSimple,
@@ -8,23 +8,23 @@ import { useChatStore } from '@/stores/useChatStore';
 import { useAppStore } from '@/stores/useAppStore';
 import { useAgentStore } from '@/stores/useAgentStore';
 import { useSessionStore } from '@/stores/useSessionStore';
-import { ACCOUNT_NAME } from '../../constants/account';
+import { useSettingsStore } from '@/stores/useSettingsStore';
+import { useAuthStore } from '../../stores/useAuthStore';
 import { t, useT } from '../../i18n';
+import { getContentText } from '../../types/chat';
 import MessageList from '../chat/MessageList';
 import ChatInput from '../input/ChatInput';
 import HeaderModeSwitcher from './HeaderModeSwitcher';
 
 const AgentConversation = lazy(() => import('../agent/AgentConversation'));
+const WorkItemView = lazy(() => import('../work/WorkItemView'));
 const ScheduledPanel = lazy(() => import('../tools/ScheduledPanel'));
 const NotificationsPanel = lazy(() => import('../tools/NotificationsPanel'));
 const PluginsPanel = lazy(() => import('../tools/PluginsPanel'));
 import QuickActionsPanel from '../inspector/QuickActionsPanel';
-import ExecutingIndicator from '../common/ExecutingIndicator';
-import StateDot from '../common/StateDot';
-import { compactChatContext, forkCurrentChatSession } from '../../utils/chatActions';
+import WorkHomeOverview from '../work/WorkHomeOverview';
+import FirstRunHint from '../chat/FirstRunHint';
 import logoPng from '../../assets/auraxis-logo.png';
-
-const CONTEXT_WINDOW = 1_000_000;
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -36,6 +36,7 @@ function greeting(): string {
 
 export default function ChatArea() {
   const tConv = useT();
+  const accountName = useAuthStore((s) => s.name);
   const messages = useChatStore((s) => s.messages);
   const [replayOpen, setReplayOpen] = useState(false);
   const [replayEvents, setReplayEvents] = useState<Array<{ seq: number; type: string; ts: number; data: Record<string, unknown> }>>([]);
@@ -45,27 +46,27 @@ export default function ChatArea() {
   const dockRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const hasMessages = messages.length > 0;
-  const selectedModel = useChatStore((s) => s.selectedModel);
-  const inputTokens = useChatStore((s) => s.exactInputTokens);
-  const outputTokens = useChatStore((s) => s.exactOutputTokens);
-  const reasoningTokens = useChatStore((s) => s.reasoningOutputTokens);
   const sidebarMode = useAppStore((s) => s.sidebarMode);
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const activeToolView = useAppStore((s) => s.activeToolView);
   const setActiveToolView = useAppStore((s) => s.setActiveToolView);
-  const isCode = sidebarMode === 'code';
+  const projectPath = useSettingsStore((s) => s.projectPath);
+  /** Work / Agent share the agent-capable surface; chat is pure conversation. */
+  const isAgentSurface = sidebarMode !== 'chat';
   const currentAgentId = useAgentStore((s) => s.currentAgentId);
   const currentAgent = useAgentStore((s) => s.agents.find((a) => a.id === currentAgentId));
+  const sessionTitle = useSessionStore((s) => s.sessions.find((x) => x.id === s.currentSessionId)?.title ?? '');
   // Divider appears whenever a conversation view is active (chat has messages
   // or an Agent task is selected), and hides only when maximized.
-  const showChatDivider = ((!isCode && hasMessages) || (isCode && !!currentAgentId)) && !isMaximized;
-
-  const totalTokens = inputTokens + outputTokens + reasoningTokens;
+  const showChatDivider = ((!isAgentSurface && hasMessages) || (isAgentSurface && !!currentAgentId)) && !isMaximized;
 
   // Composer floats over the full-height message area — track its real height
   // so the message list can reserve scroll room for the last message.
-  const composerBottom = isCode || hasMessages;
+  // Work 首页只保留中央输入区：只要当前没有 Work 任务（含残留的 Code 任务
+  // 或聊天会话），就绝不渲染底部 Dock，避免双输入框叠加。
+  const workHome = sidebarMode === 'work' && currentAgent?.surface !== 'work';
+  const composerBottom = (isAgentSurface || hasMessages) && !workHome;
   useEffect(() => {
     if (!composerBottom) return;
     const el = dockRef.current;
@@ -78,7 +79,15 @@ export default function ChatArea() {
     ro.observe(el);
     setComposerHeight(Math.round(el.getBoundingClientRect().height));
     return () => ro.disconnect();
-  }, [composerBottom, hasMessages, isCode]);
+  }, [composerBottom, hasMessages, isAgentSurface]);
+
+  // 切换模式后选中的任务偶尔不在本地 store（如残留 Code 任务）：从后端
+  // 重新拉取，避免回到“新建界面”丢失执行视图。
+  useEffect(() => {
+    if (sidebarMode !== 'chat' && currentAgentId && !currentAgent) {
+      void useAgentStore.getState().refreshStates();
+    }
+  }, [sidebarMode, currentAgentId, currentAgent]);
 
   // Top hairline: only while the conversation is running AND the window is
   // not maximized — a maximized surface stays clean, a restored window gets
@@ -128,7 +137,7 @@ export default function ChatArea() {
           onClick={() => setActiveToolView('none')}
           aria-hidden="true"
         />
-        <div className="absolute inset-y-0 right-0 z-40 w-[440px] max-w-[85%] flex flex-col bg-[var(--color-bg-primary)] border-l border-[var(--color-border-dim)] shadow-[var(--shadow-lg)]">
+        <div className="absolute inset-y-0 right-0 z-40 w-[440px] max-w-[85%] flex flex-col bg-[var(--color-bg-elevated)] border-l border-[var(--color-border-dim)] shadow-[var(--shadow-lg)]">
           <Suspense fallback={null}>
             {activeToolView === 'notifications' && <NotificationsPanel onClose={() => setActiveToolView('none')} />}
             {activeToolView === 'scheduled' && <ScheduledPanel onClose={() => setActiveToolView('none')} />}
@@ -150,7 +159,7 @@ export default function ChatArea() {
         className={
           'absolute inset-x-0 top-0 z-30 grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 pt-3 '
           + (showChatDivider
-            ? 'pb-2 border-b border-[var(--color-border-default)]'
+            ? 'pb-2 border-b border-[var(--color-border-dim)]'
             : 'pb-1')
         }
         data-divider={showChatDivider ? 'on' : 'off'}
@@ -161,10 +170,11 @@ export default function ChatArea() {
         />
         <div className="relative z-[1] flex items-center gap-2 min-w-0">
           {sidebarCollapsed && (
-            <>
+            <div className="ax-header-capsule shrink-0">
+              <div style={{ width: 1 }} aria-hidden="true" />
               <button
                 type="button"
-                className="ax-header-action shrink-0"
+                className="ax-header-capsule-btn"
                 onClick={toggleSidebar}
                 title={tConv('sidebar.expand')}
                 aria-label={tConv('sidebar.expand')}
@@ -173,10 +183,9 @@ export default function ChatArea() {
               </button>
               <button
                 type="button"
-                className="ax-header-action shrink-0"
+                className="ax-header-capsule-btn"
                 onClick={() => {
-                  if (isCode) {
-                    useAppStore.getState().setSidebarMode('code');
+                  if (isAgentSurface) {
                     useAgentStore.getState().setCurrentAgent(null);
                     useChatStore.getState().setPendingNewTask(true);
                   } else {
@@ -188,72 +197,87 @@ export default function ChatArea() {
               >
                 {NEW_CHAT_ICON}
               </button>
-            </>
-          )}
-          {isCode && currentAgentId && currentAgent && (
-            <div className="flex items-center gap-1.5 min-w-0">
-              {currentAgent.status === 'running' ? (
-                <ExecutingIndicator size={14} />
-              ) : (
-                <StateDot
-                  size={8}
-                  className="shrink-0"
-                  state={currentAgent.status === 'completed'
-                    ? 'done'
-                    : currentAgent.status === 'error' || currentAgent.status === 'stopped'
-                      ? 'error'
-                      : currentAgent.status === 'paused'
-                        ? 'warning'
-                        : 'done'}
-                />
-              )}
-              <span className="shrink-0 w-px h-4 bg-[var(--color-border-dim)]" />
-              <button
-                type="button"
-                className="shrink-0 px-1.5 py-[2px] rounded-md border-none bg-transparent text-2xs text-text-muted cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-secondary"
-                onClick={() => void compactChatContext()}
-                title={tConv('conv.compressTip')}
-              >
-                {tConv('conv.compress')}
-              </button>
-              <button
-                type="button"
-                className="shrink-0 px-1.5 py-[2px] rounded-md border-none bg-transparent text-2xs text-text-muted cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-secondary"
-                onClick={forkCurrentChatSession}
-                title={tConv('conv.forkTip')}
-              >
-                {tConv('conv.fork')}
-              </button>
             </div>
           )}
+          {isAgentSurface && currentAgentId && currentAgent ? (
+            <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-text-primary">
+              {currentAgent.name || currentAgent.description || '—'}
+            </span>
+          ) : sessionTitle ? (
+            <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-text-primary">
+              {sessionTitle}
+            </span>
+          ) : null}
         </div>
         <div className="relative z-[1] min-w-0">
           <HeaderModeSwitcher />
         </div>
         <div className="relative z-[1] flex justify-end items-center gap-2 min-w-0">
-          {hasMessages && (
-            <button
-              type="button"
-              className="text-2xs text-text-muted px-2 py-1 rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-secondary"
-              onClick={openReplay}
-            >
-              {tConv('chat.sessionLog')}
-            </button>
+          {sidebarMode === 'chat' && hasMessages && (
+            <>
+              <button
+                type="button"
+                className="text-2xs text-text-muted px-2 py-1 rounded-md cursor-pointer whitespace-nowrap hover:bg-[var(--color-hover)] hover:text-text-secondary"
+                onClick={async () => {
+                  const text = messages
+                    .filter((m) => !m.permissionRequest)
+                    .map((m) => `${m.role === 'user' ? tConv('chat.userLabelShort') : tConv('chat.assistantLabelShort')}:\n${getContentText(m.content)}`)
+                    .join('\n\n---\n\n');
+                  try {
+                    await navigator.clipboard.writeText(text);
+                    message.success(tConv('chat.copied'));
+                  } catch {
+                    message.error(tConv('chat.copyFailed'));
+                  }
+                }}
+              >
+                {tConv('chat.copyConversation')}
+              </button>
+              <button
+                type="button"
+                className="text-2xs text-text-muted px-2 py-1 rounded-md cursor-pointer whitespace-nowrap hover:bg-[var(--color-hover)] hover:text-text-secondary"
+                onClick={openReplay}
+              >
+                {tConv('chat.sessionLog')}
+              </button>
+            </>
           )}
         </div>
       </div>
       <div className="flex flex-1 min-h-0">
         <div className="relative flex-1 min-w-0 flex flex-col min-h-0">
-          {isCode && currentAgentId ? (
-        /* Code mode with a selected task: live execution view — completed /
+          {sidebarMode === 'work' && currentAgentId && currentAgent?.surface === 'work' ? (
+            /* Work mode with a selected work item: plan → execution →
+               deliverables job view — a different system from the code log. */
+            <div className="flex-1 min-h-0 flex flex-col">
+              <Suspense fallback={<div className="flex-1 min-h-0" />}>
+                <WorkItemView
+                  agent={currentAgent}
+                  headerInset={headerHeight}
+                  bottomInset={composerHeight}
+                />
+              </Suspense>
+            </div>
+          ) : sidebarMode === 'work' ? (
+            /* Work-mode home: 先只保留中央输入框，卡片后续重新设计。 */
+            <>
+              <div className="absolute inset-x-0 top-16 z-10 flex justify-center pointer-events-none">
+                <div className="pointer-events-auto w-full max-w-[720px] mx-auto px-6 flex justify-center">
+                  <WorkHomeOverview />
+                </div>
+              </div>
+              <ChatInput position="center" heroSubtitleKey="chat.fromWork" />
+            </>
+          ) : isAgentSurface && currentAgentId ? (
+        /* Agent/Work mode with a selected task: live execution view — completed /
            stopped tasks stay viewable as history. */
             <div className="flex-1 min-h-0 flex flex-col">
               <Suspense fallback={<div className="flex-1 min-h-0" />}>
                 <AgentConversation headerInset={headerHeight} bottomInset={composerHeight} />
               </Suspense>
             </div>
-          ) : isCode ? (
-            /* Code-mode home: personal dashboard (always show when no active agent task).
+          ) : isAgentSurface ? (
+            /* Agent/Work-mode home: personal dashboard (always show when no active agent task).
                Centered scroll column mirrors chat mode, so the scrollbar sits
                at the same X position with the same global styling. */
             <div className="flex-1 min-h-0 flex flex-row min-w-0">
@@ -266,7 +290,8 @@ export default function ChatArea() {
                     <span className="flex items-center gap-2">
                       <img src={logoPng} alt="Auraxis" className="w-9 h-9 object-contain" />
                       <span className="text-2xl font-medium text-text-primary tracking-[0.01em]">
-                        {ACCOUNT_NAME ? `${ACCOUNT_NAME}，` : ''}{greeting()}，
+                        {greeting()}，
+                        {accountName && <span>{accountName}</span>}
                       </span>
                     </span>
                     <span className="text-md font-semibold leading-6 text-[var(--color-text-muted)]">
@@ -283,8 +308,15 @@ export default function ChatArea() {
             <MessageList bottomInset={composerHeight} headerInset={headerHeight} />
           ) : null}
 
+          {/* 首次运行引导：无项目时给出最短上手路径 */}
+          {sidebarMode === 'chat' && !hasMessages && !projectPath && (
+            <div className="absolute inset-x-0 top-16 z-10 flex justify-center pointer-events-none">
+              <div className="pointer-events-auto"><FirstRunHint /></div>
+            </div>
+          )}
+
           {/* Agent-mode empty state: same 品牌光晕 behind the pinned composer. */}
-          {isCode && !hasMessages && <div className="ax-hero-glow" aria-hidden="true" />}
+          {isAgentSurface && sidebarMode !== 'work' && !hasMessages && <div className="ax-hero-glow" aria-hidden="true" />}
 
           {/* Messages own the whole main area; the composer + context meter
               float above them, so scrolling continues underneath the dock. */}
@@ -295,21 +327,13 @@ export default function ChatArea() {
                 aria-hidden="true"
               />
               <div className="relative z-[1] pointer-events-auto">
-                {hasMessages && totalTokens > 0 && (
-                  <div className="ax-context-meter flex items-center justify-center gap-2 shrink-0 px-4 py-1 font-mono tabular-nums">
-                    <span className="max-w-[160px] overflow-hidden text-ellipsis whitespace-nowrap">{selectedModel}</span>
-                    <span className="w-[3px] h-[3px] rounded-full bg-text-faint opacity-50" />
-                    <span className="whitespace-nowrap">
-                      {totalTokens.toLocaleString()} / {CONTEXT_WINDOW.toLocaleString()} tokens
-                    </span>
-                  </div>
-                )}
                 <ChatInput position="bottom" />
               </div>
             </div>
-          ) : (
+          ) : sidebarMode !== 'work' ? (
+            /* Chat 空状态首页的中央输入框（Work 首页已在分支内渲染，避免重复）。 */
             <ChatInput position="center" />
-          )}
+          ) : null}
         </div>
       </div>
 

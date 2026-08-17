@@ -7,7 +7,7 @@ import TerminalDrawer from '../TerminalDrawer';
 describe('TerminalDrawer — 底部终端抽屉', () => {
   it('renders the grabber and terminal surface', () => {
     const { getByLabelText, container } = render(
-      <TerminalDrawer height={300} onChange={() => {}} onClose={() => {}} />,
+      <TerminalDrawer open height={300} onChange={() => {}} onClose={() => {}} />,
     );
     expect(getByLabelText('拖动调整终端高度')).toBeTruthy();
     expect(container.textContent).toContain('集成终端');
@@ -16,7 +16,7 @@ describe('TerminalDrawer — 底部终端抽屉', () => {
   it('drags to change height with clamping', () => {
     const onChange = vi.fn();
     const { getByLabelText } = render(
-      <TerminalDrawer height={300} onChange={onChange} onClose={() => {}} />,
+      <TerminalDrawer open height={300} onChange={onChange} onClose={() => {}} />,
     );
     fireEvent.pointerDown(getByLabelText('拖动调整终端高度'), { clientY: 500 });
     fireEvent.pointerMove(window, { clientY: 200 });

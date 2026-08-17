@@ -31,7 +31,7 @@ export default function ToolViewShell({
   const t = useT();
   return (
     <div className="h-full w-full flex flex-col overflow-hidden">
-      <header className="shrink-0 flex items-center gap-2.5 px-3 pt-2.5 pb-2">
+      <header className="shrink-0 flex items-center gap-2.5 px-3 pt-2.5 pb-2 border-b border-[var(--color-border-dim)]">
         <span className="shrink-0 flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--color-bg-inset)] text-primary">
           {icon}
         </span>

@@ -13,12 +13,33 @@ import type {
   ChatSessionSummary,
   ProjectedChatSession,
 } from '../../electron/chat-log-types';
+import type {
+  BeliefRecord,
+  BeliefRejection,
+  EvidenceRecord,
+  ReadResultRecord,
+  SignalRecord,
+} from '../../electron/ipc/memory-db';
+import type { MemoryReadResult, ReadTrace } from '../../electron/ipc/memory-read';
+import type { AuthChangePasswordParams, AuthLoginParams, AuthPhase, AuthSetupParams, AuthStatus } from '../../electron/contracts/auth';
+import type { ProjectGlobalState } from '../../electron/contracts/project';
 
 // Re-export for convenience
 export type { ApplyCodePayload, ApplyCodeResult, FileSearchResult, FileResult, DirectoryEntry, ModelDefinition, WorkspaceFileDiff };
+export type { AuthPhase, AuthStatus, AuthSetupParams, AuthLoginParams, AuthChangePasswordParams };
 
 export interface AIStreamCallbacks {
   onChunk: (text: string) => void;
+  /** DeepSeek thinking mode 的 reasoning_content 流（仅 Chat 路径）。 */
+  onThinking?: (text: string) => void;
+  /** 流式末尾 usage（含推理 tokens 与上下文缓存命中）。 */
+  onUsage?: (usage: {
+    inputTokens: number;
+    outputTokens: number;
+    reasoningTokens?: number;
+    cacheHitTokens?: number;
+    cacheMissTokens?: number;
+  }) => void;
   onDone: () => void;
   onError: (error: string) => void;
 }
@@ -56,7 +77,7 @@ export interface PermissionProfile {
   name: string;
   description?: string;
   builtin?: boolean;
-  toolPolicy: 'ask' | 'plan' | 'afe';
+  toolPolicy: 'ask' | 'plan' | 'auto';
   fileScopes: { pattern: string; access: 'read' | 'write' | 'deny' }[];
   networkScopes: { pattern: string; access: 'allow' | 'deny' }[];
 }
@@ -79,6 +100,14 @@ export interface RuntimePluginInfo {
 export interface ElectronAPI {
   platform: string;
   homePath: string;
+  auth: {
+    status: () => Promise<{ ok: boolean; data?: AuthStatus; error?: string }>;
+    setup: (params: AuthSetupParams) => Promise<{ ok: boolean; error?: string }>;
+    login: (params: AuthLoginParams) => Promise<{ ok: boolean; error?: string }>;
+    logout: () => Promise<{ ok: boolean; error?: string }>;
+    changePassword: (params: AuthChangePasswordParams) => Promise<{ ok: boolean; error?: string }>;
+    setAvatar: (avatar: string) => Promise<{ ok: boolean; error?: string }>;
+  };
   minimize: () => Promise<void>;
   maximize: () => Promise<void>;
   close: () => Promise<void>;
@@ -88,6 +117,7 @@ export interface ElectronAPI {
   zoom: (delta: number | null) => Promise<number>;
   setBackgroundMaterial: (enabled: boolean) => Promise<{ ok: boolean; error?: string }>;
   backgroundMaterialSupported: () => Promise<{ ok: boolean; data?: boolean; error?: string }>;
+  getGlassState: () => Promise<{ ok: boolean; data?: { supported: boolean; ready: boolean }; error?: string }>;
 
   file: {
     open: (projectRoot?: string) => Promise<{ ok: boolean; data?: FileResult[]; error?: string }>;
@@ -115,6 +145,8 @@ export interface ElectronAPI {
     applyCode: (payload: ApplyCodePayload) => Promise<ApplyCodeResult>;
     previewCode: (payload: ApplyCodePayload) => Promise<{ ok: boolean; url?: string; filePath?: string; error?: string }>;
     selectDirectory: () => Promise<{ ok: boolean; data?: string | null; error?: string }>;
+    loadGlobalState: () => Promise<{ ok: boolean; data?: ProjectGlobalState; error?: string }>;
+    saveGlobalState: (state: ProjectGlobalState) => Promise<{ ok: boolean; error?: string }>;
   };
 
   ai: {
@@ -122,28 +154,43 @@ export interface ElectronAPI {
       model: string;
       messages: { role: string; content: string }[];
       isDeepThink: boolean;
-      reasoningEffort?: 'high' | 'max';
+      reasoningEffort?: 'low' | 'high' | 'max';
       isWebSearch: boolean;
       apiKey?: string;
-      surface?: 'chat' | 'code';
+      surface?: 'chat' | 'work' | 'code';
+      /** 对话前缀续写（Beta）：强制模型从给定 assistant 前缀继续输出。 */
+      prefix?: { content: string; stop?: string[] };
     }, callbacks: AIStreamCallbacks) => AIStreamSubscription;
     abortStream: (requestId: string) => Promise<void>;
+    /** FIM 补全（Beta）：中间填充，供编辑器/行内补全使用。 */
+    fim: (params: {
+      model: string;
+      apiKey?: string;
+      prompt: string;
+      suffix?: string;
+      maxTokens?: number;
+    }) => Promise<{ ok: boolean; data?: { text: string }; error?: string }>;
     sendQuery: (request: {
+      sessionId?: string;
       model: string;
       messages: { role: string; content: string }[];
+      memoryContext?: string;
       isDeepThink: boolean;
-      reasoningEffort?: 'high' | 'max';
+      reasoningEffort?: 'low' | 'high' | 'max';
       projectRoot: string;
       autoApprove?: boolean;
+      mode?: 'ask' | 'plan' | 'auto';
       apiKey?: string;
+      maxIterations?: number;
       approvedPlanSteps?: string[];
-      surface?: 'chat' | 'code';
+      surface?: 'chat' | 'work' | 'code';
     }, callbacks: {
       onEvent: (event: import('./tools').ToolStreamEvent) => void;
       onDone: () => void;
       onError: (error: string) => void;
     }) => AIStreamSubscription;
     abortQuery: (requestId: string) => Promise<void>;
+    clearQueryContext: (sessionId: string) => Promise<{ ok: boolean; error?: string }>;
     abortTool: (requestId: string, toolCallId: string) => Promise<{ ok: boolean }>;
     retryTool: (requestId: string, toolName: string) => Promise<{ ok: boolean; error?: string }>;
     setApiKey: (apiKey: string) => Promise<void>;
@@ -167,6 +214,35 @@ export interface ElectronAPI {
     }>;
   };
 
+  instructions: {
+    getGlobal: () => Promise<{ ok: boolean; data?: { path: string; content: string }; error?: string }>;
+    setGlobal: (content: string) => Promise<{ ok: boolean; error?: string }>;
+    listProject: (projectRoot: string) => Promise<{
+      ok: boolean;
+      data?: { relPath: string; hasOverride: boolean; hasAgents: boolean }[];
+      error?: string;
+    }>;
+    get: (projectRoot: string, relPath?: string) => Promise<{
+      ok: boolean;
+      data?: { path: string; content: string; relPath: string };
+      error?: string;
+    }>;
+    set: (projectRoot: string, relPath: string | undefined, content: string) =>
+      Promise<{ ok: boolean; error?: string }>;
+  };
+
+  connectors: {
+    status: () => Promise<{
+      ok: boolean;
+      data?: { kind: 'slack' | 'drive' | 'notion'; configured: boolean; tokenHint?: string }[];
+      error?: string;
+    }>;
+    setToken: (kind: 'slack' | 'drive' | 'notion', token: string) =>
+      Promise<{ ok: boolean; error?: string }>;
+    test: (kind: 'slack' | 'drive' | 'notion') =>
+      Promise<{ ok: boolean; data?: { ok: boolean; message: string }; error?: string }>;
+  };
+
   permission: {
     respond: (requestId: string, allowed: boolean) => Promise<{ ok: boolean }>;
     addRule: (rule: import('./advanced').PermissionRule, requestId: string) => Promise<{ ok: boolean }>;
@@ -179,6 +255,13 @@ export interface ElectronAPI {
   permissionProfile: {
     list: () => Promise<{ ok: boolean; data?: { profiles: PermissionProfile[]; activeId: string }; error?: string }>;
     save: (custom: PermissionProfile[], activeId: string) => Promise<{ ok: boolean; error?: string }>;
+    listProjectProfiles: () => Promise<{
+      ok: boolean;
+      data?: { profiles: PermissionProfile[]; activeId: string; overrides: Record<string, string> };
+      error?: string;
+    }>;
+    setProjectProfile: (path: string, profileId: string | null) => Promise<{ ok: boolean; error?: string }>;
+    moveProjectProfile: (from: string, to: string) => Promise<{ ok: boolean; error?: string }>;
   };
 
   ask: {
@@ -208,6 +291,7 @@ export interface ElectronAPI {
     pause: (agentId: string) => Promise<{ ok: boolean; data?: { paused: boolean } }>;
     resume: (agentId: string) => Promise<{ ok: boolean; data?: { resumed: boolean } }>;
     continue: (agentId: string, instruction: string, displayInstruction?: string) => Promise<{ ok: boolean; data?: { continued: boolean }; error?: string }>;
+    approveDelivery: (agentId: string) => Promise<{ ok: boolean; data?: { approved: boolean }; error?: string }>;
     setPriority: (agentId: string, priority: string) => Promise<{ ok: boolean }>;
     getQueue: () => Promise<{ ok: boolean; data?: { running: any[]; queued: any[] } }>;
     setMaxConcurrent: (n: number) => Promise<{ ok: boolean }>;
@@ -231,6 +315,10 @@ export interface ElectronAPI {
     get: () => Promise<{ ok: boolean; data?: unknown; error?: string }>;
   };
 
+  tokenizer?: {
+    count: (text: string) => Promise<{ ok: boolean; data?: number; error?: string }>;
+  };
+
   memory: {
     extract: (sessionContext: any) => Promise<{ ok: boolean; data?: any[]; error?: string }>;
     getByProject: (projectPath: string) => Promise<{ ok: boolean; data?: any[]; error?: string }>;
@@ -238,6 +326,37 @@ export interface ElectronAPI {
     search: (projectPath: string, query: string) => Promise<{ ok: boolean; data?: any[]; error?: string }>;
     archive: (id: string) => Promise<{ ok: boolean; error?: string }>;
     delete: (id: string) => Promise<{ ok: boolean; error?: string }>;
+    evidenceList: (projectPath: string) => Promise<{ ok: boolean; data?: EvidenceRecord[]; error?: string }>;
+    evidenceDetail: (id: string) => Promise<{
+      ok: boolean;
+      data?: { evidence: EvidenceRecord; signals: SignalRecord[] } | null;
+      error?: string;
+    }>;
+    readForQuery: (projectPath: string, query: string, opts?: unknown) =>
+      Promise<{ ok: boolean; data?: MemoryReadResult; error?: string }>;
+    beliefAudit: (id: string) => Promise<{
+      ok: boolean;
+      data?: {
+        belief: BeliefRecord;
+        evidence: {
+          evidence: EvidenceRecord;
+          support_strength: number;
+          signals: SignalRecord[];
+        }[];
+        revisions: { id: string; belief_id: string; prev_status: string | null; next_status: string; reason: string | null; actor: string; ts: number }[];
+      } | null;
+      error?: string;
+    }>;
+    readTrace: (runId: string) => Promise<{ ok: boolean; data?: ReadTrace | null; error?: string }>;
+    erase: (scope: string) => Promise<{ ok: boolean; data?: { erased: number }; error?: string }>;
+    reindex: (projectPath: string) => Promise<{
+      ok: boolean;
+      data?: { signals: number; beliefsChecked: number; rejected: number };
+      error?: string;
+    }>;
+    graph: (projectPath: string, role?: string, agent?: { id?: string; name?: string }) =>
+      Promise<{ ok: boolean; data?: any; error?: string }>;
+    rejections: (projectPath: string) => Promise<{ ok: boolean; data?: BeliefRejection[]; error?: string }>;
   };
 
   conflict: {
@@ -365,7 +484,8 @@ export interface ElectronAPI {
     project: (agentId: string) => Promise<{ ok: boolean; data?: ProjectedChatSession | null; error?: string }>;
   };
   chatLog: {
-    append: (sessionId: string, events: Array<Omit<ChatLogEvent, 'seq'>>) => Promise<{ ok: boolean; error?: string }>;
+    append: (sessionId: string, events: Array<Omit<ChatLogEvent, 'seq'>>, projectRoot?: string) =>
+      Promise<{ ok: boolean; error?: string }>;
     read: (sessionId: string) => Promise<{ ok: boolean; data?: ChatLogEvent[]; error?: string }>;
     list: () => Promise<{ ok: boolean; data?: ChatSessionSummary[]; error?: string }>;
     project: (sessionId: string) => Promise<{ ok: boolean; data?: ProjectedChatSession | null; error?: string }>;
@@ -385,7 +505,7 @@ export interface ElectronAPI {
   };
   feedback: {
     submit: (text: string) => Promise<{ ok: boolean; error?: string }>;
-    message: (record: { messageId: string; sessionId: string; rating: 'up' | 'down' | null; note?: string }) =>
+    message: (record: { messageId: string; sessionId: string; rating: 'up' | 'down' | null; note?: string; projectPath?: string }) =>
       Promise<{ ok: boolean; error?: string }>;
     messageList: (sessionId: string) => Promise<{
       ok: boolean;

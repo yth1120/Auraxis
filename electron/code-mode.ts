@@ -11,7 +11,7 @@
  */
 import { Worker } from 'worker_threads';
 import ts from 'typescript';
-import type { PermissionMode } from './types';
+import type { ApprovalPolicy } from './types';
 import type { SandboxMode } from './sandbox-policy';
 import { isToolConcurrencySafe } from './tool-registry';
 import { executeToolCall } from './ipc/tool-handlers';
@@ -22,7 +22,7 @@ export interface CodeModeHost {
   checkPermission?: (toolName: string, input: Record<string, unknown>, toolCallId?: string) => Promise<boolean>;
   autoApprove?: boolean;
   abortSignal?: AbortSignal;
-  mode: PermissionMode;
+  mode: ApprovalPolicy;
   approvedPlanSteps?: string[];
   depth?: number;
   sandboxMode?: SandboxMode;

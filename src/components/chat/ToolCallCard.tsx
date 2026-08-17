@@ -56,6 +56,14 @@ const TOOL_LABEL: Record<ToolName, string | { key: I18nKey }> = {
   RunWorkflow: 'RunWorkflow',
   RunCode: 'RunCode',
   AskUser: { key: 'tool.askUser' },
+  ReadDocument: 'ReadDocument',
+  WriteDocument: 'WriteDocument',
+  SlackListChannels: 'Slack',
+  SlackPostMessage: 'Slack',
+  DriveList: 'Drive',
+  DriveRead: 'Drive',
+  NotionSearch: 'Notion',
+  NotionCreatePage: 'Notion',
   Pty: 'PTY',
   InspectRuntime: 'InspectRuntime',
   WriteSkill: 'WriteSkill',
@@ -84,6 +92,16 @@ function formatInput(name: ToolName, input: Record<string, unknown>): string {
       return (input.file_path as string) || '';
     case 'Write':
       return (input.file_path as string) || '';
+    case 'ReadDocument':
+      return (input.file_path as string) || '';
+    case 'WriteDocument':
+      return (input.file_path as string) || '';
+    case 'SlackPostMessage':
+      return `${input.channel || ''} → ${input.text || ''}`;
+    case 'DriveRead':
+      return (input.file_id as string) || '';
+    case 'NotionCreatePage':
+      return `${input.title || ''} (${input.parent_page_id || ''})`;
     case 'Edit':
       return t('msg.replaceText', { path: String(input.file_path || '') });
     case 'Grep':
@@ -291,7 +309,7 @@ const ToolCallCard = memo(function ToolCallCard({ toolCall }: ToolCallCardProps)
                 danger
                 icon={<StopOutlined />}
                 onClick={handleAbort}
-                className="!p-0 !h-[18px] !w-[18px] !min-w-[18px] !text-text-muted hover:!text-danger"
+                className="!p-0 !h-5 !w-5 !min-w-5 !text-text-muted hover:!text-danger"
               />
             </Tooltip>
           )}
@@ -302,7 +320,7 @@ const ToolCallCard = memo(function ToolCallCard({ toolCall }: ToolCallCardProps)
                 size="small"
                 icon={<ReloadOutlined />}
                 onClick={handleRetry}
-                className="!p-0 !h-[18px] !w-[18px] !min-w-[18px] !text-text-muted hover:!text-text-primary"
+                className="!p-0 !h-5 !w-5 !min-w-5 !text-text-muted hover:!text-text-primary"
               />
             </Tooltip>
           )}

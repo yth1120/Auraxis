@@ -10,7 +10,7 @@ import { useChatStore } from '@/stores/useChatStore';
  */
 export function backfillComposer(instruction: string, agentId?: string): void {
   const app = useAppStore.getState();
-  if (app.sidebarMode !== 'code') app.setSidebarMode('code');
+  if (app.sidebarMode === 'chat') app.setSidebarMode('code');
   if (agentId) {
     useAgentStore.getState().setCurrentAgent(agentId);
   }

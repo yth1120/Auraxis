@@ -5,12 +5,16 @@ import { readErrorBody } from './agent-loop';
 import { runQuery } from './query-engine';
 import { requestPermission } from './permission-handlers';
 import { trackMessage } from './stats-handlers';
-import { readSettings } from './settings-store';
-import { resolveApiBase } from './model-config';
+import { readSettings, resolveMaxOutputTokens } from './settings-store';
+import { resolveModelApiBase, resolveModelApiKey } from './model-config';
 import { executeToolCall, abortTool } from './tool-handlers';
 import type { EngineEvent } from './engine-events';
 import { toToolStreamEvent } from './event-bridge';
+import { clearLlmContext } from './query-context';
 import { resolveCredential } from '../credentials';
+import { getDeepSeekUserId } from '../auth-store';
+import { isPermissionPreset, PERMISSION_PRESETS } from '../contracts/permission';
+import { normalizeApprovalPolicy } from '../contracts/core';
 
 const activeStreams = new Map<string, AbortController>();
 const activeQueries = new Map<string, AbortController>();
@@ -33,6 +37,7 @@ async function performWebSearch(query: string): Promise<string | null> {
       .map((r: any, i: number) => `[${i + 1}] ${r.title}\n${r.snippet}\n${r.url}`)
       .join('\n\n');
   } catch {
+    console.warn('[chatStream] 联网搜索未返回结果，已跳过（不影响主回答）');
     return null;
   }
 }
@@ -49,8 +54,27 @@ async function getApiKey(overrideKey?: string): Promise<string | null> {
   return null;
 }
 
-function sendToRenderer(win: BrowserWindow, requestId: string, type: 'chunk' | 'done' | 'error', text?: string, error?: string) {
+function sendToRenderer(win: BrowserWindow, requestId: string, type: 'chunk' | 'thinking' | 'done' | 'error', text?: string, error?: string) {
   try { win.webContents.send(`ai:chunk:${requestId}`, { requestId, type, text, error }); } catch { /* window destroyed */ }
+}
+
+function sendUsageToRenderer(
+  win: BrowserWindow,
+  requestId: string,
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    reasoningTokens?: number;
+    cacheHitTokens?: number;
+    cacheMissTokens?: number;
+  },
+) {
+  try { win.webContents.send(`ai:chunk:${requestId}`, { requestId, type: 'usage', usage }); } catch { /* window destroyed */ }
+}
+
+/** FIM 补全（Beta）走 /completions；从 chat 端点推导即可。 */
+function resolveFimApiBase(apiBase: string): string {
+  return apiBase.replace(/\/chat\/completions$/, '/completions');
 }
 
 function sendQueryEvent(win: BrowserWindow, requestId: string, type: 'done' | 'error', text?: string, error?: string) {
@@ -63,11 +87,13 @@ export function registerAiHandlers() {
     model: string;
     messages: { role: string; content: string }[];
     isDeepThink: boolean;
-    reasoningEffort?: 'high' | 'max';
+    reasoningEffort?: 'low' | 'high' | 'max';
     isWebSearch: boolean;
     apiKey?: string;
+    /** 对话前缀续写（Beta）：强制模型从给定 assistant 前缀继续输出。 */
+    prefix?: { content: string; stop?: string[] };
   }) => {
-    const { requestId, model, messages, isDeepThink, reasoningEffort, isWebSearch, apiKey } = payload;
+    const { requestId, model, messages, isDeepThink, reasoningEffort, isWebSearch, apiKey, prefix } = payload;
     const win = BrowserWindow.fromWebContents(event.sender);
 
     if (!win) {
@@ -75,8 +101,10 @@ export function registerAiHandlers() {
       return;
     }
 
-    const resolvedKey = await getApiKey(apiKey);
-    const apiBase = resolveApiBase(model);
+    const resolvedKey = apiKey || (await resolveModelApiKey(model)) || (await getApiKey(undefined));
+    const apiBase = await resolveModelApiBase(model);
+    const settings = await readSettings().catch(() => null) as Record<string, unknown> | null;
+    const maxOutputTokens = resolveMaxOutputTokens(settings);
     if (!resolvedKey) {
       sendToRenderer(win, requestId, 'error', undefined, '未配置 DeepSeek API Key。请在设置中添加或在环境变量中设置。');
       return;
@@ -108,7 +136,7 @@ export function registerAiHandlers() {
 
     try {
       const searchResults = await searchPromise;
-      await streamDeepSeek({ model, messages, isDeepThink, reasoningEffort, isWebSearch }, resolvedKey, apiBase, requestId, win, signal, searchResults);
+      await streamDeepSeek({ model, messages, isDeepThink, reasoningEffort, isWebSearch, prefix, maxTokens: maxOutputTokens }, resolvedKey, apiBase, requestId, win, signal, searchResults);
       emitDone();
     } catch (error: any) {
       if (error.name === 'AbortError') { emitDone(); return; }
@@ -118,6 +146,12 @@ export function registerAiHandlers() {
         sendToRenderer(win, requestId, 'error', undefined, 'API Key 无效或已过期。');
       } else if (error.response?.status === 429) {
         sendToRenderer(win, requestId, 'error', undefined, '请求过于频繁，请稍后重试。');
+      } else if (error.response?.status === 402) {
+        sendToRenderer(win, requestId, 'error', undefined, '账户余额不足，请前往 DeepSeek 平台充值后重试。');
+      } else if (error.response?.status === 503) {
+        sendToRenderer(win, requestId, 'error', undefined, '服务繁忙，请稍后重试。');
+      } else if (error.response?.status === 500) {
+        sendToRenderer(win, requestId, 'error', undefined, '服务器故障，请稍后重试。');
       } else if (error.response?.status) {
         const errorBody = await readErrorBody(error);
         let detail = '';
@@ -141,19 +175,56 @@ export function registerAiHandlers() {
     }
   });
 
+  ipcMain.handle('ai:fim', async (_event, params: {
+    model: string;
+    apiKey?: string;
+    prompt: string;
+    suffix?: string;
+    maxTokens?: number;
+  }) => {
+    const { model, apiKey, prompt, suffix, maxTokens } = params ?? {};
+    const resolvedKey = apiKey || (await resolveModelApiKey(model)) || (await getApiKey(undefined));
+    if (!resolvedKey) return { ok: false, error: '未配置 DeepSeek API Key。' };
+    const apiBase = resolveFimApiBase(await resolveModelApiBase(model));
+    try {
+      const body: Record<string, unknown> = {
+        model,
+        prompt,
+        max_tokens: Math.min(Math.max(maxTokens ?? 512, 16), 4096),
+        stream: false,
+        temperature: 0.2,
+      };
+      if (suffix) body.suffix = suffix;
+      const response = await axios.post(apiBase, body, {
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resolvedKey}` },
+        timeout: 60_000,
+      });
+      const text = typeof response.data?.choices?.[0]?.text === 'string'
+        ? response.data.choices[0].text
+        : '';
+      return { ok: true, data: { text } };
+    } catch (error: any) {
+      return { ok: false, error: error?.message ?? String(error) };
+    }
+  });
+
   ipcMain.handle('ai:sendQuery', async (event, payload: {
     requestId: string;
+    sessionId?: string;
     model: string;
     messages: { role: string; content: string }[];
+    memoryContext?: string;
     isDeepThink: boolean;
-    reasoningEffort?: 'high' | 'max';
+    reasoningEffort?: 'low' | 'high' | 'max';
     projectRoot: string;
     autoApprove?: boolean;
+    mode?: string;
     apiKey?: string;
+    maxIterations?: number;
     approvedPlanSteps?: string[];
-    surface?: 'chat' | 'code';
+    surface?: 'chat' | 'work' | 'code';
   }) => {
-    const { requestId, model, messages, isDeepThink, reasoningEffort, projectRoot, autoApprove, apiKey, approvedPlanSteps, surface } = payload;
+    const { requestId, sessionId, model, messages, memoryContext, isDeepThink, reasoningEffort, projectRoot, autoApprove, mode, apiKey, maxIterations, approvedPlanSteps, surface } = payload;
     const win = BrowserWindow.fromWebContents(event.sender);
 
     if (!win) {
@@ -164,16 +235,22 @@ export function registerAiHandlers() {
     // Backend-enforced mode isolation: the unified tool/agent engine must
     // never run for a chat-mode request, even if the renderer misbehaves.
     if (surface === 'chat') {
-      sendQueryEvent(win, requestId, 'error', undefined, '对话模式不支持 Agent 功能，请切换到 Work 或 Agent 模式。');
+      sendQueryEvent(win, requestId, 'error', undefined, 'Chat 模式不支持 Agent 功能，请切换到 Work 或 Code 模式。');
       return;
     }
 
-    const resolvedKey = await getApiKey(apiKey || undefined);
-    const apiBase = resolveApiBase(model);
+    const resolvedKey = apiKey || (await resolveModelApiKey(model)) || (await getApiKey(undefined));
+    const apiBase = await resolveModelApiBase(model);
     const settings = await readSettings().catch(() => null) as Record<string, any> | null;
-    const sandboxMode = settings?.sandboxMode === 'read' || settings?.sandboxMode === 'workspace-write' || settings?.sandboxMode === 'full'
-      ? settings.sandboxMode
-      : 'workspace-write';
+    const presetSpec = isPermissionPreset(settings?.permissionPreset)
+      ? PERMISSION_PRESETS[settings.permissionPreset]
+      : undefined;
+    const sandboxMode = presetSpec?.sandboxMode
+      ?? (settings?.sandboxMode === 'read' || settings?.sandboxMode === 'workspace-write' || settings?.sandboxMode === 'full'
+        ? settings.sandboxMode
+        : 'workspace-write');
+    const approval = normalizeApprovalPolicy(mode ?? presetSpec?.mode ?? 'ask');
+    const effectiveAutoApprove = autoApprove ?? presetSpec?.autoApprove ?? false;
 
     if (!resolvedKey) {
       sendQueryEvent(win, requestId, 'error', undefined, '未配置 DeepSeek API Key。请在设置中添加。');
@@ -188,19 +265,23 @@ export function registerAiHandlers() {
     for (let i = 0; i < userMsgCount; i++) trackMessage().catch(() => {});
 
     try {
-      const checkPermission = autoApprove
+      const checkPermission = effectiveAutoApprove
         ? () => Promise.resolve(true)
         : (toolName: string, input: Record<string, unknown>, toolCallId?: string) =>
-            requestPermission(toolName, input, win, toolCallId, { mode: 'ask', approvedPlanSteps, projectRoot });
+            requestPermission(toolName, input, win, toolCallId, { mode: approval, approvedPlanSteps, projectRoot });
 
       nudgeQueues.set(requestId, []);
       await runQuery(
         {
-          requestId, model, messages, isDeepThink, reasoningEffort, projectRoot, apiKey: resolvedKey, apiBase, checkPermission,
-          autoApprove,
-          mode: 'ask',
+          requestId, sessionId, model, messages, memoryContext, isDeepThink, reasoningEffort, projectRoot, apiKey: resolvedKey, apiBase, checkPermission,
+          autoApprove: effectiveAutoApprove,
+          mode: approval,
+          maxIterations,
+          fallbackModel: (settings?.fallbackModel as string) || undefined,
           sandboxMode,
           approvedPlanSteps,
+          surface,
+          clarifyBeforeWork: settings?.clarifyBeforeWork !== false,
           win,
           getPendingNudge: () => {
             const q = nudgeQueues.get(requestId);
@@ -223,6 +304,15 @@ export function registerAiHandlers() {
     } finally {
       activeQueries.delete(requestId);
       nudgeQueues.delete(requestId);
+    }
+  });
+
+  ipcMain.handle('ai:clearQueryContext', async (_event, sessionId: string) => {
+    try {
+      await clearLlmContext(sessionId);
+      return { ok: true };
+    } catch (error: any) {
+      return { ok: false, error: error?.message ?? String(error) };
     }
   });
 
@@ -278,6 +368,12 @@ export function registerAiHandlers() {
       if (err.response?.status === 429) {
         return { ok: false, error: '请求过于频繁，请稍后重试' };
       }
+      if (err.response?.status === 402) {
+        return { ok: false, error: '账户余额不足，请前往 DeepSeek 平台充值后重试' };
+      }
+      if (err.response?.status === 503) {
+        return { ok: false, error: '服务繁忙，请稍后重试' };
+      }
       if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
         return { ok: false, error: '无法连接到 API 服务器，请检查网络或 API 地址' };
       }
@@ -291,7 +387,15 @@ export function registerAiHandlers() {
 }
 
 async function streamDeepSeek(
-  request: { model: string; messages: { role: string; content: string }[]; isDeepThink: boolean; reasoningEffort?: 'high' | 'max'; isWebSearch?: boolean },
+  request: {
+    model: string;
+    messages: { role: string; content: string }[];
+    isDeepThink: boolean;
+    reasoningEffort?: 'low' | 'high' | 'max';
+    isWebSearch?: boolean;
+    prefix?: { content: string; stop?: string[] };
+    maxTokens?: number;
+  },
   apiKey: string,
   apiBase: string,
   requestId: string,
@@ -301,16 +405,34 @@ async function streamDeepSeek(
 ): Promise<void> {
   const body: Record<string, unknown> = {
     model: request.model,
-    max_tokens: 8192,
+    max_tokens: request.maxTokens ?? 8192,
     messages: [...request.messages],
     stream: true,
+    // 官方用法：流式末尾额外返回 usage 块（含缓存命中与推理 tokens）。
+    stream_options: { include_usage: true },
   };
+
+  const userId = await getDeepSeekUserId();
+  if (userId) {
+    body.user_id = userId;
+  }
 
   if (searchResults) {
     (body.messages as any[]).push({
       role: 'system',
       content: `以下是与用户问题相关的网络搜索结果，请基于这些信息回答：\n\n${searchResults}\n\n请结合搜索结果提供准确、最新的回答，并引用来源编号。`,
     });
+  }
+
+  if (request.prefix?.content) {
+    // 官方对话前缀续写：最后一条消息必须是 assistant 且 prefix=true，
+    // 模型从给定内容继续生成；stop 避免多输出代码块闭合标记。
+    (body.messages as any[]).push({
+      role: 'assistant',
+      content: request.prefix.content,
+      prefix: true,
+    });
+    body.stop = request.prefix.stop && request.prefix.stop.length > 0 ? request.prefix.stop : ['```'];
   }
 
   if (request.isDeepThink) {
@@ -362,9 +484,24 @@ async function streamDeepSeek(
 
           try {
             const parsed = JSON.parse(data);
+            const usage = parsed.usage;
+            if (usage) {
+              sendUsageToRenderer(win, requestId, {
+                inputTokens: usage.prompt_tokens || 0,
+                outputTokens: usage.completion_tokens || 0,
+                reasoningTokens: usage.completion_tokens_details?.reasoning_tokens,
+                cacheHitTokens: usage.prompt_cache_hit_tokens,
+                cacheMissTokens: usage.prompt_cache_miss_tokens,
+              });
+            }
             const content = parsed.choices?.[0]?.delta?.content;
             if (content) {
               sendToRenderer(win, requestId, 'chunk', content);
+            }
+            // DeepSeek thinking mode: reasoning_content 单独流式下发，供 Chat 渲染思考块。
+            const reasoning = parsed.choices?.[0]?.delta?.reasoning_content;
+            if (reasoning) {
+              sendToRenderer(win, requestId, 'thinking', reasoning);
             }
           } catch {
             // skip malformed JSON

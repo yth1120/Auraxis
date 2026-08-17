@@ -18,7 +18,7 @@ function baseCtx(projectRoot: string, extra: Record<string, unknown> = {}) {
   return {
     projectRoot,
     requestId: 'int-1',
-    mode: 'afe' as const,
+    mode: 'auto' as const,
     sandboxMode: 'full' as const,
     ...extra,
   };
@@ -153,5 +153,46 @@ describe('executeToolCall — 真实工具处理器', () => {
     );
     expect(ok.error).toBeUndefined();
     expect(readFileSync(file, 'utf8')).toBe('v2');
+  });
+
+  it('Work 模式：拒绝代码文件写入，允许文档写入', async () => {
+    const work = baseCtx(root, { autoApprove: true, surface: 'work', sandboxMode: 'workspace-write' });
+
+    const codeDenied = await executeToolCall(
+      'Write',
+      { file_path: 'src/app.ts', content: 'export const a = 1;' },
+      work,
+    );
+    expect(codeDenied.error).toContain('Work 模式');
+    expect(codeDenied.output).toBeNull();
+
+    const docOk = await executeToolCall(
+      'Write',
+      { file_path: 'docs/notes.md', content: '# hi' },
+      work,
+    );
+    expect(docOk.error).toBeUndefined();
+    expect(readFileSync(path.join(root, 'docs', 'notes.md'), 'utf8')).toContain('# hi');
+  });
+
+  it('Work 模式：StrReplaceEditor / Edit / Delete 同样受文档门禁', async () => {
+    const work = baseCtx(root, { autoApprove: true, surface: 'work', sandboxMode: 'workspace-write' });
+
+    const editDenied = await executeToolCall(
+      'Edit',
+      { file_path: 'src/app.ts', old_string: 'a', new_string: 'b' },
+      work,
+    );
+    expect(editDenied.error).toContain('Work 模式');
+
+    const srDenied = await executeToolCall(
+      'StrReplaceEditor',
+      { command: 'create', path: path.join(root, 'src', 'x.js'), file_text: 'x' },
+      work,
+    );
+    expect(srDenied.error).toContain('Work 模式');
+
+    const delDenied = await executeToolCall('Delete', { file_path: 'src' }, work);
+    expect(delDenied.error).toContain('Work 模式');
   });
 });

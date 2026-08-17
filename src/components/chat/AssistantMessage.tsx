@@ -13,7 +13,6 @@ import type { Message } from '../../types/chat';
 import { getContentText } from '../../types/chat';
 import { cleanOutput, cleanStreamChunk } from '../../utils/output-cleaner';
 import { useChatStore } from '../../stores/useChatStore';
-import { useInspectorStore } from '../../stores/useInspectorStore';
 import { useSessionStore } from '../../stores/useSessionStore';
 import { useMessageFeedbackStore } from '../../stores/useMessageFeedbackStore';
 import { formatTime } from '../../utils/time';
@@ -26,10 +25,9 @@ import ImageGallery from './ImageGallery';
 interface AssistantMessageProps {
   message: Message;
   searchQuery?: string;
-  isLastAssistant?: boolean;
 }
 
-export default memo(function AssistantMessage({ message, searchQuery, isLastAssistant }: AssistantMessageProps) {
+export default memo(function AssistantMessage({ message, searchQuery }: AssistantMessageProps) {
   const t = useT();
   const contentText = getContentText(message.content);
   const { cleanedText, thinkingBlocks: extractedBlocks } = useMemo(
@@ -38,13 +36,14 @@ export default memo(function AssistantMessage({ message, searchQuery, isLastAssi
       : cleanOutput(contentText),
     [contentText, message.isStreaming],
   );
-  const thinkingBlocks = (message.thinkingBlocks && message.thinkingBlocks.length > 0)
-    ? message.thinkingBlocks
-    : extractedBlocks.map((c) => ({ content: c }));
+  // Chat 关闭思考时，即使模型泄漏 <thinking> 标签也不展示思考块。
+  const thinkingBlocks = message.thinkingEnabled === false
+    ? []
+    : ((message.thinkingBlocks && message.thinkingBlocks.length > 0)
+        ? message.thinkingBlocks
+        : extractedBlocks.map((c) => ({ content: c })));
 
-  const retryLastMessage = useChatStore((s) => s.retryLastMessage);
-  const isStreaming = useChatStore((s) => s.isStreaming);
-  const activeToolCount = useInspectorStore((s) => s.activeToolCount);
+  const regenerateFromMessage = useChatStore((s) => s.regenerateFromMessage);
   const rating = useMessageFeedbackStore((s) => s.ratings[message.id]);
   const [copied, setCopied] = useState(false);
 
@@ -59,10 +58,6 @@ export default memo(function AssistantMessage({ message, searchQuery, isLastAssi
         : part,
     );
   }, [searchQuery, hasSearch]);
-
-  const handleRetry = useCallback(() => {
-    if (!isStreaming) retryLastMessage();
-  }, [retryLastMessage, isStreaming]);
 
   const hasError = message.tags?.includes('error');
   const hasWarning = message.tags?.includes('warning');
@@ -133,15 +128,13 @@ export default memo(function AssistantMessage({ message, searchQuery, isLastAssi
           >
             <ThumbsDown size={14} weight={rating === 'down' ? 'fill' : 'regular'} />
           </button>
-          {isLastAssistant && (
-            <button
-              className="ax-message-action"
-              onClick={handleRetry}
-          title={t('msg.regenerate')}
-            >
-              <ReloadOutlined />
-            </button>
-          )}
+          <button
+            className="ax-message-action"
+            onClick={() => regenerateFromMessage(message.id)}
+            title={t('msg.regenerate')}
+          >
+            <ReloadOutlined />
+          </button>
           <button
             className="ax-message-action"
             onClick={() => {

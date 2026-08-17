@@ -56,4 +56,30 @@ describe('sdk-server — JSON-RPC over stdio', () => {
     const invalid = await handleSdkRequest(deps, { method: 'ping' });
     expect(invalid.error?.code).toBe(-32600);
   });
+
+  it('requires a matching token when AURAXIS_SDK_TOKEN is set', async () => {
+    const prev = process.env.AURAXIS_SDK_TOKEN;
+    process.env.AURAXIS_SDK_TOKEN = 'sdk-secret';
+    try {
+      const denied = await handleSdkRequest(deps, {
+        jsonrpc: '2.0',
+        id: 6,
+        method: 'agent.run',
+        params: { prompt: '写一个测试' },
+      });
+      expect(denied.error?.code).toBe(-32603);
+
+      const ok = await handleSdkRequest(deps, {
+        jsonrpc: '2.0',
+        id: 7,
+        method: 'agent.run',
+        params: { prompt: '写一个测试', token: 'sdk-secret' },
+      });
+      expect(ok.error).toBeUndefined();
+      expect((ok.result as any).message).toContain('写一个测试');
+    } finally {
+      if (prev === undefined) delete process.env.AURAXIS_SDK_TOKEN;
+      else process.env.AURAXIS_SDK_TOKEN = prev;
+    }
+  });
 });

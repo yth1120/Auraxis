@@ -70,7 +70,7 @@ export default function PluginsPanel({ onClose }: { onClose?: () => void }) {
                   </span>
                   <span className="min-w-0 flex-1 flex items-baseline gap-2">
                     <span className="text-sm font-medium text-text-primary truncate">{p.name}</span>
-                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-md bg-[var(--color-bg-inset)] text-2xs text-text-faint font-mono">
+                    <span className="shrink-0 inline-flex items-center h-5 px-1.5 rounded-md bg-[var(--color-bg-inset)] text-2xs text-text-faint font-mono">
                       v{p.version}
                     </span>
                   </span>

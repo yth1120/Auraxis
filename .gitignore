@@ -38,6 +38,8 @@ Thumbs.db
 
 # Agent workspaces & snapshots (local dev)
 .auraxis-snapshots/
+shots/
+.trash-cleanup/
 
 # TypeScript
 *.tsbuildinfo

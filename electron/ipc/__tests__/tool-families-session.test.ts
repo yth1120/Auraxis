@@ -68,7 +68,7 @@ function ctx(extra: Record<string, unknown> = {}) {
   return {
     projectRoot: os.tmpdir(),
     requestId: 'sess-1',
-    mode: 'afe' as const,
+    mode: 'auto' as const,
     sandboxMode: 'full' as const,
     autoApprove: true,
     ...extra,

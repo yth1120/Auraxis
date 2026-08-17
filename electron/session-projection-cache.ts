@@ -20,7 +20,7 @@ export interface SessionCacheRow {
   updated: number;
   model?: string;
   projectRoot?: string;
-  mode?: 'chat' | 'code';
+  mode?: 'chat' | 'work' | 'code';
   pinned?: boolean;
   branchedFrom?: { sessionId: string; messageId: string; title: string } | null;
   messageCount: number;

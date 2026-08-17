@@ -12,6 +12,7 @@ vi.stubGlobal('window', {
     },
     setBackgroundMaterial: vi.fn().mockResolvedValue({ ok: true }),
     backgroundMaterialSupported: vi.fn().mockResolvedValue({ ok: true, data: true }),
+    getGlassState: vi.fn().mockResolvedValue({ ok: true, data: { supported: true, ready: true } }),
   },
 });
 
@@ -120,9 +121,9 @@ describe('useSettingsStore — setters', () => {
     expect(useSettingsStore.getState().sidebarGlass).toBe(35);
   });
 
-  it('仅当系统支持 Acrylic 时切换窗口材质', () => {
+  it('仅当系统支持且窗口已预置 Acrylic 时切换窗口材质', () => {
     const setMaterial = (window as any).electronAPI.setBackgroundMaterial;
-    useSettingsStore.getState().setSidebarGlassSupported(true);
+    useSettingsStore.setState({ sidebarGlassSupported: true, sidebarGlassReady: true });
     useSettingsStore.getState().setSidebarGlass(60);
     expect(setMaterial).toHaveBeenLastCalledWith(true);
 
@@ -131,7 +132,11 @@ describe('useSettingsStore — setters', () => {
     useSettingsStore.getState().setSidebarGlass(80);
     expect(setMaterial).not.toHaveBeenCalled();
 
-    useSettingsStore.getState().setSidebarGlassSupported(true);
+    useSettingsStore.setState({ sidebarGlassSupported: true, sidebarGlassReady: false });
+    useSettingsStore.getState().setSidebarGlass(60);
+    expect(setMaterial).not.toHaveBeenCalled();
+
+    useSettingsStore.setState({ sidebarGlassReady: true });
     useSettingsStore.getState().setSidebarGlass(0);
     expect(setMaterial).toHaveBeenLastCalledWith(false);
   });

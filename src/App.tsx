@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { App as AntApp, ConfigProvider, Modal, message, notification } from 'antd';
 import WorkbenchLayout from './components/layout/WorkbenchLayout';
 import ErrorBoundary from './components/layout/ErrorBoundary';
+import AuthGate from './components/auth/AuthGate';
 import CommandPalette from './components/layout/CommandPalette';
 import UndoToast from './components/common/UndoToast';
 import AskUserHost from './components/common/AskUserHost';
@@ -24,7 +25,6 @@ import { useWorktreeStore } from './stores/useWorktreeStore';
 import { useSessionStore } from './stores/useSessionStore';
 import { permissionBridge } from './services/replBridge';
 import { useNotificationsSource } from './hooks/useNotificationsSource';
-import { openWorkbenchTab } from './utils/workbenchTabs';
 
 export default function App() {
   useNotificationsSource();
@@ -36,6 +36,13 @@ export default function App() {
   const enqueuePermission = useAdvancedStore((s) => s.enqueuePermission);
   const sidebarGlass = useSettingsStore((s) => s.sidebarGlass);
   const sidebarGlassSupported = useSettingsStore((s) => s.sidebarGlassSupported);
+  const sidebarGlassReady = useSettingsStore((s) => s.sidebarGlassReady);
+  const glassLayoutMounted = useAppStore((s) => s.glassLayoutMounted);
+  const alwaysShowMessageActions = useSettingsStore((s) => s.alwaysShowMessageActions);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('always-show-message-actions', alwaysShowMessageActions);
+  }, [alwaysShowMessageActions]);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [systemDark, setSystemDark] = useState(
@@ -60,8 +67,31 @@ export default function App() {
   // Frosted sidebar: the app's outer layers turn transparent only when native
   // Acrylic is available, so the desktop (blurred) can show through.
   useEffect(() => {
-    document.documentElement.classList.toggle('auraxis-glass', sidebarGlass > 0 && sidebarGlassSupported);
-  }, [sidebarGlass, sidebarGlassSupported]);
+    const glassOn =
+      sidebarGlass > 0 && sidebarGlassSupported && sidebarGlassReady && glassLayoutMounted;
+    document.documentElement.classList.toggle('auraxis-glass', glassOn);
+    // 玻璃类与窗口材质同开同关：玻璃未真正生效时窗口保持不透明，
+    // 避免透明+Acrylic 窗口在首帧露出桌面（启动/解锁瞬间全透明）。
+    window.electronAPI?.setBackgroundMaterial?.(glassOn)?.catch?.(() => {});
+  }, [sidebarGlass, sidebarGlassSupported, sidebarGlassReady, glassLayoutMounted]);
+
+  // 兜底：无论持久化 rehydrate 是否执行，挂载时都重新确认 Acrylic 能力。
+  useEffect(() => {
+    if (!window.electronAPI?.getGlassState) return;
+    let alive = true;
+    window.electronAPI.getGlassState()
+      .then((r) => {
+        if (!alive) return;
+        useSettingsStore.setState({
+          sidebarGlassSupported: !!(r?.ok && r.data?.supported),
+          sidebarGlassReady: !!(r?.ok && r.data?.ready),
+        });
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // Prefetch SettingsModal chunk on idle so the first click feels instant.
   useEffect(() => {
@@ -119,7 +149,7 @@ export default function App() {
         // the backend auto-denies at 120s and the task "mysteriously" fails.
         // Raise a clickable notification that jumps to the task view.
         const { currentAgentId, agents } = useAgentStore.getState();
-        const onScreen = currentAgentId === agentId && useAppStore.getState().sidebarMode === 'code';
+        const onScreen = currentAgentId === agentId && useAppStore.getState().sidebarMode !== 'chat';
         if (!onScreen) {
           const agentName = agents.find((a) => a.id === agentId)?.name || t('app.task');
           notification.info({
@@ -129,7 +159,9 @@ export default function App() {
             placement: 'bottomRight',
             duration: 0,
             onClick: () => {
-              useAppStore.getState().setSidebarMode('code');
+              const app = useAppStore.getState();
+              const targetSurface = useAgentStore.getState().agents.find((a) => a.id === agentId)?.surface ?? 'code';
+              app.setSidebarMode(targetSurface === 'work' ? 'work' : 'code');
               useAgentStore.getState().setCurrentAgent(agentId);
               notification.destroy(request.requestId);
             },
@@ -198,16 +230,17 @@ export default function App() {
 
   // ── Plugin bootstrap ──
   useEffect(() => {
-    const store = usePluginStore.getState();
     const bootstrap = async () => {
-      if (!store.installedPlugins.some((p) => p.id === 'example-timestamp')) {
+      if (usePluginStore.getState().seededBuiltins) return;
+      if (!usePluginStore.getState().installedPlugins.some((p) => p.id === 'example-timestamp')) {
         const mod = await import('./plugins/example-timestamp');
-        pluginManager.install(mod.default, 'builtin:example-timestamp');
+        pluginManager.installBuiltin(mod.default, 'builtin:example-timestamp');
       }
-      if (!store.installedPlugins.some((p) => p.id === 'example-uuid')) {
+      if (!usePluginStore.getState().installedPlugins.some((p) => p.id === 'example-uuid')) {
         const mod = await import('./plugins/example-uuid');
-        pluginManager.install(mod.default, 'builtin:example-uuid');
+        pluginManager.installBuiltin(mod.default, 'builtin:example-uuid');
       }
+      usePluginStore.getState().markBuiltinsSeeded();
     };
     bootstrap();
   }, []);
@@ -263,7 +296,7 @@ export default function App() {
       if (isCtrlOrCmd(e) && e.key === 'f') {
         if (!isInputFocused()) {
           e.preventDefault();
-          (window as { __toggleSearch?: () => void }).__toggleSearch?.();
+          window.dispatchEvent(new CustomEvent('auraxis:toggle-message-search'));
         }
         return;
       }
@@ -327,7 +360,7 @@ export default function App() {
           return;
         }
         // ── Right-panel tab switching (Ctrl+Shift+1..3) ──
-        if (binding.description === '右侧面板：计划') {
+        if (binding.description === '右侧面板：执行详情') {
           e.preventDefault();
           if (useAppStore.getState().sidebarMode === 'chat') return;
           const appState = useAppStore.getState();
@@ -343,18 +376,12 @@ export default function App() {
           if (!appState.showRightPanel) appState.toggleRightPanel();
           return;
         }
-        if (binding.description === '工作台：变更') {
+        if (binding.description === '右侧面板：预览') {
           e.preventDefault();
           if (useAppStore.getState().sidebarMode === 'chat') return;
           const appState = useAppStore.getState();
-          appState.setRightPanelView('review');
+          appState.setRightPanelView('preview');
           if (!appState.showRightPanel) appState.toggleRightPanel();
-          return;
-        }
-        if (binding.description === '工作台：预览') {
-          e.preventDefault();
-          if (useAppStore.getState().sidebarMode === 'chat') return;
-          openWorkbenchTab('browser');
           return;
         }
         if (binding.description === '右侧面板：时间线') {
@@ -477,19 +504,21 @@ export default function App() {
           confirmation never appeared). component={false} adds no extra DOM. */}
       <AntApp component={false}>
         <ErrorBoundary>
-          <WorkbenchLayout />
-          {showSettings && (
-            <Suspense fallback={null}>
-              <SettingsModal
-                open={showSettings}
-                initialKey={settingsInitialKey}
-                onClose={() => setShowSettings(false)}
-              />
-            </Suspense>
-          )}
-          <UndoToast />
-          <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-          <AskUserHost />
+          <AuthGate>
+            <WorkbenchLayout />
+            {showSettings && (
+              <Suspense fallback={null}>
+                <SettingsModal
+                  open={showSettings}
+                  initialKey={settingsInitialKey}
+                  onClose={() => setShowSettings(false)}
+                />
+              </Suspense>
+            )}
+            <UndoToast />
+            <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+            <AskUserHost />
+          </AuthGate>
         </ErrorBoundary>
       </AntApp>
     </ConfigProvider>

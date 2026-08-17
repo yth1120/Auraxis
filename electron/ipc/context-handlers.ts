@@ -4,7 +4,7 @@ import path from 'path';
 import { isPathInside, normalizeWinPath, SAFE_EXTENSIONS, EXCLUDED_DIRS } from './shared';
 import { compactHistory, estimateTokens } from './context-manager';
 import { readSettings } from './settings-store';
-import { resolveApiBase } from './model-config';
+import { resolveModelApiBase, resolveModelApiKey } from './model-config';
 
 async function getFileTreeText(dirPath: string, prefix = '', depth = 0): Promise<string> {
   if (depth > 4) return '';
@@ -53,8 +53,8 @@ export function registerContextHandlers() {
     try {
       const settings: Record<string, any> = await readSettings();
       const model = settings.selectedModel || 'deepseek-v4-pro';
-      const apiBase = resolveApiBase(model);
-      const apiKey = settings.deepseekApiKey || process.env.DEEPSEEK_API_KEY || '';
+      const apiBase = await resolveModelApiBase(model);
+      const apiKey = (await resolveModelApiKey(model)) || settings.deepseekApiKey || process.env.DEEPSEEK_API_KEY || '';
 
       const normalized = (params.messages ?? []).map((m) => ({
         role: m.role,

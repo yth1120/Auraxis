@@ -27,12 +27,22 @@ function mkPlugin(id: string): Plugin {
 
 describe('usePluginStore', () => {
   beforeEach(() => {
-    usePluginStore.setState({ installedPlugins: [], activePlugins: [] });
+    usePluginStore.setState({
+      installedPlugins: [],
+      activePlugins: [],
+      seededBuiltins: false,
+    });
   });
 
   it('初始状态 installedPlugins 和 activePlugins 为空', () => {
     expect(usePluginStore.getState().installedPlugins).toEqual([]);
     expect(usePluginStore.getState().activePlugins).toEqual([]);
+    expect(usePluginStore.getState().seededBuiltins).toBe(false);
+  });
+
+  it('markBuiltinsSeeded 标记内置插件已装配', () => {
+    usePluginStore.getState().markBuiltinsSeeded();
+    expect(usePluginStore.getState().seededBuiltins).toBe(true);
   });
 
   it('installPlugin 安装新插件（同时加入 installed + active）', () => {

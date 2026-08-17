@@ -227,6 +227,45 @@
   37.5%, 100% { opacity: 0.15; }
 }
 
+/* ── Thinking-depth effort label swap（Claude-style）────── */
+@keyframes effortLabelIn {
+  from {
+    opacity: 0;
+    transform: translateY(var(--effort-enter-y, 4px));
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes effortLabelOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(var(--effort-exit-y, -4px));
+    filter: blur(2px);
+  }
+}
+
+/* 项目展开：子会话/任务列表淡入 + 轻微下移入场 */
+@keyframes projectExpandIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ── Reduced motion ────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

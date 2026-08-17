@@ -4,16 +4,14 @@ interface ChatRequest {
   model: string;
   messages: { role: string; content: string }[];
   isDeepThink: boolean;
-  reasoningEffort?: 'high' | 'max';
+  reasoningEffort?: 'low' | 'high' | 'max';
   isWebSearch: boolean;
+  maxOutputTokens?: number;
 }
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/beta/chat/completions';
 
 function getApiUrl(): string {
-  if (typeof window !== 'undefined' && (window as any).__API_BASES__?.deepseek) {
-    return (window as any).__API_BASES__.deepseek;
-  }
   try {
     const viteEnv = (import.meta as any).env;
     if (viteEnv?.VITE_DEEPSEEK_API_BASE) return viteEnv.VITE_DEEPSEEK_API_BASE;
@@ -24,7 +22,8 @@ function getApiUrl(): string {
 export async function streamChat(
   request: ChatRequest,
   onChunk: (text: string) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onThinking?: (text: string) => void,
 ): Promise<void> {
   const apiKey = getApiKeyFromStore() || '';
 
@@ -34,7 +33,7 @@ export async function streamChat(
 
   const body: Record<string, unknown> = {
     model: request.model,
-    max_tokens: 8192,
+    max_tokens: request.maxOutputTokens ?? 8192,
     messages: [...request.messages],
     stream: true,
   };
@@ -108,6 +107,10 @@ export async function streamChat(
             } else if (!rafId) {
               rafId = requestAnimationFrame(flush);
             }
+          }
+          const reasoning = parsed.choices?.[0]?.delta?.reasoning_content;
+          if (reasoning) {
+            onThinking?.(reasoning);
           }
         } catch {
           // skip malformed JSON

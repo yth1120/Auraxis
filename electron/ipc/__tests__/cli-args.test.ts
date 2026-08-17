@@ -57,6 +57,15 @@ describe('cli-args', () => {
     expect(args.approvePlan).toBe(true);
   });
 
+  it('parses --tool-choice（auto/none/required/工具名）', () => {
+    expect(parseCliArgs(['--run', 'x', '--tool-choice', 'required']).toolChoice).toBe('required');
+    expect(parseCliArgs(['--run', 'x', '--tool-choice', 'none']).toolChoice).toBe('none');
+    expect(parseCliArgs(['--run', 'x', '--tool-choice', 'WebSearch']).toolChoice).toEqual({
+      type: 'function',
+      function: { name: 'WebSearch' },
+    });
+  });
+
   it('supports --flag=value syntax and rejects bad enums', () => {
     const args = parseCliArgs([
       '--run=hello',
@@ -70,5 +79,10 @@ describe('cli-args', () => {
     expect(args.maxIterations).toBeUndefined();
     expect(args.mode).toBeUndefined();
     expect(args.sandbox).toBeUndefined();
+  });
+
+  it('normalizes legacy --mode afe to auto', () => {
+    const args = parseCliArgs(['--run', 'x', '--mode', 'afe']);
+    expect(args.mode).toBe('auto');
   });
 });

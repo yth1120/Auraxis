@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Input, Modal, message } from 'antd';
+import { Input, Modal, Dropdown, message } from 'antd';
 import clsx from 'clsx';
 import { shallow } from 'zustand/shallow';
 import {
@@ -10,6 +10,7 @@ import {
   MagnifyingGlass,
   Terminal,
   Globe,
+  MoreHorizontal,
 } from '@/components/common/icons';
 import { useInspectorStore, mapTodosToTasks, type RawTodo } from '../../stores/useInspectorStore';
 import { useChatStore } from '../../stores/useChatStore';
@@ -82,7 +83,7 @@ export default function WorkspaceInspector() {
   }, []);
 
   const sidebarMode = useAppStore((s) => s.sidebarMode);
-  const isCode = sidebarMode === 'code';
+  const isCode = sidebarMode !== 'chat';
 
   // Foreground chat inspector data (chat mode).
   const inspectorTasks = useInspectorStore((s) => s.tasks);
@@ -520,7 +521,7 @@ export default function WorkspaceInspector() {
 
   const renderSnapshotCard = () =>
     projectRoot ? (
-      <section className="px-3.5 py-2.5 mb-2.5 rounded-xl bg-[var(--color-bg-secondary)]">
+      <section className="px-3.5 py-2.5 mt-3 mb-2.5 rounded-xl bg-[var(--color-bg-secondary)]">
         <header className="flex items-center justify-between mb-1.5">
             <span className="text-2xs font-semibold text-text-muted tracking-wide">{tPanel('snapshot.cardTitle')}</span>
           <button
@@ -545,20 +546,24 @@ export default function WorkspaceInspector() {
                       {fmtRelative(s.createdAt, now)} · {tPanel('snapshot.fileCount', { n: s.files.length })}
                   </span>
                 </span>
-                <button
-                  type="button"
-                  className="shrink-0 text-2xs text-text-muted px-1.5 py-[2px] rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-secondary"
-                  onClick={() => restoreSnapshot(s)}
+                <Dropdown
+                  trigger={['click']}
+                  placement="bottomRight"
+                  menu={{
+                    items: [
+                      { key: 'restore', label: tPanel('snapshot.restore'), onClick: () => restoreSnapshot(s) },
+                      { key: 'delete', label: tPanel('snapshot.delete'), danger: true, onClick: () => deleteSnapshot(s) },
+                    ],
+                  }}
                 >
-                    {tPanel('snapshot.restore')}
-                </button>
-                <button
-                  type="button"
-                  className="shrink-0 text-2xs text-text-muted px-1.5 py-[2px] rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-secondary"
-                  onClick={() => deleteSnapshot(s)}
-                >
-                    {tPanel('snapshot.delete')}
-                </button>
+                  <button
+                    type="button"
+                    className="shrink-0 flex items-center justify-center w-6 h-6 rounded-md text-text-muted cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-secondary"
+                    aria-label={tPanel('snapshot.actions')}
+                  >
+                    <MoreHorizontal size={14} />
+                  </button>
+                </Dropdown>
               </li>
             ))}
           </ul>
@@ -581,7 +586,9 @@ export default function WorkspaceInspector() {
           <ApartmentOutlined className="text-2xl text-[var(--color-text-faint)]" />
           <p className="text-sm font-semibold text-[var(--color-text-secondary)] m-0">{tPanel('inspector.emptyTitle')}</p>
           <p className="text-2xs text-[var(--color-text-muted)] m-0 leading-relaxed">
-            {isCode ? tPanel('inspector.emptyCode') : tPanel('inspector.emptyChat')}
+            {isCode
+              ? (sidebarMode === 'work' ? tPanel('inspector.emptyWork') : tPanel('inspector.emptyCode'))
+              : tPanel('inspector.emptyChat')}
           </p>
         </div>
         {renderSnapshotCard()}
@@ -592,7 +599,7 @@ export default function WorkspaceInspector() {
   return (
     <div className="h-full overflow-y-auto px-3 pb-6 pt-3">
       {isCode && agent && (
-        <div className="sticky top-0 z-10 -mx-3 px-3 pt-2 pb-2.5 mb-3 bg-[var(--color-bg-primary)]/95 backdrop-blur border-b border-[var(--color-border-dim)]">
+        <div className="sticky top-0 z-10 -mx-3 px-3 pt-2 pb-2.5 mb-3 bg-[var(--color-bg-primary)] border-b border-[var(--color-border-dim)]">
           <div className="flex items-center gap-2 min-w-0">
             <span className="inline-flex items-center gap-1.5 text-2xs px-2 py-[2px] rounded-full bg-[var(--color-bg-inset)] text-text-secondary shrink-0">
               <span className={clsx('w-1.5 h-1.5 rounded-full', statusMeta?.cls)} />
@@ -662,13 +669,14 @@ export default function WorkspaceInspector() {
         </section>
       )}
 
-      {isCode && agent && (
+      {isCode && agent && qualityRuns.length > 0 && (
         <section className="px-3.5 py-2.5 mb-2.5 rounded-xl bg-[var(--color-bg-secondary)]">
           <header className="text-2xs font-semibold text-text-muted tracking-wide mb-1.5">{tPanel('inspector.qualityGate')}</header>
-          {qualityRuns.length === 0 ? (
-            <p className="text-2xs text-text-muted leading-[1.5]">
-              {tPanel('inspector.noQualityRuns')}
-            </p>
+          {qualityRuns.every((r) => r.passed) ? (
+            <div className="flex items-center gap-2 text-xs text-text-secondary">
+              <Check size={14} className="text-[var(--color-success)] shrink-0" />
+              {tPanel('inspector.qualityAllPassed', { n: qualityRuns.length })}
+            </div>
           ) : (
             <ul className="list-none m-0 p-0 flex flex-col gap-1">
               {qualityRuns.map((r, idx) => (
@@ -767,7 +775,7 @@ export default function WorkspaceInspector() {
         </section>
       )}
 
-      {isCode && agent && (
+      {isCode && agent && (agent.status === 'completed' || agent.status === 'error' || agent.status === 'stopped') && (
         <section className="px-3.5 py-2.5 mb-2.5 rounded-xl bg-[var(--color-bg-secondary)]">
           <header className="text-2xs font-semibold text-text-muted tracking-wide mb-1.5">{tPanel('inspector.rollback')}</header>
           <p className="text-2xs text-text-muted leading-[1.5] mb-2">

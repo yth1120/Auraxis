@@ -12,7 +12,7 @@
  */
 import type { AgentInfo } from '../types/agent';
 
-const TERMINAL = new Set(['completed', 'error', 'stopped']);
+const TERMINAL = new Set(['completed', 'error', 'stopped', 'review']);
 
 function isTerminal(a: AgentInfo | null | undefined): a is AgentInfo {
   return !!a && TERMINAL.has(a.status);

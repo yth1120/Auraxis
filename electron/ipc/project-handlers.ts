@@ -1,9 +1,14 @@
-import { ipcMain, dialog } from 'electron';
+import { ipcMain, dialog, app } from 'electron';
 import { readFile, writeFile, readdir, stat, mkdir } from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
 import type { ApplyCodePayload } from '../types';
+import {
+  EMPTY_PROJECT_GLOBAL_STATE,
+  normalizeProjectGlobalState,
+  type ProjectGlobalState,
+} from '../contracts/project';
 import { isPathInside, isAllowedExtension, EXCLUDED_DIRS, assertString, assertObject } from './shared';
 
 function parseGitignore(content: string): string[] {
@@ -32,6 +37,26 @@ function matchesGitignore(name: string, patterns: string[]): boolean {
     }
   }
   return false;
+}
+
+function getProjectGlobalStatePath(): string {
+  const userData = process.env.AURAXIS_USER_DATA_DIR || app.getPath('userData');
+  return path.join(userData, 'auraxis-global-state.json');
+}
+
+export async function readProjectGlobalState(): Promise<ProjectGlobalState> {
+  try {
+    const raw = await readFile(getProjectGlobalStatePath(), 'utf-8');
+    return normalizeProjectGlobalState(JSON.parse(raw));
+  } catch {
+    return { ...EMPTY_PROJECT_GLOBAL_STATE };
+  }
+}
+
+export async function writeProjectGlobalState(state: ProjectGlobalState): Promise<void> {
+  const file = getProjectGlobalStatePath();
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, JSON.stringify(state, null, 2), 'utf-8');
 }
 
 async function loadGitignore(rootDir: string): Promise<string[]> {
@@ -89,6 +114,23 @@ async function buildDirectoryTree(dirPath: string, depth: number, basePath: stri
 }
 
 export function registerProjectHandlers() {
+  ipcMain.handle('project:loadGlobalState', async () => {
+    try {
+      return { ok: true, data: await readProjectGlobalState() };
+    } catch (error: any) {
+      return { ok: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('project:saveGlobalState', async (_event, state: unknown) => {
+    try {
+      await writeProjectGlobalState(normalizeProjectGlobalState(state));
+      return { ok: true };
+    } catch (error: any) {
+      return { ok: false, error: error.message };
+    }
+  });
+
   ipcMain.handle('project:getTree', async (_event, projectRoot: string) => {
     try {
       const root = path.resolve(projectRoot);

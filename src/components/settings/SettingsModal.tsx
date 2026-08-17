@@ -22,6 +22,10 @@ import {
   Info,
   Percent,
   Gauge,
+  Key,
+  Coins,
+  MagnifyingGlass,
+  Globe,
 } from '@/components/common/icons';
 import clsx from 'clsx';
 import { useSettingsStore } from '../../stores/useSettingsStore';
@@ -39,6 +43,7 @@ import InlineEmpty from '../common/InlineEmpty';
 import SchemaPanel from './SchemaPanel';
 import { buildAgentRuntimeFields } from './agentRuntimeSchema';
 import PermissionProfilePanel from './PermissionProfilePanel';
+import AccountPane from './AccountPane';
 import { useI18nStore } from '../../i18n';
 import { useT, keybindingDescKey, type I18nKey } from '../../i18n';
 
@@ -49,6 +54,9 @@ const MemoryPanel = lazy(() => import('../memory/MemoryPanel'));
 const AgentDashboard = lazy(() => import('../agent/AgentDashboard'));
 const CoverageBadge = lazy(() => import('../common/CoverageBadge'));
 const StatsHeatmap = lazy(() => import('./StatsHeatmap'));
+const ProjectRulesPane = lazy(() => import('./ProjectRulesPane'));
+const CustomModelsPane = lazy(() => import('./CustomModelsPane'));
+const ConnectorsPane = lazy(() => import('./ConnectorsPane'));
 
 // Lazy panes swap in without a spinner — no motion inside settings.
 const paneFallback = null;
@@ -61,15 +69,17 @@ const NAV_GROUPS: { labelKey: I18nKey; items: { key: string; labelKey: I18nKey; 
       { key: 'general', labelKey: 'settings.item.general', icon: <GearSix size={16} /> },
       { key: 'appearance', labelKey: 'settings.item.appearance', icon: <PaintBrush size={16} /> },
       { key: 'keybindings', labelKey: 'settings.item.keybindings', icon: <Keyboard size={16} /> },
-      { key: 'stats', labelKey: 'settings.item.stats', icon: <ChartBar size={16} /> },
     ],
   },
   {
-    labelKey: 'settings.nav.capability',
+    labelKey: 'settings.nav.modelRuntime',
     items: [
       { key: 'agents', labelKey: 'settings.item.agents', icon: <Robot size={16} /> },
       { key: 'agent-runtime', labelKey: 'settings.item.agentRuntime', icon: <Gauge size={16} /> },
       { key: 'memory', labelKey: 'settings.item.memory', icon: <Brain size={16} /> },
+      { key: 'project-rules', labelKey: 'settings.item.projectRules', icon: <FileText size={16} /> },
+      { key: 'custom-models', labelKey: 'settings.item.customModels', icon: <PlugsConnected size={16} /> },
+      { key: 'connectors', labelKey: 'settings.item.connectors', icon: <Globe size={16} /> },
       { key: 'mcp', labelKey: 'settings.item.mcp', icon: <Plugs size={16} /> },
       { key: 'plugins', labelKey: 'settings.item.plugins', icon: <Blocks size={16} /> },
     ],
@@ -77,23 +87,26 @@ const NAV_GROUPS: { labelKey: I18nKey; items: { key: string; labelKey: I18nKey; 
   {
     labelKey: 'settings.nav.security',
     items: [
+      { key: 'account', labelKey: 'settings.item.account', icon: <Key size={16} /> },
       { key: 'permissions', labelKey: 'settings.item.permissions', icon: <ShieldCheck size={16} /> },
       { key: 'rules', labelKey: 'settings.item.rules', icon: <FileText size={16} /> },
     ],
   },
   {
-    labelKey: 'settings.nav.engineering',
+    labelKey: 'settings.nav.advanced',
     items: [
+      { key: 'cost', labelKey: 'settings.item.cost', icon: <Coins size={16} /> },
       { key: 'actions', labelKey: 'settings.item.actions', icon: <Lightning size={16} /> },
       { key: 'workflows', labelKey: 'settings.item.workflows', icon: <GitBranch size={16} /> },
       { key: 'connections', labelKey: 'settings.item.connections', icon: <PlugsConnected size={16} /> },
+      { key: 'stats', labelKey: 'settings.item.stats', icon: <ChartBar size={16} /> },
+      { key: 'coverage', labelKey: 'settings.item.coverage', icon: <Percent size={16} /> },
     ],
   },
   {
     labelKey: 'settings.nav.about',
     items: [
       { key: 'about', labelKey: 'settings.item.about', icon: <Info size={16} /> },
-      { key: 'coverage', labelKey: 'settings.item.coverage', icon: <Percent size={16} /> },
     ],
   },
 ];
@@ -108,6 +121,7 @@ interface SettingsModalProps {
 export default function SettingsModal({ open, onClose, initialKey }: SettingsModalProps) {
   const t = useT();
   const [activeKey, setActiveKey] = useState(initialKey ?? 'general');
+  const [settingsQuery, setSettingsQuery] = useState('');
   const [appVersion, setAppVersion] = useState('0.0.0');
   const models = useModels();
   const runtimeFields = useMemo(() => buildAgentRuntimeFields(models, t), [models, t]);
@@ -119,6 +133,29 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
   const [rulesList, setRulesList] = useState<{ pattern: string[]; decision: string; justification?: string; source: string }[]>([]);
   const [workflows, setWorkflows] = useState<{ id: string; name: string; description?: string; source?: 'json' | 'markdown'; steps: { id: string; name: string }[] }[]>([]);
   const [workflowRuns, setWorkflowRuns] = useState<{ runId: string; workflowName: string; status: string; startedAt: number; endedAt?: number }[]>([]);
+
+  // 弹窗已打开时再次点击 账户/设置 等入口，也要能切换面板。
+  useEffect(() => {
+    if (open && initialKey) setActiveKey(initialKey);
+  }, [open, initialKey]);
+
+  useEffect(() => {
+    if (open) setSettingsQuery('');
+  }, [open]);
+
+  const q = settingsQuery.trim().toLowerCase();
+  const visibleGroups = useMemo(() => {
+    if (!q) return NAV_GROUPS;
+    return NAV_GROUPS
+      .map((g) => {
+        const groupHit = t(g.labelKey).toLowerCase().includes(q);
+        const items = groupHit
+          ? g.items
+          : g.items.filter((i) => t(i.labelKey).toLowerCase().includes(q));
+        return items.length > 0 ? { ...g, items } : null;
+      })
+      .filter((g): g is NonNullable<typeof g> => g !== null);
+  }, [q, t]);
 
   useEffect(() => {
     if (window.electronAPI?.system) {
@@ -136,15 +173,17 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
   }, [open]);
 
   const {
-    deepseekApiKey, defaultModel, projectPath,
-    setApiKey, setDefaultModel, clearApiKeys,
+    deepseekApiKey, defaultModel, fallbackModel, projectPath,
+    setApiKey, setDefaultModel, setFallbackModel, clearApiKeys,
     notificationMode, setNotificationMode,
     permissionNotifications, setPermissionNotifications,
+    alwaysShowMessageActions, setAlwaysShowMessageActions,
     inputPricePerM, outputPricePerM,
     setInputPricePerM, setOutputPricePerM,
     webSearchProvider, exaApiKey, perplexityApiKey,
     setWebSearchProvider, setExaApiKey, setPerplexityApiKey,
-    sidebarGlass, setSidebarGlass, sidebarGlassSupported,
+    maxOutputTokens, setMaxOutputTokens,
+    sidebarGlass, setSidebarGlass, sidebarGlassSupported, sidebarGlassReady,
   } = useSettingsStore();
 
   useEffect(() => {
@@ -316,6 +355,38 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
     </div>
   );
 
+  const renderCost = () => (
+    <>
+      <SectionTitle>{t('settings.section.cost')}</SectionTitle>
+      <section className="mb-2">
+        <SettingItem title={t('settings.cost.input')} description={t('settings.cost.input.desc')}>
+          <InputNumber
+            value={inputPricePerM}
+            onChange={(v) => setInputPricePerM(Number(v) || 0)}
+            min={0}
+            step={0.1}
+            precision={2}
+            addonAfter={t('settings.currencyUnit')}
+            style={{ width: '100%' }}
+            placeholder="0"
+          />
+        </SettingItem>
+        <SettingItem title={t('settings.cost.output')} description={t('settings.cost.output.desc')} noBorder>
+          <InputNumber
+            value={outputPricePerM}
+            onChange={(v) => setOutputPricePerM(Number(v) || 0)}
+            min={0}
+            step={0.1}
+            precision={2}
+            addonAfter={t('settings.currencyUnit')}
+            style={{ width: '100%' }}
+            placeholder="0"
+          />
+        </SettingItem>
+      </section>
+    </>
+  );
+
   const renderGeneral = () => (
     <>
       <PaneHeader title={t('settings.item.general')} description={t('settings.pane.general.desc')} />
@@ -366,6 +437,28 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
             options={models.map((m) => ({ value: m.id, label: m.name }))}
           />
         </SettingItem>
+        <SettingItem title={t('settings.fallbackModel')} description={t('settings.fallbackModel.desc')} noBorder>
+          <Select
+            value={fallbackModel}
+            onChange={setFallbackModel}
+            style={{ width: '100%' }}
+            getPopupContainer={(t) => t.parentElement || document.body}
+            options={[
+              { value: '', label: t('settings.fallbackModel.none') },
+              ...models.filter((m) => m.id !== defaultModel).map((m) => ({ value: m.id, label: m.name })),
+            ]}
+          />
+        </SettingItem>
+        <SettingItem title={t('settings.maxOutputTokens')} description={t('settings.maxOutputTokens.desc')} noBorder>
+          <InputNumber
+            value={maxOutputTokens}
+            onChange={(val) => setMaxOutputTokens(Number(val) || 8192)}
+            min={1024}
+            max={384000}
+            step={1024}
+            style={{ width: '100%' }}
+          />
+        </SettingItem>
       </section>
 
       <SectionTitle>{t('settings.webSearchSection')}</SectionTitle>
@@ -400,34 +493,6 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
             placeholder="pplx-..."
             className="w-full"
             autoComplete="off"
-          />
-        </SettingItem>
-      </section>
-
-      <SectionTitle>{t('settings.section.cost')}</SectionTitle>
-      <section className="mb-2">
-        <SettingItem title={t('settings.cost.input')} description={t('settings.cost.input.desc')}>
-          <InputNumber
-            value={inputPricePerM}
-            onChange={(v) => setInputPricePerM(Number(v) || 0)}
-            min={0}
-            step={0.1}
-            precision={2}
-            addonAfter={t('settings.currencyUnit')}
-            style={{ width: '100%' }}
-            placeholder="0"
-          />
-        </SettingItem>
-        <SettingItem title={t('settings.cost.output')} description={t('settings.cost.output.desc')} noBorder>
-          <InputNumber
-            value={outputPricePerM}
-            onChange={(v) => setOutputPricePerM(Number(v) || 0)}
-            min={0}
-            step={0.1}
-            precision={2}
-            addonAfter={t('settings.currencyUnit')}
-            style={{ width: '100%' }}
-            placeholder="0"
           />
         </SettingItem>
       </section>
@@ -510,7 +575,7 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
               step={5}
               value={sidebarGlass}
               onChange={setSidebarGlass}
-              disabled={!sidebarGlassSupported}
+              disabled={!sidebarGlassSupported || !sidebarGlassReady}
               tooltip={{ formatter: (v) => `${v}%` }}
               marks={{
                 0: t('settings.sidebarGlass.off'),
@@ -524,6 +589,24 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
               {t('settings.sidebarGlass.unsupported')}
             </div>
           )}
+          {sidebarGlassSupported && !sidebarGlassReady && (
+            <div className="mt-1.5 text-2xs text-warning">
+              {t('settings.sidebarGlass.restart')}
+            </div>
+          )}
+        </SettingItem>
+      </section>
+      <SectionTitle>{t('settings.section.messages')}</SectionTitle>
+      <section className="mb-2">
+        <SettingItem
+          title={t('settings.showMessageActions')}
+          description={t('settings.showMessageActions.desc')}
+          noBorder
+        >
+          <Switch
+            checked={alwaysShowMessageActions}
+            onChange={setAlwaysShowMessageActions}
+          />
         </SettingItem>
       </section>
     </>
@@ -708,6 +791,8 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
   const renderPane = () => {
     switch (activeKey) {
       case 'general': return renderGeneral();
+      case 'cost': return renderCost();
+      case 'account': return <AccountPane />;
       case 'appearance': return renderAppearance();
       case 'stats': return <Suspense fallback={paneFallback}><StatsHeatmap /></Suspense>;
       case 'keybindings': return renderKeybindings();
@@ -727,6 +812,9 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
         />
       );
       case 'memory': return <Suspense fallback={paneFallback}><MemoryPanel /></Suspense>;
+      case 'project-rules': return <Suspense fallback={paneFallback}><ProjectRulesPane /></Suspense>;
+      case 'custom-models': return <Suspense fallback={paneFallback}><CustomModelsPane /></Suspense>;
+      case 'connectors': return <Suspense fallback={paneFallback}><ConnectorsPane /></Suspense>;
       case 'actions': return (
         <>
       <PaneHeader title={t('settings.item.actions')} description={t('settings.actionsDesc')} />
@@ -768,7 +856,7 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-text-primary">{wf.name}</span>
                     <span className="text-2xs text-text-muted">{t('settings.stepsN', { n: wf.steps.length })}</span>
-                    <span className="inline-flex items-center h-[18px] px-1.5 rounded text-2xs font-medium leading-none bg-border-dim text-text-muted">
+                    <span className="inline-flex items-center h-5 px-1.5 rounded-md text-2xs font-medium leading-none bg-border-dim text-text-muted">
                       {wf.source === 'markdown' ? 'MD' : 'JSON'}
                     </span>
                     <Button
@@ -934,8 +1022,23 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
       maskTransitionName=""
     >
       <div className="flex h-[640px]">
-        <nav className="w-[184px] shrink-0 px-3 py-5 bg-bg-secondary overflow-y-auto" aria-label={t('settings.navAria')}>
-          {NAV_GROUPS.map((g) => (
+        <nav className="w-[220px] shrink-0 px-3 py-5 bg-bg-secondary overflow-y-auto" aria-label={t('settings.navAria')}>
+          <div className="px-[10px] pb-3">
+            <Input
+              size="middle"
+              className="!h-8"
+              prefix={<MagnifyingGlass size={14} className="text-text-muted" />}
+              allowClear
+              value={settingsQuery}
+              onChange={(e) => setSettingsQuery(e.target.value)}
+              placeholder={t('settings.searchPlaceholder')}
+              aria-label={t('settings.searchPlaceholder')}
+            />
+          </div>
+          {visibleGroups.length === 0 && (
+            <div className="px-[10px] py-2 text-2xs text-text-faint">{t('settings.searchEmpty')}</div>
+          )}
+          {visibleGroups.map((g) => (
       <div key={g.labelKey} className="mb-5 last:mb-0">
               <div className="px-[10px] pb-1.5 text-2xs font-semibold text-text-muted tracking-[0.06em]">{t(g.labelKey)}</div>
               <div className="flex flex-col gap-[2px]">
@@ -951,7 +1054,7 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
                     onClick={() => setActiveKey(item.key)}
                   >
                     <span className="w-4 h-4 shrink-0">{item.icon}</span>
-                {t(item.labelKey)}
+                    {t(item.labelKey)}
                   </button>
                 ))}
               </div>

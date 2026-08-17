@@ -21,6 +21,7 @@ function agentIpc() {
         pause: (agentId: string) => Promise<{ ok: boolean; error?: string }>;
         resume: (agentId: string) => Promise<{ ok: boolean; error?: string }>;
         continue: (agentId: string, instruction: string, displayInstruction?: string) => Promise<{ ok: boolean; error?: string }>;
+        approveDelivery: (agentId: string) => Promise<{ ok: boolean; error?: string }>;
         setPriority: (agentId: string, priority: string) => Promise<{ ok: boolean; error?: string }>;
         setMaxConcurrent: (n: number) => Promise<{ ok: boolean; error?: string }>;
         getAll: () => Promise<{ ok: boolean; data?: any[]; error?: string }>;
@@ -49,6 +50,7 @@ export const useAgentStore = create<AgentStore>()(
       isLoading: false,
       maxConcurrent: 3,
       currentAgentId: null,
+      lastAgentIdBySurface: {},
       agentPermissions: {},
 
       // ── Local mutations ──────────────────────────
@@ -161,6 +163,7 @@ export const useAgentStore = create<AgentStore>()(
               autoApprove: request.autoApprove,
               isDeepThink: request.isDeepThink ?? true,
               reasoningEffort: request.reasoningEffort ?? 'high',
+              toolChoice: request.toolChoice,
               priority: request.priority || 'normal',
               maxIterations: request.maxIterations ?? 200,
               // Scheduler's AgentConfig names this `tools` — sending it as
@@ -168,6 +171,9 @@ export const useAgentStore = create<AgentStore>()(
               // read-only guarantee included).
               tools: request.customTools?.length ? request.customTools : undefined,
               mode: request.mode,
+              workTier: request.workTier,
+              workspaceRoots: request.workspaceRoots,
+              writableRoots: request.writableRoots,
               sandboxMode: request.sandboxMode,
               surface: useAppStore.getState().sidebarMode,
               goal: request.goal,
@@ -196,6 +202,7 @@ export const useAgentStore = create<AgentStore>()(
                     status: 'running' as AgentStatus,
                     priority: request.priority || 'normal',
                     projectRoot: request.projectRoot || '',
+                    surface: useAppStore.getState().sidebarMode,
                     startTime: Date.now(),
                     iteration: 0,
                     maxIterations: request.maxIterations ?? 200,
@@ -295,6 +302,27 @@ export const useAgentStore = create<AgentStore>()(
         }
       },
 
+      approveDelivery: async (agentId) => {
+        const api = agentIpc();
+        if (!api?.approveDelivery) return { ok: false, error: '当前环境不支持验收' };
+        try {
+          const r = await api.approveDelivery(agentId);
+          if (!r?.ok) {
+            console.error('[useAgentStore] approveDelivery rejected:', r?.error || 'unknown');
+            return { ok: false, error: r?.error || '验收失败' };
+          }
+          set((s) => ({
+            agents: s.agents.map((a) =>
+              a.id === agentId ? { ...a, status: 'completed' as AgentStatus, endTime: Date.now() } : a,
+            ),
+          }));
+          return { ok: true };
+        } catch (e) {
+          console.error('[useAgentStore] approveDelivery IPC failed:', (e as Error)?.message || e);
+          return { ok: false, error: (e as Error)?.message || '验收请求失败' };
+        }
+      },
+
       setAgentPriority: async (agentId, priority) => {
         const api = agentIpc();
         if (api?.setPriority) {
@@ -359,9 +387,12 @@ export const useAgentStore = create<AgentStore>()(
                   maxIterations: be.maxIterations ?? existing.maxIterations,
                   toolCallCount: be.toolCallCount ?? existing.toolCallCount,
                   messagesCount: be.messagesCount ?? existing.messagesCount,
+                  surface: be.surface ?? existing.surface,
                   plan: be.plan !== undefined ? be.plan : existing.plan,
                   error: be.error ?? existing.error,
                   result: be.result ?? existing.result,
+                  workTier: be.workTier ?? existing.workTier,
+                  delivery: be.delivery ?? existing.delivery,
                   // log, model, isDeepThink, reasoningEffort are
                   // frontend-authoritative — backend never sends them.
                 };
@@ -383,11 +414,14 @@ export const useAgentStore = create<AgentStore>()(
                   maxIterations: be.maxIterations ?? 25,
                   toolCallCount: be.toolCallCount ?? 0,
                   messagesCount: be.messagesCount ?? 0,
+                  surface: be.surface,
                   totalInputTokens: 0,
                   totalOutputTokens: 0,
                   plan: be.plan ?? null,
                   error: be.error,
                   result: be.result,
+                  workTier: be.workTier,
+                  delivery: be.delivery,
                   model: be.model,
                   log: [],
                 });
@@ -488,12 +522,15 @@ export const useAgentStore = create<AgentStore>()(
                   maxIterations: snapshot.maxIterations || 200,
                   toolCallCount: snapshot.toolCallCount || 0,
                   messagesCount: snapshot.messagesCount || 0,
+                  surface: snapshot.surface,
                   totalInputTokens: 0,
                   totalOutputTokens: 0,
                   plan: snapshot.plan ?? null,
                   model: snapshot.model,
                   error: snapshot.error,
                   result: snapshot.result,
+                  workTier: snapshot.workTier,
+                  delivery: snapshot.delivery,
                   log: [],
                 },
               ],
@@ -514,13 +551,15 @@ export const useAgentStore = create<AgentStore>()(
             || a.status === 'queued'
             || a.status === 'completed'
             || a.status === 'error'
-            || a.status === 'stopped',
+            || a.status === 'stopped'
+            || a.status === 'review',
           )
           .map((a) => ({ ...a, log: [] })), // Don't persist streaming logs
         maxConcurrent: state.maxConcurrent,
         // Keep the selected task across renderer reloads: losing it is what
         // made a finished task appear to "jump back to the new-chat screen".
         currentAgentId: state.currentAgentId,
+        lastAgentIdBySurface: state.lastAgentIdBySurface,
       }),
       // App restart: the backend restores running/paused/queued tasks from
       // its own disk snapshots (via refreshStates), so live entries must not
@@ -537,7 +576,7 @@ export const useAgentStore = create<AgentStore>()(
           ...current,
           ...(persisted as Partial<AgentStore>),
           agents: agents.filter((a) =>
-            a.status === 'completed' || a.status === 'error' || a.status === 'stopped',
+            a.status === 'completed' || a.status === 'error' || a.status === 'stopped' || a.status === 'review',
           ),
           // Restore the selection. A running task is not in `agents` yet —
           // refreshStates() re-attaches it from the backend right after boot.
@@ -643,6 +682,10 @@ function logEntryFromEvent(event: any): AgentLogEntry | null {
     case 'deviance_warning':
       return event.message
         ? { type: 'warning', timestamp: Date.now(), text: event.message }
+        : null;
+    case 'system_message':
+      return event.level === 'warning' && event.content
+        ? { type: 'warning', timestamp: Date.now(), text: event.content }
         : null;
     case 'context_compressed':
       return {
@@ -841,6 +884,9 @@ function ensureEventSub(id: string) {
                 ...a,
                 totalInputTokens: (a.totalInputTokens || 0) + (event.inputTokens || 0),
                 totalOutputTokens: (a.totalOutputTokens || 0) + (event.outputTokens || 0),
+                totalReasoningTokens: (a.totalReasoningTokens || 0) + (event.reasoningTokens || 0),
+                totalCacheHitTokens: (a.totalCacheHitTokens || 0) + (event.cacheHitTokens || 0),
+                totalCacheMissTokens: (a.totalCacheMissTokens || 0) + (event.cacheMissTokens || 0),
               }
             : a,
         ),
@@ -898,6 +944,29 @@ if (typeof window !== 'undefined') {
   if (prev) prev(); // Clean previous subscription (HMR)
   (window as any)[STORE_KEY] = (() => {
     const unsubUpdates = useAgentStore.getState().subscribeToUpdates();
+    // 模式切换不丢任务：先记住当前模式选中的任务，再恢复目标模式上次的
+    // 选中项；没有历史选中才清空。这样 Code↔Work 来回切换不会回到新建界面。
+    const unsubMode = useAppStore.subscribe((state, prev) => {
+      if (state.sidebarMode === prev.sidebarMode) return;
+      const surface = state.sidebarMode === 'chat' ? null : state.sidebarMode;
+      const { currentAgentId, agents, lastAgentIdBySurface } = useAgentStore.getState();
+      if (currentAgentId) {
+        const agent = agents.find((a) => a.id === currentAgentId);
+        const agentSurface = agent?.surface ?? 'code';
+        if (agentSurface === 'work' || agentSurface === 'code') {
+          useAgentStore.setState({
+            lastAgentIdBySurface: { ...lastAgentIdBySurface, [agentSurface]: currentAgentId },
+          });
+        }
+      }
+      if (!surface) {
+        useAgentStore.setState({ currentAgentId: null });
+        return;
+      }
+      const saved = useAgentStore.getState().lastAgentIdBySurface[surface];
+      const savedAgent = saved ? useAgentStore.getState().agents.find((a) => a.id === saved) : null;
+      useAgentStore.setState({ currentAgentId: savedAgent ? saved : null });
+    });
     // Pull restored snapshots (task history / paused agents) from the backend.
     void useAgentStore.getState().refreshStates();
     // Backend maxConcurrent resets to its default on every app launch; push the
@@ -905,6 +974,7 @@ if (typeof window !== 'undefined') {
     agentIpc()?.setMaxConcurrent?.(useAgentStore.getState().maxConcurrent)?.catch?.(() => {});
     return () => {
       unsubUpdates();
+      unsubMode();
       for (const timer of cleanupTimers.values()) clearTimeout(timer);
       cleanupTimers.clear();
       for (const unsub of eventSubs.values()) unsub();

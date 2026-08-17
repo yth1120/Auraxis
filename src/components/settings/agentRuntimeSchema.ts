@@ -20,6 +20,13 @@ export function buildAgentRuntimeFields(
   const fallbackExecute = { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' };
   return [
     {
+      key: 'clarifyBeforeWork',
+      label: t('settings.runtime.clarifyBeforeWork'),
+      description: t('settings.runtime.clarifyBeforeWork.desc'),
+      type: 'boolean',
+      default: true,
+    },
+    {
       key: 'agentMaxIterations',
       label: t('settings.runtime.maxIterations'),
       description: t('settings.runtime.maxIterations.desc'),

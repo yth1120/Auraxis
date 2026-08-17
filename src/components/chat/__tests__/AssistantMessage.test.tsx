@@ -52,6 +52,34 @@ describe('AssistantMessage — AI 输出渲染', () => {
     expect(text).toContain('这是推理过程');
   });
 
+  it('思考关闭时隐藏模型泄漏的 <thinking> 块', () => {
+    const { container } = render(
+      <AssistantMessage
+        message={msg({
+          content: '<thinking>不该展示的推理</thinking>\n\n最终答案',
+          thinkingEnabled: false,
+        })}
+      />,
+    );
+    const text = container.textContent ?? '';
+    expect(text).toContain('最终答案');
+    expect(text).not.toContain('不该展示的推理');
+    expect(text).not.toContain('思考');
+  });
+
+  it('思考开启时展示模型输出的思考块', () => {
+    const { container } = render(
+      <AssistantMessage
+        message={msg({
+          content: '<thinking>应当展示的推理</thinking>\n\n最终答案',
+          thinkingEnabled: true,
+        })}
+      />,
+    );
+    const text = container.textContent ?? '';
+    expect(text).toContain('应当展示的推理');
+  });
+
   it('流式内容不会重复渲染已完成的段落', () => {
     const { container } = render(
       <AssistantMessage

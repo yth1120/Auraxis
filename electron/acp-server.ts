@@ -4,16 +4,20 @@
  * Exposes Auraxis agents to ACP clients (Zed, VS Code, etc.) over newline-
  * delimited JSON-RPC 2.0 on stdio. Supported methods:
  *   initialize / session/new / session/prompt / session/cancel /
- *   session/delete / shutdown
+ *   session/delete / session/read_file / session/update_file / shutdown
  * Server notifications: session/update (running/idle), request/agent_message,
- * request/error. Text prompts only; no plan/diff/file capabilities yet.
+ * request/error. Text + plan prompts; text file read/write inside the session
+ * project root.
  */
 import { createInterface } from 'readline';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 export interface AcpRunAgentParams {
   prompt: string;
   sessionId: string;
   projectRoot?: string;
+  promptType?: 'text' | 'plan';
   signal?: AbortSignal;
 }
 
@@ -58,7 +62,7 @@ export class AcpServer {
     private send: (msg: AcpRpcMessage) => void,
   ) {}
 
-  handle(raw: unknown): void {
+  async handle(raw: unknown): Promise<void> {
     const msg = raw as AcpRpcMessage;
     if (!msg || msg.jsonrpc !== '2.0') {
       this.send({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Invalid Request' } });
@@ -75,9 +79,9 @@ export class AcpServer {
             result: {
               protocolVersion: clientVersion,
               agentCapabilities: {
-                transcriptTypes: ['text'],
-                promptTypes: ['text'],
-                fileTypes: [],
+                transcriptTypes: ['text', 'plan'],
+                promptTypes: ['text', 'plan'],
+                fileTypes: ['text'],
                 capabilities: [],
               },
               agentInfo: {
@@ -109,6 +113,7 @@ export class AcpServer {
             return;
           }
           const text = typeof p.prompt?.text === 'string' ? p.prompt.text : '';
+          const promptType: 'text' | 'plan' = p.prompt?.type === 'plan' ? 'plan' : 'text';
           if (!text.trim()) {
             this.send({ jsonrpc: '2.0', id: msg.id ?? null, error: { code: -32602, message: 'prompt.text is required' } });
             return;
@@ -117,7 +122,36 @@ export class AcpServer {
           const sequenceId = session.seq;
           const sessionId = session.id;
           this.send({ jsonrpc: '2.0', id: msg.id ?? null, result: { sessionId, sequenceId } });
-          void this.runPrompt(session, sequenceId, text);
+          void this.runPrompt(session, sequenceId, text, promptType);
+          return;
+        }
+        case 'session/read_file': {
+          const p = msg.params ?? {};
+          const session = this.sessions.get(String(p.sessionId ?? ''));
+          if (!session) {
+            this.send({ jsonrpc: '2.0', id: msg.id ?? null, error: { code: -32001, message: 'Session not found' } });
+            return;
+          }
+          const filePath = this.resolveFilePath(session, p.filePath);
+          const content = await fs.readFile(filePath, 'utf8');
+          this.send({ jsonrpc: '2.0', id: msg.id ?? null, result: { content } });
+          return;
+        }
+        case 'session/update_file': {
+          const p = msg.params ?? {};
+          const session = this.sessions.get(String(p.sessionId ?? ''));
+          if (!session) {
+            this.send({ jsonrpc: '2.0', id: msg.id ?? null, error: { code: -32001, message: 'Session not found' } });
+            return;
+          }
+          const filePath = this.resolveFilePath(session, p.filePath);
+          if (typeof p.content !== 'string') {
+            this.send({ jsonrpc: '2.0', id: msg.id ?? null, error: { code: -32602, message: 'content is required' } });
+            return;
+          }
+          await fs.mkdir(path.dirname(filePath), { recursive: true });
+          await fs.writeFile(filePath, p.content, 'utf8');
+          this.send({ jsonrpc: '2.0', id: msg.id ?? null, result: {} });
           return;
         }
         case 'session/cancel': {
@@ -149,7 +183,21 @@ export class AcpServer {
     }
   }
 
-  private async runPrompt(session: AcpSession, sequenceId: number, text: string): Promise<void> {
+  private resolveFilePath(session: AcpSession, raw: unknown): string {
+    if (typeof raw !== 'string' || !raw.trim()) {
+      throw new Error('filePath is required');
+    }
+    const resolved = path.resolve(raw);
+    if (session.projectRoot) {
+      const root = path.resolve(session.projectRoot);
+      if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+        throw new Error('filePath 必须位于会话项目目录内');
+      }
+    }
+    return resolved;
+  }
+
+  private async runPrompt(session: AcpSession, sequenceId: number, text: string, promptType: 'text' | 'plan'): Promise<void> {
     this.send({
       jsonrpc: '2.0',
       method: 'session/update',
@@ -160,6 +208,7 @@ export class AcpServer {
         prompt: text,
         sessionId: session.id,
         projectRoot: session.projectRoot,
+        promptType,
         signal: session.abort.signal,
       });
       if (session.abort.signal.aborted) {
@@ -220,7 +269,7 @@ export function startAcpServer(deps: AcpDeps): () => void {
       server.handle({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } });
       return;
     }
-    server.handle(raw);
+    void server.handle(raw);
   });
   return () => rl.close();
 }

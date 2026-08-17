@@ -218,6 +218,20 @@
   gap: 10px;
   height: 28px;
   margin-left: -6px;
+  /* 噪音收敛：回合/消息尾巴 hover（或键盘聚焦）时才显示。 */
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.group:hover .ax-flow-actions,
+.ax-flow-actions:focus-within {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .ax-flow-actions {
+    opacity: 1;
+  }
 }
 
 .ax-flow-actions[data-align='end'] {
@@ -342,9 +356,9 @@
   --color-primary: #111216;
   --color-primary-hover: #292C32;
   --color-primary-active: #3A3E45;
-  --color-primary-soft: rgba(17, 18, 22, 0.06);
-  --color-primary-strong: rgba(17, 18, 22, 0.10);
-  --color-primary-border: rgba(17, 18, 22, 0.16);
+  --color-primary-soft: rgba(30, 35, 42, 0.06);
+  --color-primary-strong: rgba(30, 35, 42, 0.10);
+  --color-primary-border: rgba(30, 35, 42, 0.17);
   --color-accent: #6A6884;
   --color-accent-hover: #5B5975;
   --color-accent-active: #4D4B66;
@@ -361,35 +375,35 @@
   --color-violet-border: rgba(106, 104, 132, 0.24);
 
   --color-bg-primary: #FFFFFF;
-  --color-bg-secondary: #F4F4F1;
-  --color-bg-tertiary: #E9E9E6;
+  --color-bg-secondary: #F5F6F8;
+  --color-bg-tertiary: #EBEDF0;
   --color-bg-elevated: #FFFFFF;
-  --color-bg-inset: rgba(17, 18, 22, 0.04);
+  --color-bg-inset: rgba(30, 35, 42, 0.045);
 
-  --color-text-primary: #000000;
-  --color-text-secondary: #3E424A;
-  --color-text-muted: #6B7280;
-  --color-text-faint: #8E95A0;
+  --color-text-primary: #111216;
+  --color-text-secondary: #2E333A;
+  --color-text-muted: #454B53;
+  --color-text-faint: #61676F;
   --color-text-on-accent: #FFFFFF;
 
-  --color-border-dim: rgba(29, 33, 41, 0.05);
-  --color-border-default: rgba(29, 33, 41, 0.08);
-  --color-border-strong: rgba(29, 33, 41, 0.12);
+  --color-border-dim: rgba(30, 35, 42, 0.065);
+  --color-border-default: rgba(30, 35, 42, 0.085);
+  --color-border-strong: rgba(30, 35, 42, 0.13);
 
-  --color-success: #16A34A;
-  --color-success-soft: rgba(22, 163, 74, 0.08);
-  --color-danger: #E5484D;
-  --color-danger-soft: rgba(229, 72, 77, 0.08);
-  --color-danger-border: rgba(229, 72, 77, 0.25);
-  --color-danger-lighter: #A25B60;
-  --color-warning: #D97706;
-  --color-warning-soft: rgba(217, 119, 6, 0.08);
-  --color-warning-border: rgba(217, 119, 6, 0.25);
+  --color-success: #4F7C68;
+  --color-success-soft: rgba(79, 124, 104, 0.10);
+  --color-danger: #A25B60;
+  --color-danger-soft: rgba(162, 91, 96, 0.10);
+  --color-danger-border: rgba(162, 91, 96, 0.22);
+  --color-danger-lighter: #B06F74;
+  --color-warning: #B97F3E;
+  --color-warning-soft: rgba(185, 127, 62, 0.10);
+  --color-warning-border: rgba(185, 127, 62, 0.24);
 
   --color-code-bg: #F6F7F9;
   --color-surface: #FFFFFF;
-  --color-surface-hover: #ECECE9;
-  --color-surface-inset: rgba(29, 33, 41, 0.045);
+  --color-surface-hover: #EEF0F3;
+  --color-surface-inset: rgba(30, 35, 42, 0.045);
   --color-tooltip-bg: #FFFFFF;
 
   /* Colors — back-compat aliases */
@@ -407,12 +421,16 @@
   --color-warning-alt: var(--color-warning);
 
   /* Typography */
-  --font-heading: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
-    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
-    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --font-mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas,
-    'Liberation Mono', Menlo, Courier, 'PingFang SC', 'Microsoft YaHei';
+  --font-heading: 'Inter Variable', 'Segoe UI Variable Text', 'Segoe UI',
+    -apple-system, BlinkMacSystemFont, 'HarmonyOS Sans SC', 'MiSans',
+    'PingFang SC', 'Hiragino Sans GB', 'Source Han Sans SC', 'Noto Sans CJK SC',
+    'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  --font-body: 'Inter Variable', 'Segoe UI Variable Text', 'Segoe UI',
+    -apple-system, BlinkMacSystemFont, 'HarmonyOS Sans SC', 'MiSans',
+    'PingFang SC', 'Hiragino Sans GB', 'Source Han Sans SC', 'Noto Sans CJK SC',
+    'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code',
+    Consolas, 'Liberation Mono', Menlo, Courier, 'PingFang SC', 'Microsoft YaHei';
 
   --text-4xs: 0.5625rem;  /* 9px */
   --text-4xs--line-height: 0.875rem;
@@ -527,14 +545,14 @@ html, body, #root {
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(30, 35, 42, 0.22);
   border-radius: 9999px;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.25); }
+::-webkit-scrollbar-thumb:hover { background: rgba(30, 35, 42, 0.32); }
 ::-webkit-scrollbar-corner { background: transparent; }
 
-.dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); }
-.dark ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.28); }
+.dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.22); }
+.dark ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.32); }
 
 /* Selection */
 ::selection {
@@ -563,6 +581,12 @@ html.auraxis-glass body {
   background: transparent !important;
 }
 
+/* 玻璃开启时，侧边栏内容自身的实色底必须让位给 aside 的半透明 Acrylic 层，
+   否则 .ax-sidebar 的 bg-secondary 会把磨砂效果整个盖死。 */
+html.auraxis-glass .ax-sidebar {
+  background: transparent;
+}
+
 /* ── Import existing global CSS files ────────────────────── */
 /* tokens.css is imported AFTER @theme so its values take precedence
    for CSS custom properties. During migration this ensures both
@@ -573,3 +597,4 @@ html.auraxis-glass body {
 @import "./icons.css";
 @import "./overrides.css";
 @import "./ax-ui.css";
+@import "./glass.css";

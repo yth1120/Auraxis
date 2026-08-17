@@ -5,9 +5,39 @@
  * here; fields that only one side needed (maxIterations, parentAgentId, goal)
  * are merged so neither side loses information.
  */
-import type { PermissionMode } from './core';
+import type { ApprovalPolicy } from './core';
 
-export type { PermissionMode };
+export type { ApprovalPolicy };
+export { normalizeApprovalPolicy } from './core';
+export * from './permission';
+
+/** DeepSeek tool_choice：auto / none / required / 强制指定某个工具。 */
+export type DeepSeekToolChoice =
+  | 'auto'
+  | 'none'
+  | 'required'
+  | { type: 'function'; function: { name: string } };
+
+/** Work 模式执行自主度（档位）。
+ *  · plan  — 计划确认：先规划并审批，审批后计划内动作自动执行。
+ *  · smart — 智能放行：低风险自动，中/高风险逐项询问。
+ *  · full  — 全自动：低/中风险自动，高危操作仍询问（除非 autoApprove）。
+ */
+export type WorkAutonomyTier = 'plan' | 'smart' | 'full';
+
+export const WORK_AUTONOMY_TIERS: readonly WorkAutonomyTier[] = ['plan', 'smart', 'full'];
+
+export function normalizeWorkAutonomyTier(value: unknown): WorkAutonomyTier {
+  if (value === 'plan' || value === 'smart' || value === 'full') return value;
+  return 'smart';
+}
+
+/** 交付验收数据：任务完成后呈现给用户的结构化交付物清单。 */
+export interface WorkDelivery {
+  files: string[];
+  result: string;
+  summary?: string;
+}
 
 export interface MCPServerConfig {
   id: string;
@@ -47,13 +77,13 @@ export interface PermissionRequest {
   input: Record<string, unknown>;
   message: string;
   timestamp: number;
-  mode: PermissionMode;
+  mode: ApprovalPolicy;
   oldContent?: string;
   /** Set when the request originates from a background (Code-mode) agent task. */
   agentId?: string;
 }
 
-export type AgentStatus = 'idle' | 'running' | 'completed' | 'error' | 'stopped';
+export type AgentStatus = 'idle' | 'running' | 'completed' | 'error' | 'stopped' | 'review';
 
 export interface AgentLogEntry {
   type: 'text' | 'tool_start' | 'tool_end' | 'tool_error' | 'iteration_start' | 'iteration_end' | 'error' | 'plan' | 'context';
@@ -94,6 +124,14 @@ export interface AgentInfo {
   /** 该 Agent 通过 Report 工具发送的进度汇报。 */
   reports?: { id: string; text: string; ts: number }[];
   log: AgentLogEntry[];
+  /** Work 模式执行档位（透传到前端展示/恢复）。 */
+  workTier?: WorkAutonomyTier;
+  /** 项目工作区根目录（含主根）。 */
+  workspaceRoots?: string[];
+  /** 项目可写根目录（roots 的子集）。 */
+  writableRoots?: string[];
+  /** Work 模式交付验收数据。 */
+  delivery?: WorkDelivery;
 }
 
 export interface AgentCreateRequest {
@@ -105,5 +143,9 @@ export interface AgentCreateRequest {
   apiKey: string;
   autoApprove?: boolean;
   isDeepThink?: boolean;
-  reasoningEffort?: 'high' | 'max';
+  reasoningEffort?: 'low' | 'high' | 'max';
+  /** 项目工作区根目录（含主根）。 */
+  workspaceRoots?: string[];
+  /** 项目可写根目录（roots 的子集）。 */
+  writableRoots?: string[];
 }

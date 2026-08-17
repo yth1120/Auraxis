@@ -28,6 +28,20 @@
 
 > **说明**：`better-sqlite3` 为可选原生依赖，依赖本机编译工具链；未安装时长期记忆自动回退为 JSON 文件存储，不影响其余功能。
 
+## 研究论文与设计参考
+
+以下论文为本项目「论文驱动开发」的算法与设计参考（实现均为自研，未复制论文代码；论文版权归原作者，正文以 arXiv 页面为准）：
+
+| 论文 | arXiv |
+|---|---|
+| Eywa: Provenance-Grounded Long-Term Memory for AI Agents | [arXiv:2605.30771](https://arxiv.org/abs/2605.30771) |
+| MAP-Graph: Provenance-Aware Shared Memory for Multi-Agent Workflows | [arXiv:2608.10509](https://arxiv.org/abs/2608.10509) |
+| AGORA: Adapter-Grounded Observation-Action Retention for Inference-Free Prompt Compression in LLM Agents | [arXiv:2605.26596](https://arxiv.org/abs/2605.26596) |
+| SWE-Touch: Benchmarking Coding Agents When Users Touch the Code | [arXiv:2608.02499](https://arxiv.org/abs/2608.02499) |
+| Oversight Has a Capacity: Calibrating Agent Guards to a Subjective, Fatiguing Human | [arXiv:2606.08919](https://arxiv.org/abs/2606.08919) |
+| AutoTool: Efficient Tool Selection for Large Language Model Agents | [arXiv:2511.14650](https://arxiv.org/abs/2511.14650) |
+| When Self-Evolution Backfires: Pre-Commit Gating against Skill Contamination in LLM Agents | [arXiv:2608.05810](https://arxiv.org/abs/2608.05810) |
+
 ## 开发与构建工具链
 
 | 依赖 | 用途 | 许可证 |

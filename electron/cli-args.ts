@@ -8,9 +8,10 @@
  *   auraxis --sdk | --acp
  */
 
-export type CliPermissionMode = 'ask' | 'plan' | 'afe';
+export type CliApprovalMode = 'ask' | 'plan' | 'auto';
 export type CliSandboxMode = 'read' | 'workspace-write' | 'full';
-export type CliReasoningEffort = 'high' | 'max';
+export type CliReasoningEffort = 'low' | 'high' | 'max';
+import type { DeepSeekToolChoice } from './contracts/advanced';
 
 export interface CliArgs {
   help: boolean;
@@ -29,10 +30,11 @@ export interface CliArgs {
   apiKey?: string;
   /** Override the resolved API base (also settable via DEEPSEEK_BASE_URL). */
   apiBase?: string;
-  mode?: CliPermissionMode;
+  mode?: CliApprovalMode;
   sandbox?: CliSandboxMode;
   deepThink?: boolean;
   reasoningEffort?: CliReasoningEffort;
+  toolChoice?: DeepSeekToolChoice;
   maxIterations?: number;
   /** Stream machine-readable NDJSON events instead of plain text. */
   json?: boolean;
@@ -78,11 +80,22 @@ export function parseCliArgs(argv: string[]): CliArgs {
     return Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
   })();
   const mode = valueOf(argv, '--mode');
-  if (mode === 'ask' || mode === 'plan' || mode === 'afe') out.mode = mode;
+  if (mode === 'ask' || mode === 'plan' || mode === 'auto') {
+    out.mode = mode;
+  } else if (mode === 'afe') {
+    // Legacy CLI spelling — normalize to the current value.
+    out.mode = 'auto';
+  }
   const sandbox = valueOf(argv, '--sandbox');
   if (sandbox === 'read' || sandbox === 'workspace-write' || sandbox === 'full') out.sandbox = sandbox;
   const effort = valueOf(argv, '--reasoning-effort');
-  if (effort === 'high' || effort === 'max') out.reasoningEffort = effort;
+  if (effort === 'low' || effort === 'high' || effort === 'max') out.reasoningEffort = effort;
+  const toolChoice = valueOf(argv, '--tool-choice');
+  if (toolChoice === 'auto' || toolChoice === 'none' || toolChoice === 'required') {
+    out.toolChoice = toolChoice;
+  } else if (toolChoice) {
+    out.toolChoice = { type: 'function', function: { name: toolChoice } };
+  }
   out.deepThink = has(argv, '--deep-think') || has(argv, '--deepthink');
   out.json = has(argv, '--json');
   out.verbose = has(argv, '--verbose');
@@ -113,7 +126,7 @@ export function cliUsage(): string {
     '  --model <id>                模型 ID（默认: 设置 → deepseek-v4-pro）',
     '  --api-key <key>             API Key（优先级高于设置；也支持 DEEPSEEK_API_KEY）',
     '  --api-base=<url>            API 端点（默认: DEEPSEEK_BASE_URL → 官方端点；请用 = 形式）',
-    '  --mode <ask|plan|afe>       权限模式（默认: afe）',
+    '  --mode <ask|plan|auto>      审批策略（默认: auto；旧写法 afe 仍兼容）',
     '  --sandbox <read|workspace-write|full>  沙箱模式（默认: workspace-write）',
     '  --deep-think                启用深度思考',
     '  --reasoning-effort <high|max>  思考强度（默认 high）',

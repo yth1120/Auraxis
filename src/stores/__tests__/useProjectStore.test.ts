@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useProjectStore } from '../useProjectStore';
+import { hydrateProjectStore, useProjectStore } from '../useProjectStore';
 import { useSettingsStore } from '../useSettingsStore';
 import { useChatStore } from '../useChatStore';
 
@@ -65,5 +65,53 @@ describe('useProjectStore — 项目工作区', () => {
     expect(s.currentProjectId).toBeNull();
     expect(useSettingsStore.getState().projectPath).toBeNull();
     expect(useChatStore.getState().currentProjectPath).toBeNull();
+  });
+
+  it('hydrateProjectStore 恢复磁盘注册表', () => {
+    hydrateProjectStore({
+      projects: [{
+        id: 'p1', name: 'demo', path: 'C:/proj/demo',
+        roots: ['C:/proj/demo'], writableRoots: ['C:/proj/demo'],
+        createdAt: 1, updatedAt: 2,
+      }],
+      currentProjectId: 'p1',
+      view: { groupBy: 'flat', orderBy: 'updated' },
+      workspaceOrder: ['p1'],
+      sessionOrder: { 'C:/proj/demo': ['s1'] },
+    });
+    const s = useProjectStore.getState();
+    expect(s.projects).toHaveLength(1);
+    expect(s.projects[0].path).toBe('C:/proj/demo');
+    expect(s.currentProjectId).toBe('p1');
+    expect(s.view).toEqual({ groupBy: 'flat', orderBy: 'updated' });
+    expect(s.workspaceOrder).toEqual(['p1']);
+    expect(s.sessionOrder['C:/proj/demo']).toEqual(['s1']);
+  });
+
+  it('项目默认只有主根且可写', () => {
+    const p = useProjectStore.getState().addProject('C:/proj/a');
+    expect(p.roots).toEqual(['C:/proj/a']);
+    expect(p.writableRoots).toEqual(['C:/proj/a']);
+  });
+
+  it('addProjectRoot / removeProjectRoot / setRootWritable 管理多根', () => {
+    const p = useProjectStore.getState().addProject('C:/proj/a');
+    useProjectStore.getState().addProjectRoot(p.id, 'C:/shared');
+    let updated = useProjectStore.getState().projects.find((x) => x.id === p.id)!;
+    expect(updated.roots).toEqual(['C:/proj/a', 'C:/shared']);
+    expect(updated.writableRoots).toEqual(['C:/proj/a', 'C:/shared']);
+
+    useProjectStore.getState().setRootWritable(p.id, 'C:/shared', false);
+    updated = useProjectStore.getState().projects.find((x) => x.id === p.id)!;
+    expect(updated.writableRoots).toEqual(['C:/proj/a']);
+
+    useProjectStore.getState().removeProjectRoot(p.id, 'C:/shared');
+    updated = useProjectStore.getState().projects.find((x) => x.id === p.id)!;
+    expect(updated.roots).toEqual(['C:/proj/a']);
+
+    // 主根不可移除
+    useProjectStore.getState().removeProjectRoot(p.id, 'C:/proj/a');
+    updated = useProjectStore.getState().projects.find((x) => x.id === p.id)!;
+    expect(updated.roots).toEqual(['C:/proj/a']);
   });
 });

@@ -66,6 +66,14 @@ afterEach(async () => {
 });
 
 describe('settings-store API key encryption', () => {
+  it('resolveMaxOutputTokens 收敛到官方范围', async () => {
+    const store = await loadStore();
+    expect(store.resolveMaxOutputTokens({})).toBe(8192);
+    expect(store.resolveMaxOutputTokens({ maxOutputTokens: 512 })).toBe(1024);
+    expect(store.resolveMaxOutputTokens({ maxOutputTokens: 999999 })).toBe(384000);
+    expect(store.resolveMaxOutputTokens({ maxOutputTokens: 16384 })).toBe(16384);
+  });
+
   it('writeSettings encrypts every known API key and leaves other fields intact', async () => {
     const { writeSettings } = await loadStore();
     await writeSettings({
@@ -109,13 +117,13 @@ describe('settings-store API key encryption', () => {
     expect(String(raw.deepseekApiKey)).toMatch(/^enc:/);
   });
 
-  it('keeps plaintext when safeStorage is unavailable', async () => {
+  it('drops the key instead of storing plaintext when safeStorage is unavailable', async () => {
     electronMock.safeStorage.isEncryptionAvailable.mockReturnValue(false);
     const { writeSettings } = await loadStore();
     await writeSettings({ deepseekApiKey: 'sk-plain' });
 
     const raw = await readRawSettings();
-    expect(raw.deepseekApiKey).toBe('sk-plain');
+    expect(raw.deepseekApiKey).toBeUndefined();
   });
 
   it('removes an undecryptable key instead of surfacing garbage', async () => {

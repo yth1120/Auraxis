@@ -25,6 +25,7 @@ import { Planner } from './agent-loop';
 import { estimateTokens } from './agent-loop';
 import { devLog } from './shared';
 import { pruneToolResults } from '../tool-result-prune';
+import { compressHistorySteps } from '../step-compressor';
 
 // Re-export estimateTokens so query-engine doesn't need a separate import
 export { estimateTokens };
@@ -122,6 +123,10 @@ export function buildSessionPreamble(params: {
   return text;
 }
 
+/** Static work-guide message placed at index 2 (after system + preamble).
+ *  Exported so snapshot replay can verify the stored head is still current. */
+export const WORK_GUIDE_MESSAGE = '请根据 system prompt 中的任务描述开始工作。节奏由你自主决定。';
+
 /**
  * Prepare the initial message array with cache-aligned layout:
  *
@@ -145,7 +150,7 @@ export function prepareCacheAlignedMessages(params: {
     isDeepThink: params.isDeepThink,
   });
 
-  const workGuide = '请根据 system prompt 中的任务描述开始工作。节奏由你自主决定。';
+  const workGuide = WORK_GUIDE_MESSAGE;
 
   const filtered = params.chatMessages.filter((m) => m.role !== 'system');
 
@@ -731,6 +736,13 @@ export async function compactHistory(params: {
   maxTokens?: number;
   plan: TaskPlan | null;
   llmConfig?: LLMSummaryConfig;
+  /**
+   * 'snip' = 现有原子组截断 + 摘要管线（默认，聊天/手动压缩不变）；
+   * 'step' = AGORA 步骤级压缩（整步保留/丢弃，动作语法完整，免推理）。
+   */
+  compressMode?: 'snip' | 'step';
+  /** step 模式下始终保留的最近步骤数。默认 6。 */
+  stepKeepRecent?: number;
 }): Promise<CompactResult> {
   const { maxTokens = SNIP_COMPACT_TOKEN_BUDGET, plan, llmConfig } = params;
   let messages = params.messages;
@@ -739,6 +751,10 @@ export async function compactHistory(params: {
   // become compact summaries (reads/greps/bash/web keep key fields).
   const pruned = pruneToolResults(messages, plan);
   if (pruned.pruned > 0) messages = pruned.messages;
+
+  if (params.compressMode === 'step') {
+    return compactWithSteps(messages, plan, params.stepKeepRecent ?? 6);
+  }
 
   const { truncated, removed } = snipCompact(messages, maxTokens, plan);
 
@@ -781,6 +797,58 @@ export async function compactHistory(params: {
     roundsRemoved,
     summaryInjected: true,
     messagesRemoved,
+    tokensSaved,
+  };
+}
+
+/**
+ * AGORA 步骤级压缩分支：复用 pruneToolResults 的大结果剪枝，然后整步压缩。
+ * 先清除历史摘要注入，避免跨轮压缩出现摘要叠加；摘要统一走
+ * [System Notification] 约定，与 snip 管线对齐。
+ */
+function compactWithSteps(
+  messages: any[],
+  plan: TaskPlan | null,
+  keepRecentSteps: number,
+): CompactResult {
+  const stripped = messages.filter(
+    (m) =>
+      !(
+        m.role === 'user' &&
+        typeof m.content === 'string' &&
+        (m.content.startsWith('[历史上下文摘要]') || m.content.startsWith('[System Notification]'))
+      ),
+  );
+  const result = compressHistorySteps(stripped, {
+    keepRecentSteps,
+    plan,
+    summaryHeader: '[System Notification] 历史上下文压缩',
+  });
+
+  // 步骤数未超地板时 compressHistorySteps 原样返回同一数组。
+  if (result === stripped) {
+    return {
+      messages,
+      wasTruncated: false,
+      roundsRemoved: 0,
+      summaryInjected: false,
+      messagesRemoved: 0,
+      tokensSaved: 0,
+    };
+  }
+
+  const removedAssistantRounds =
+    stripped.filter((m) => m.role === 'assistant').length -
+    result.filter((m) => m.role === 'assistant').length;
+  // result 里比 stripped 多一条摘要消息，故 +1 折算真实移除数。
+  const messagesRemoved = stripped.length - result.length + 1;
+  const tokensSaved = Math.max(0, estimateTokens(stripped) - estimateTokens(result));
+  return {
+    messages: result,
+    wasTruncated: true,
+    roundsRemoved: Math.max(0, removedAssistantRounds),
+    summaryInjected: true,
+    messagesRemoved: Math.max(0, messagesRemoved),
     tokensSaved,
   };
 }

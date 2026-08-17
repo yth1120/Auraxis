@@ -4,18 +4,18 @@
 
 ## 角色设定
 
-你是一位资深前端工程师兼品牌视觉设计师，为 **Auraxis**（桌面端 Agentic 编码助手，v2.0.0，MIT 开源）设计并实现官方网站。输出需要同时满足：开发者极客的信任感（产品面向开发者）与 Aura 品牌气质——**「Black is the Axis，White is the Structure，Purple is the Aura」**：克制、精密、不花哨。
+你是一位资深前端工程师兼品牌视觉设计师，为 **Auraxis**（桌面端 Agentic 编码助手，v3.0.0，MIT 开源）设计并实现官方网站。输出需要同时满足：开发者极客的信任感（产品面向开发者）与 Aura 品牌气质——**「Black is the Axis，White is the Structure，Purple is the Aura」**：克制、精密、不花哨。
 
 ## 项目背景（素材事实，写页面时引用，不得编造）
 
 Auraxis 是 Electron + React 18 + TypeScript + Zustand 构建的桌面 Agentic 编程助手，核心能力：
 
 - **统一 ReAct 步进引擎**：聊天与多 Agent 共用一套循环，重试 / 上下文压缩 / 停止策略收敛一处
-- **63 个内置 AI 工具**：Bash、Read/Write/Edit、Grep/Glob、WebSearch、终端六件套（Terminal*）、LSP、NotebookEdit、Cron、GitCommit、RunWorkflow、SessionQuery 等
+- **71 个内置 AI 工具**：Bash、Read/Write/Edit、Grep/Glob、WebSearch、终端六件套（Terminal*）、LSP、NotebookEdit、Cron、GitCommit、RunWorkflow、SessionQuery、ReadDocument/WriteDocument（Word/Excel/PPT/PDF）、Slack/Drive/Notion 连接器工具等
 - **多 Agent 调度**：优先级队列（high/normal/low）、并发控制、三级偏差检测（L1 失败 / L2 停滞 / L3 重规划）、计划审批（5 分钟超时）、暂停/恢复、最大递归深度 3
 - **Code Mode**：`RunCode` 的 TypeScript 程序在 worker 线程执行，`await tools.Name(args)` 子调用回穿完整权限管线（并发安全工具最多 8 路重叠、变异工具串行、硬超时）
 - **原生沙箱四后端**：Windows restricted token / AppContainer、Linux、macOS
-- **权限三模式**：`ask`（默认，每次危险工具弹窗）/ `plan`（计划内自动批准）/ `afe`（全自动）；read-before-write 硬门、路径边界、扩展名白名单
+- **审批三策略**：`ask`（默认，每次危险工具弹窗）/ `plan`（计划内自动批准）/ `auto`（全自动）；read-before-write 硬门、路径边界、扩展名白名单
 - **记忆与会话**：LLM 提取长期记忆（项目隔离、自动注入）；统一 JSONL 事件流 + SQLite 投影缓存 + FTS5 全文检索；会话事件级 lineage 追踪
 - **工作区隔离**：EnterWorktree 创建 Git worktree 沙箱，文件/命令自动重定向
 - **扩展生态**：MCP 协议客户端、插件系统（commands / tools / hooks / ui 四类扩展点）、headless CLI、TypeScript SDK（TCP JSON-RPC）、Python SDK、ACP 协议
@@ -60,21 +60,21 @@ Auraxis 是 Electron + React 18 + TypeScript + Zustand 构建的桌面 Agentic �
 - Logo（品牌黑底/白字 + Aura 紫灰状态点）｜链接：特性、下载、文档、开源 ｜右侧 pill「下载」按钮
 
 ### Hero
-- 眉题：`开源 · MIT · v2.0.0`
+- 眉题：`开源 · MIT · v3.0.0`
 - 主标题：Auraxis —— 桌面端 Agentic 编码助手（「Agentic」可用 Aura 紫灰高光，约 3% 用量）
-- 副标题（一句话定位）：一条统一 ReAct 引擎，63 个内置工具，多 Agent 并行、原生沙箱与 Code Mode 编排，让模型在你的项目里真正干活。
+- 副标题（一句话定位）：一条统一 ReAct 引擎，71 个内置工具，多 Agent 并行、原生沙箱与 Code Mode 编排，让模型在你的项目里真正干活。
 - CTA：「下载」（Windows/macOS/Linux 三平台）+「查看文档」
 - 视觉：产品截图或执行 GIF 占位（标注「替换为真实截图」），底部黑→紫灰 3% 光晕
 
 ### 数据条（诚实数字，来源 docs/README.md）
-`63` 内置工具 · `3` 权限模式 · `4` 沙箱后端 · `3` 内置 Agent 类型 · `2` 条 SDK（TS / Python）· `1` 统一步进引擎
+`63` 内置工具 · `1` 运行权限（4 档预设）· `4` 沙箱后端 · `3` 内置 Agent 类型 · `2` 条 SDK（TS / Python）· `1` 统一步进引擎
 
 ### 核心特性（卡片网格，每卡：lucide 图标 + 标题 + 两行描述）
 1. **统一步进引擎** — 聊天与 Agent 共用一套 ReAct 循环：API 重试、上下文压缩、停止策略收敛一处
 2. **多 Agent 调度** — 优先级队列与并发控制，三级偏差检测、计划审批、暂停/恢复
 3. **Code Mode** — worker 线程里用 TypeScript 编排工具，每个子调用回穿完整权限管线（8 路并发、硬超时）
 4. **原生沙箱** — Windows restricted token / AppContainer、Linux、macOS 四后端命令级隔离
-5. **权限三模式** — ask / plan / afe，read-before-write 硬门与可持久化权限规则
+5. **审批三策略** — ask / plan / auto，read-before-write 硬门与可持久化权限规则
 6. **记忆与会话** — LLM 提取长期记忆自动注入；JSONL 事件流 + FTS5 全文检索，事件级溯源
 - 第二行（可选）：MCP 协议、插件系统、终端/PTY/SSH、后台与定时任务、图片输入、撤销与冲突检测
 
@@ -93,7 +93,7 @@ Electron Main (electron/)                     Renderer (src/)
 按能力族列出代表工具：文件（Read/Write/Edit/Delete/Glob/Grep）、检索（SessionQuery/EventSearch/Trace）、终端（Terminal* 六件套、Pty、Pwsh）、后台（Task*/Job*/Schedule*）、编排（RunWorkflow、Ralph、Goal*）、安全（EnterWorktree、ReviewArtifact、GitCommit）
 
 ### 安全章节（开发者最关心，两栏对比）
-- 权限三模式行为对比表（ask 弹窗 / plan 计划内批准 / afe 全自动，安全检查仍生效）
+- 审批三策略行为对比表（ask 弹窗 / plan 计划内批准 / auto 全自动，安全检查仍生效）
 - 沙箱四后端 + 路径边界 + 扩展名白名单 + read-before-write + 撤销快照 + 冲突检测文件锁
 
 ### 开发者生态（4 卡片）
@@ -103,7 +103,7 @@ Electron Main (electron/)                     Renderer (src/)
 - **插件系统** — commands / tools / hooks / ui 四类扩展点，源码扫描安全模型
 
 ### 下载章节
-- Windows（NSIS）/ macOS（DMG，x64 + arm64）/ Linux（AppImage）三卡片，标注版本 v2.0.0 与安装说明
+- Windows（NSIS）/ macOS（DMG，x64 + arm64）/ Linux（AppImage）三卡片，标注版本 v3.0.0 与安装说明
 
 ### FAQ（5–7 条）
 - 是否需要 API Key？支持哪些模型？（DeepSeek 默认，兼容 OpenAI/Anthropic 格式）
@@ -131,7 +131,7 @@ Electron Main (electron/)                     Renderer (src/)
 3. 中英双语切换可用，默认中文；所有文案与产品文档口径一致
 4. Lighthouse：Performance ≥ 90、Accessibility ≥ 95、SEO ≥ 95
 5. 375px / 768px / 1440px 三档无破版
-6. 所有数据（63 工具、v2.0.0、命令示例）与 `docs/README.md` 一致，不编造
+6. 所有数据（71 工具、v3.0.0、命令示例）与 `docs/README.md` 一致，不编造
 7. `npx tsc --noEmit` 与生产构建零错误
 
 ## 五、交付物

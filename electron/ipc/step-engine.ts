@@ -7,11 +7,13 @@
  * that happens inside a single iteration, so query-engine and agent-loop no
  * longer re-implement the same body twice.
  */
-import type { PermissionMode } from '../types';
+import type { ApprovalPolicy } from '../types';
+import type { WorkAutonomyTier } from '../types';
 import type { ToolDef } from '../tool-defs';
 import type { SandboxMode } from '../sandbox-policy';
 import { writeSpill } from '../spill';
 import type { AssistantMessage, ContextConfig, TaskPlan } from './agent-loop';
+import type { DeepSeekToolChoice } from '../contracts/advanced';
 import {
   stopPolicyEvaluate,
   markInjected,
@@ -111,15 +113,23 @@ export interface StepEngineConfig {
   apiBase: string;
   systemPrompt: string;
   projectRoot: string;
-  mode: PermissionMode;
+  mode: ApprovalPolicy;
   approvedPlanSteps?: string[];
+  /** Work 模式执行自主度档位（透传到工具门禁）。 */
+  workTier?: WorkAutonomyTier;
+  /** 项目工作区根目录（含主根）。 */
+  workspaceRoots?: string[];
+  /** 项目可写根目录（roots 的子集）。 */
+  writableRoots?: string[];
   checkPermission?: (toolName: string, input: Record<string, unknown>, toolCallId?: string) => Promise<boolean>;
   autoApprove?: boolean;
   signal?: AbortSignal;
   isDeepThink?: boolean;
-  reasoningEffort?: 'high' | 'max';
+  reasoningEffort?: 'low' | 'high' | 'max';
   /** LLM adapter id — defaults to the built-in deepseek adapter. */
   adapter?: string;
+  /** 主模型重试耗尽后的降级模型（如 deepseek-v4-flash）。 */
+  fallbackModel?: string;
   /** Tool schemas injected into every request (defaults to all tools). */
   tools?: ToolDef[];
   /** External retry nudge (ai:retryTool IPC). */
@@ -130,14 +140,24 @@ export interface StepEngineConfig {
   compactModel?: string;
   /** Token threshold that triggers compaction. */
   compactTokenThreshold?: number;
+  /** 压缩策略：'snip'（默认原子组截断）或 'step'（AGORA 步骤级压缩）。 */
+  compressMode?: 'snip' | 'step';
+  /** step 策略下保留的最近步骤数。 */
+  stepKeepRecent?: number;
   /** Retry base delay in ms (backoff = base * 2^attempt). */
   retryBaseDelayMs?: number;
   /** LLM temperature. */
   temperature?: number;
+  /** DeepSeek tool_choice：auto/none/required/强制指定工具。 */
+  toolChoice?: DeepSeekToolChoice;
   /** Sub-agent recursion depth for dispatched tools. */
   depth?: number;
+  /** Agent 显示名（用于 MAP-Graph 角色自动绑定）。 */
+  agentName?: string;
   /** Per-call sandbox mode; falls back to AURAXIS_SANDBOX_MODE env, then full. */
   sandboxMode?: SandboxMode;
+  /** Which UI surface created this run — 'work' enforces docs-only writes. */
+  surface?: 'chat' | 'work' | 'code';
   /** Inject per-step current-time + elapsed context (Agent mode default on). */
   timeContext?: boolean;
   /** Inject the current tmux session:window.pane before each step (opt-in). */
@@ -162,9 +182,17 @@ export interface StepEngineConfig {
   /** Build a structured summary attached to canonical `tool_end` events. */
   onToolSummary?: (r: RunnerToolResult, tc: RunnerToolCall) => Record<string, unknown> | undefined;
   /** Called after the engine emits `usage` (stats etc.). */
-  onUsage?: (inputTokens: number, outputTokens: number) => void;
+  onUsage?: (usage: {
+    inputTokens: number;
+    outputTokens: number;
+    reasoningTokens?: number;
+    cacheHitTokens?: number;
+    cacheMissTokens?: number;
+  }) => void;
   /** Pre-flight permission gate — denied calls are not executed. */
   preCheckPermission?: (toolName: string, input: Record<string, unknown>, toolCallId: string) => Promise<boolean>;
+  /** MAP-Graph 记忆风险门控（M5，opt-in）。 */
+  riskGate?: (toolName: string, input: Record<string, unknown>, toolCallId: string) => Promise<{ allowed: boolean; reason?: string }>;
   onBeforeToolDispatch?: (tc: RunnerToolCall, toolCallId: string) => void;
   onToolStart?: (tc: RunnerToolCall, toolCallId: string) => void;
   onToolProgress?: (tc: RunnerToolCall, toolCallId: string, chunk: string) => void;
@@ -274,6 +302,9 @@ export async function runStep(
   const maxRetries = DEFAULT_MAX_RETRIES;
   const baseDelay = cfg.retryBaseDelayMs ?? 2000;
   const tools = cfg.tools ?? getAllTools();
+  const fallback = cfg.fallbackModel && cfg.fallbackModel !== cfg.model ? cfg.fallbackModel : undefined;
+  const totalAttempts = maxRetries + (fallback ? 1 : 0);
+  let usedFallback = false;
 
   if (cfg.timeContext) {
     const tc = buildTimeContextMessage(state.startedAt, Date.now());
@@ -291,11 +322,11 @@ export async function runStep(
 
   await cfg.onBeforeRequest?.(messages);
 
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
+  for (let attempt = 0; attempt < totalAttempts; attempt++) {
     if (signal?.aborted) break;
     try {
       assistantMsg = await invokeLlm({
-        model: cfg.model,
+        model: usedFallback ? fallback! : cfg.model,
         apiKey: cfg.apiKey,
         apiBase: cfg.apiBase,
         systemPrompt: cfg.systemPrompt,
@@ -304,6 +335,7 @@ export async function runStep(
         isDeepThink: cfg.isDeepThink,
         reasoningEffort: cfg.reasoningEffort,
         temperature: cfg.temperature,
+        toolChoice: cfg.toolChoice,
         adapter: cfg.adapter,
         signal: signal || new AbortController().signal,
         onTextChunk: (text) => {
@@ -315,10 +347,18 @@ export async function runStep(
           if (firstTokenAt === null) firstTokenAt = Date.now();
           emit({ type: 'thinking_chunk', chunk, isNewBlock });
         },
-        onUsage: (inputTokens, outputTokens) => {
+        onUsage: (usage) => {
+          const { inputTokens, outputTokens, reasoningTokens, cacheHitTokens, cacheMissTokens } = usage;
           stepOutputTokens += outputTokens;
-          emit({ type: 'usage', inputTokens, outputTokens });
-          cfg.onUsage?.(inputTokens, outputTokens);
+          emit({
+            type: 'usage',
+            inputTokens,
+            outputTokens,
+            ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
+            ...(cacheHitTokens !== undefined ? { cacheHitTokens } : {}),
+            ...(cacheMissTokens !== undefined ? { cacheMissTokens } : {}),
+          });
+          cfg.onUsage?.(usage);
         },
       });
       break;
@@ -342,6 +382,11 @@ export async function runStep(
         emit({ type: 'system_message', level: 'info', content: `API 请求失败 (${apiErr.response?.status || apiErr.code})，${Math.round(delay / 1000)}s 后重试...` });
         await new Promise((r) => setTimeout(r, delay));
         if (signal?.aborted) break;
+        continue;
+      }
+      if (!usedFallback && fallback) {
+        usedFallback = true;
+        emit({ type: 'system_message', level: 'info', content: `主模型多次失败，切换到降级模型 ${fallback}` });
         continue;
       }
       break;
@@ -460,18 +505,35 @@ export async function runStep(
   const collectedResults = await runToolBatch(assistantMsg.toolCalls, {
     projectRoot: cfg.projectRoot,
     requestId: cfg.requestId,
-    agentId: cfg.requestId,
+    // 权限路由 / 工作区会话 / 冲突检测都以稳定任务 ID 为 key；
+    // requestId 是每次运行的随机 ID，不能当 agentId 用。
+    agentId: cfg.sessionId ?? cfg.requestId,
     sessionId: cfg.sessionId ?? cfg.requestId,
     checkPermission: cfg.checkPermission,
     autoApprove: cfg.autoApprove,
     abortSignal: signal,
     mode: cfg.mode,
     approvedPlanSteps: cfg.approvedPlanSteps,
+    workTier: cfg.workTier,
+    workspaceRoots: cfg.workspaceRoots,
+    writableRoots: cfg.writableRoots,
     depth: cfg.depth,
     sandboxMode,
+    surface: cfg.surface,
     stepGroupId,
     executeTool: cfg.executeTool,
     interceptTool: cfg.interceptTool,
+    riskGate: cfg.riskGate ?? (
+      process.env.AURAXIS_MEMORY_RISK_GATE === '1'
+        ? async (toolName: string) => {
+            const { createMemoryRiskGate, recordRiskAudit, roleForAgent } = await import('./memory-graph');
+            const role = roleForAgent(cfg.agentName || '');
+            const verdict = createMemoryRiskGate(cfg.projectRoot, role)(toolName);
+            if (!verdict.allowed) recordRiskAudit(cfg.projectRoot, toolName, verdict);
+            return Promise.resolve({ allowed: verdict.allowed, reason: verdict.reason });
+          }
+        : undefined
+    ),
   }, {
     makeToolCallId: cfg.makeToolCallId ?? ((tc) => `tc-${Date.now()}-${tc.name}`),
     preCheckPermission: cfg.preCheckPermission,
@@ -526,6 +588,8 @@ async function maybeCompact(cfg: StepEngineConfig, state: StepState, _stepGroupI
     messages: state.messages,
     plan: cfg.plan ?? null,
     llmConfig: { model: cfg.compactModel ?? DEFAULT_COMPACT_MODEL, apiKey: cfg.apiKey, apiBase: cfg.apiBase },
+    compressMode: cfg.compressMode ?? 'snip',
+    stepKeepRecent: cfg.stepKeepRecent,
   });
   state.messages.length = 0;
   state.messages.push(...result.messages);

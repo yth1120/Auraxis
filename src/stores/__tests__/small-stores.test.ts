@@ -29,7 +29,16 @@ describe('小型 Zustand Store 行为', () => {
     useWorktreeStore.getState().clear();
     useWorktreeStore.getState().setMode('local');
     useKeybindingsStore.setState({ overrides: {} });
-    useMemoryStore.setState({ activeMemories: [], searchResults: [], searchQuery: '', isLoading: false });
+    useMemoryStore.setState({
+      activeMemories: [],
+      searchResults: [],
+      searchQuery: '',
+      isLoading: false,
+      evidenceItems: [],
+      auditMap: {},
+      lastReadResult: null,
+      rejections: [],
+    });
     useFileTreeStore.getState().clear();
     useMessageFeedbackStore.setState({ ratings: {}, loadedSessions: [] });
     vi.unstubAllGlobals();
@@ -79,6 +88,82 @@ describe('小型 Zustand Store 行为', () => {
     expect(useMemoryStore.getState().activeMemories.map((m) => m.id)).toEqual(['b']);
     await s.deleteMemory('b');
     expect(useMemoryStore.getState().activeMemories).toEqual([]);
+  });
+
+  it('useMemoryStore：证据 / 审计 / 读取诊断 / 擦除 / 重建索引 / 拒绝记录', async () => {
+    const api = {
+      memory: {
+        getByProject: vi.fn(async () => ({ ok: true, data: [memory('a')] })),
+        evidenceList: vi.fn(async () => ({ ok: true, data: [{ id: 'ev1', role: 'user' }] })),
+        beliefAudit: vi.fn(async () => ({
+          ok: true,
+          data: {
+            belief: { id: 'a', kind: 'project', title: 't-a', text: 'c-a', status: 'active', legacy: 0, importance: 3, updated_at: 1 },
+            evidence: [],
+            revisions: [],
+          },
+        })),
+        readForQuery: vi.fn(async () => ({
+          ok: true,
+          data: {
+            context: [{ beliefId: 'a', title: 't-a', text: 'c-a', evidenceIds: [], ts: 1, supportStrength: 0.5, score: 0.9, routes: ['keyword'] }],
+            policy: { requireCitation: true, refuseOnUncertain: true, scope: '/p', maxTokens: 900, defaultRules: [] },
+            facts: ['- [project] t-a：c-a'],
+            diagnostics: {
+              routes: [], budget: { allocated: 900, used: 1, truncated: false },
+              missingEvidence: false, unsupportedExtraction: false, staleState: false,
+              retrievalLoss: false, modelBehaviorFlagged: false, latencyMs: 1, deterministic: true,
+            },
+            readRunId: 'run-1',
+          },
+        })),
+        erase: vi.fn(async () => ({ ok: true, data: { erased: 3, auditId: 'erase-1' } })),
+        reindex: vi.fn(async () => ({ ok: true, data: { signals: 2, beliefsChecked: 1, rejected: 0 } })),
+        rejections: vi.fn(async () => ({ ok: true, data: [{ id: 'r1' }] })),
+      },
+    };
+    stubApi(api);
+    const s = useMemoryStore.getState();
+
+    await s.loadEvidence('/p');
+    expect(useMemoryStore.getState().evidenceItems).toHaveLength(1);
+
+    await s.auditBelief('a');
+    expect(useMemoryStore.getState().auditMap.a.belief.id).toBe('a');
+
+    const read = await s.runReadTrace('/p', '查询');
+    expect(read?.readRunId).toBe('run-1');
+    expect(useMemoryStore.getState().lastReadResult?.facts).toHaveLength(1);
+
+    await s.loadRejections('/p');
+    expect(useMemoryStore.getState().rejections).toHaveLength(1);
+
+    const reindexed = await s.reindex('/p');
+    expect(reindexed).toMatchObject({ signals: 2, rejected: 0 });
+
+    expect(await s.eraseScope('/p')).toBe(true);
+    expect(useMemoryStore.getState().activeMemories).toEqual([]);
+    expect(useMemoryStore.getState().evidenceItems).toEqual([]);
+  });
+
+  it('useMemoryStore：IPC 失败时静默保持状态', async () => {
+    stubApi({
+      memory: {
+        evidenceList: vi.fn(async () => ({ ok: false, error: 'down' })),
+        beliefAudit: vi.fn(async () => ({ ok: false, error: 'down' })),
+        readForQuery: vi.fn(async () => ({ ok: false, error: 'down' })),
+        erase: vi.fn(async () => ({ ok: false, error: 'down' })),
+        reindex: vi.fn(async () => ({ ok: false, error: 'down' })),
+        rejections: vi.fn(async () => ({ ok: false, error: 'down' })),
+      },
+    });
+    const s = useMemoryStore.getState();
+    await s.loadEvidence('/p');
+    await s.auditBelief('a');
+    expect(await s.runReadTrace('/p', 'q')).toBeNull();
+    expect(await s.reindex('/p')).toBeNull();
+    expect(await s.eraseScope('/p')).toBe(false);
+    expect(useMemoryStore.getState().evidenceItems).toEqual([]);
   });
 
   it('useFileTreeStore：展开/定位/文件状态 + fetchTree', async () => {

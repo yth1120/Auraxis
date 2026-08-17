@@ -6,14 +6,14 @@
 
 /* ── Color Palette — Light (default) ─────────────────────── */
 /* Aura Purple is an accent only (~3% of the UI). The action color is
-   brand black; surfaces are paper with ivory layers. */
+   brand black; surfaces are cool neutral whites — no warm ivory. */
 :root {
   --color-primary: #111216;
   --color-primary-hover: #292C32;
   --color-primary-active: #3A3E45;
-  --color-primary-soft: rgba(17, 18, 22, 0.06);
-  --color-primary-strong: rgba(17, 18, 22, 0.10);
-  --color-primary-border: rgba(17, 18, 22, 0.16);
+  --color-primary-soft: rgba(30, 35, 42, 0.07);
+  --color-primary-strong: rgba(30, 35, 42, 0.12);
+  --color-primary-border: rgba(30, 35, 42, 0.20);
   --color-accent: #6A6884;
   --color-accent-hover: #5B5975;
   --color-accent-active: #4D4B66;
@@ -34,35 +34,35 @@
   --color-violet-border: rgba(106, 104, 132, 0.24);
 
   --color-bg-primary: #FFFFFF;
-  --color-bg-secondary: #F4F4F1;
-  --color-bg-tertiary: #E9E9E6;
+  --color-bg-secondary: #F5F6F8;
+  --color-bg-tertiary: #EBEDF0;
   --color-bg-elevated: #FFFFFF;
-  --color-bg-inset: rgba(17, 18, 22, 0.04);
+  --color-bg-inset: rgba(30, 35, 42, 0.045);
 
   --color-text-primary: #111216;
-  --color-text-secondary: #3E424A;
-  --color-text-muted: #6F727A;
-  --color-text-faint: #8A8D95;
+  --color-text-secondary: #2E333A;
+  --color-text-muted: #454B53;
+  --color-text-faint: #61676F;
   --color-text-on-accent: #FFFFFF;
 
-  --color-border-dim: rgba(17, 18, 22, 0.07);
-  --color-border-default: rgba(17, 18, 22, 0.11);
-  --color-border-strong: rgba(17, 18, 22, 0.17);
-  --color-hover: rgba(17, 18, 22, 0.055);
+  --color-border-dim: rgba(30, 35, 42, 0.065);
+  --color-border-default: rgba(30, 35, 42, 0.085);
+  --color-border-strong: rgba(30, 35, 42, 0.13);
+  --color-hover: rgba(30, 35, 42, 0.08);
 
-  --color-success: #15803D;
-  --color-success-soft: rgba(21, 128, 61, 0.08);
+  --color-success: #4F7C68;
+  --color-success-soft: rgba(79, 124, 104, 0.10);
   --color-danger: #A25B60;
-  --color-danger-soft: rgba(162, 91, 96, 0.08);
+  --color-danger-soft: rgba(162, 91, 96, 0.10);
   --color-danger-border: rgba(162, 91, 96, 0.22);
   --color-danger-lighter: #B06F74;
-  --color-warning: #B45309;
-  --color-warning-soft: rgba(180, 83, 9, 0.08);
-  --color-warning-border: rgba(180, 83, 9, 0.22);
+  --color-warning: #B97F3E;
+  --color-warning-soft: rgba(185, 127, 62, 0.10);
+  --color-warning-border: rgba(185, 127, 62, 0.24);
 
-  --color-code-bg: #F4F4F1;
+  --color-code-bg: #F5F6F8;
   --color-surface: #FFFFFF;
-  --color-surface-hover: #ECECE9;
+  --color-surface-hover: #EEF0F3;
   --color-tooltip-bg: #FFFFFF;
   --glass-switcher-thumb: rgba(255, 255, 255, 0.70);
 }
@@ -100,26 +100,26 @@
   --color-bg-elevated: #2C3037;
   --color-bg-inset: rgba(0, 0, 0, 0.30);
 
-  --color-text-primary: #F1F1EE;
-  --color-text-secondary: #CFD3D6;
-  --color-text-muted: #ADB2B8;
-  --color-text-faint: #81858C;
+  --color-text-primary: #F3F3F0;
+  --color-text-secondary: #E2E5E7;
+  --color-text-muted: #C5C9CE;
+  --color-text-faint: #9DA2A9;
   --color-text-on-accent: #111216;
 
-  --color-border-dim: rgba(41, 44, 50, 0.72);
-  --color-border-default: #292C32;
-  --color-border-strong: #3A3E45;
-  --color-hover: rgba(241, 241, 238, 0.06);
+  --color-border-dim: rgba(62, 67, 76, 0.55);
+  --color-border-default: #2A2E35;
+  --color-border-strong: #383D45;
+  --color-hover: rgba(241, 241, 238, 0.09);
 
-  --color-success: #34D399;
-  --color-success-soft: rgba(52, 211, 153, 0.12);
-  --color-danger: #B06F74;
-  --color-danger-soft: rgba(176, 111, 116, 0.12);
-  --color-danger-border: rgba(176, 111, 116, 0.26);
+  --color-success: #4FAE86;
+  --color-success-soft: rgba(79, 174, 134, 0.12);
+  --color-danger: #B07177;
+  --color-danger-soft: rgba(176, 113, 119, 0.12);
+  --color-danger-border: rgba(176, 113, 119, 0.24);
   --color-danger-lighter: #C98E92;
-  --color-warning: #C9A15C;
-  --color-warning-soft: rgba(201, 161, 92, 0.12);
-  --color-warning-border: rgba(201, 161, 92, 0.26);
+  --color-warning: #B8935A;
+  --color-warning-soft: rgba(184, 147, 90, 0.12);
+  --color-warning-border: rgba(184, 147, 90, 0.24);
 
   --color-code-bg: #1B1D21;
   --color-surface: #1B1D21;
@@ -130,12 +130,15 @@
 
 /* ── Frosted Glass Surfaces ──────────────────────────────── */
 :root {
+  /* sidebar acrylic 与既有组件引用；界面主体为实体表面。 */
   --color-glass-header: #FFFFFF;
-  --color-glass-panel: #F5F5F2;
+  --color-glass-panel: #F6F7F9;
+  --glass-mask: rgba(17, 18, 22, 0.34);
 }
 .dark {
   --color-glass-header: #111216;
   --color-glass-panel: #1B1D21;
+  --glass-mask: rgba(0, 0, 0, 0.55);
 }
 
 /* ── Content Width ───────────────────────────────────────── */
@@ -152,14 +155,19 @@
 /* ── Typography ──────────────────────────────────────────── */
 :root {
   /* 系统 UI 字体栈（与主流桌面应用一致）。 */
-  --font-heading: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
-    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
-    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  /* Inter Variable 随应用打包（Latin 界面字），CJK 回退到系统最优黑体。 */
+  --font-heading: 'Inter Variable', 'Segoe UI Variable Text', 'Segoe UI',
+    -apple-system, BlinkMacSystemFont, 'HarmonyOS Sans SC', 'MiSans',
+    'PingFang SC', 'Hiragino Sans GB', 'Source Han Sans SC', 'Noto Sans CJK SC',
+    'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  --font-body: 'Inter Variable', 'Segoe UI Variable Text', 'Segoe UI',
+    -apple-system, BlinkMacSystemFont, 'HarmonyOS Sans SC', 'MiSans',
+    'PingFang SC', 'Hiragino Sans GB', 'Source Han Sans SC', 'Noto Sans CJK SC',
+    'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
   /* Code stack deliberately omits a bare `monospace` tail so Windows CJK
      falls back to YaHei instead of SimSun. */
-  --font-mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas,
-    'Liberation Mono', Menlo, Courier, 'PingFang SC', 'Microsoft YaHei';
+  --font-mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code',
+    Consolas, 'Liberation Mono', Menlo, Courier, 'PingFang SC', 'Microsoft YaHei';
 
   /* 排版字号刻度。 */
   --ax-font-markdown-h1: 700 24px/34px var(--font-heading);
@@ -195,7 +203,7 @@
 
   --leading-tight: 1.25; --leading-normal: 1.5; --leading-relaxed: 1.6;
   --leading-comfortable: 1.75;
-  --tracking-tight: -0.02em; --tracking-normal: 0; --tracking-wide: 0.02em;
+  --tracking-tight: -0.015em; --tracking-normal: 0; --tracking-wide: 0.02em;
   --tracking-wider: 0.04em;
 
   -webkit-font-smoothing: antialiased;
@@ -251,22 +259,22 @@
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(30, 35, 42, 0.22);
   border-radius: 4px;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.25); }
+::-webkit-scrollbar-thumb:hover { background: rgba(30, 35, 42, 0.32); }
 ::-webkit-scrollbar-corner { background: transparent; }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+  scrollbar-color: rgba(30, 35, 42, 0.22) transparent;
 }
 .dark * {
   scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
-.dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); }
-.dark ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.28); }
+.dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.22); }
+.dark ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.32); }
 
 /* ── Reduced motion — performance & accessibility ────────── */
 @media (prefers-reduced-motion: reduce) {
@@ -320,8 +328,8 @@ body {
   --border-dim: var(--color-border-dim);
   --border-hairline: var(--color-border-dim);
   --border-strong: var(--color-border-strong);
-  --scrollbar-thumb: rgba(0, 0, 0, 0.15);
-  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
+  --scrollbar-thumb: rgba(30, 35, 42, 0.22);
+  --scrollbar-thumb-hover: rgba(30, 35, 42, 0.32);
   --code-bg: var(--color-code-bg);
   --surface: var(--color-surface);
   --surface-highlight: var(--color-primary-soft);
@@ -339,6 +347,6 @@ body {
 }
 
 .dark {
-  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.28);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.22);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
 }

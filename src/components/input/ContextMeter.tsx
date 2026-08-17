@@ -85,7 +85,7 @@ export default function ContextMeter() {
   const content = (
     <div className="w-[240px] flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-2">
-    <span className="text-sm font-semibold text-text-primary">{t('ctxMeter.title')}</span>
+        <span className="text-sm font-semibold text-text-primary">{t('ctxMeter.title')}</span>
         <span className="text-xs text-text-muted tabular-nums">
           {hasReal ? '' : '~'}{used.toLocaleString()} / {capacity.toLocaleString()} tokens
         </span>
@@ -109,9 +109,9 @@ export default function ContextMeter() {
           </div>
         ))}
       </div>
-    <p className="m-0 text-2xs text-text-faint leading-[1.5]">
-      {hasReal ? t('ctxMeter.hintReal') : t('ctxMeter.hint')}
-    </p>
+      <p className="m-0 text-2xs text-text-faint leading-[1.5]">
+        {hasReal ? t('ctxMeter.hintReal') : t('ctxMeter.hint')}
+      </p>
     </div>
   );
 
@@ -120,8 +120,8 @@ export default function ContextMeter() {
       <button
         type="button"
         className={clsx('ax-icon-button', pct >= 85 && '!text-warning')}
-    aria-label={t('ctxMeter.aria', { pct })}
-    title={t('ctxMeter.aria', { pct })}
+        aria-label={t('ctxMeter.aria', { pct })}
+        title={t('ctxMeter.aria', { pct })}
       >
         <svg viewBox="0 0 16 16" width="14" height="14" className="block">
           <circle

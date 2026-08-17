@@ -3,10 +3,12 @@ import { createElement } from 'react';
 import { useAgentStore } from '../stores/useAgentStore';
 import { useChatStore } from '../stores/useChatStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
+import { useProjectStore } from '../stores/useProjectStore';
 import { useAppStore } from '../stores/useAppStore';
 import { useSessionStore } from '../stores/useSessionStore';
 import type { AgentPriority } from '../types/agent';
-import type { PermissionMode } from '../types/advanced';
+import { PERMISSION_PRESETS } from '../types/advanced';
+import type { ApprovalPolicy, DeepSeekToolChoice, WorkAutonomyTier } from '../types/advanced';
 import { fetchModels } from '../types/chat';
 import { AGENT_SKILLS, startAgentSkill } from '../core/skills';
 import { t, slashCommandDescKey } from '../i18n';
@@ -26,6 +28,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'agent', description: '创建指定类型的 Agent 任务（Explore / Plan / 通用）', usage: '/agent <Explore|Plan|general-purpose>' },
   { name: 'goal', description: '进入目标模式，设置持续执行的目标', usage: '/goal <目标描述>' },
   { name: 'plan', description: '计划模式：先生成计划，批准后执行', usage: '/plan <任务描述>' },
+  { name: 'tool', description: '指定下一个 Agent 任务的工具调用策略', usage: '/tool <auto|none|required|工具名>' },
   { name: 'review', description: '启动代码审查：只读审查 Agent + 变更面板', usage: '/review <范围>' },
   { name: 'skill', description: '启动快捷技能（代码审查 / Bug 修复 / 重构 / 测试 / 架构 / 功能）', usage: '/skill <技能名>' },
   { name: 'workflow', description: '运行脚本化多 Agent 工作流', usage: '/workflow <名称>' },
@@ -46,10 +49,14 @@ export function createAgent(params: {
   maxIterations?: number;
   tools?: string[];
   isDeepThink?: boolean;
-  reasoningEffort?: 'high' | 'max';
+  reasoningEffort?: 'low' | 'high' | 'max';
+  toolChoice?: DeepSeekToolChoice;
   priority?: AgentPriority;
   autoApprove?: boolean;
-  mode?: PermissionMode;
+  mode?: ApprovalPolicy;
+  workTier?: WorkAutonomyTier;
+  workspaceRoots?: string[];
+  writableRoots?: string[];
   sandboxMode?: 'read' | 'workspace-write' | 'full';
   goal?: { text: string; maxRounds: number } | null;
 }): Promise<string | null> {
@@ -58,6 +65,10 @@ export function createAgent(params: {
   const model = params.model || chatState.selectedModel;
   const apiKey = settingsState.deepseekApiKey;
   const projectPath = chatState.currentProjectPath || settingsState.projectPath || '';
+  // 所有 Agent 创建路径统一携带项目多根，斜杠命令也不会漏。
+  const activeProject = projectPath
+    ? useProjectStore.getState().projects.find((p) => p.path === projectPath)
+    : undefined;
 
   const agentStore = useAgentStore.getState();
   // startAgent throws on backend rejection (e.g. invalid project dir) —
@@ -75,11 +86,23 @@ export function createAgent(params: {
         priority: params.priority ?? 'normal',
         maxIterations: params.maxIterations ?? 200,
         customTools: params.tools as any,
-        autoApprove: params.autoApprove ?? chatState.autoApprove,
+        // All agent creation paths honor the selected permission preset;
+        // the legacy chatState.autoApprove flag no longer drives tasks.
+        autoApprove: params.autoApprove ?? PERMISSION_PRESETS[settingsState.permissionPreset].autoApprove,
         isDeepThink: params.isDeepThink ?? true,
         reasoningEffort: params.reasoningEffort ?? 'high',
+        toolChoice: params.toolChoice,
         mode: params.mode,
-        sandboxMode: params.sandboxMode,
+        workTier: params.workTier,
+        workspaceRoots: params.workspaceRoots
+          ?? (activeProject?.roots && activeProject.roots.length > 0 ? activeProject.roots : undefined),
+        writableRoots: params.writableRoots
+          ?? (activeProject?.writableRoots && activeProject.writableRoots.length > 0
+            ? activeProject.writableRoots
+            : undefined),
+        // Explicit per-task sandbox wins; otherwise the preset's boundary is
+        // carried on the task itself (immune to backend settings write races).
+        sandboxMode: params.sandboxMode ?? PERMISSION_PRESETS[settingsState.permissionPreset].sandboxMode,
         goal: params.goal,
       },
       projectPath,
@@ -200,7 +223,8 @@ export function executeCommand(
 
     case 'plan': {
       const chat = useChatStore.getState();
-      useAppStore.getState().setSidebarMode('code');
+      // Plan-first is the Work mode personality — /plan enters it directly.
+      useAppStore.getState().setSidebarMode('work');
       if (trimmedArgs) {
         chat.setPendingPlanMode(false);
         void createAgent({
@@ -209,7 +233,7 @@ export function executeCommand(
           instruction: trimmedArgs,
           displayText: trimmedArgs,
           mode: 'plan',
-          autoApprove: false,
+          autoApprove: PERMISSION_PRESETS[useSettingsStore.getState().permissionPreset].autoApprove,
         }).then((id) => {
           if (id) {
             useAgentStore.getState().setCurrentAgent(id);
@@ -220,6 +244,23 @@ export function executeCommand(
         chat.setPendingPlanMode(true);
         message.success(t('cmd.msg.planArmed'));
       }
+      ctx.setInputValue('');
+      return true;
+    }
+
+    case 'tool': {
+      const chat = useChatStore.getState();
+      const arg = trimmedArgs.trim();
+      if (!arg) {
+        message.info(t('cmd.msg.toolChoiceUsage'));
+        return true;
+      }
+      if (arg === 'auto' || arg === 'none' || arg === 'required') {
+        chat.setPendingToolChoice(arg);
+      } else {
+        chat.setPendingToolChoice({ type: 'function', function: { name: arg } });
+      }
+      message.success(t('cmd.msg.toolChoiceSet', { tool: arg }));
       ctx.setInputValue('');
       return true;
     }

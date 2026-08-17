@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { Popconfirm, Tooltip, Input, message, Dropdown } from 'antd';
+import { Popconfirm, Tooltip, Input, message, Dropdown, Modal, Checkbox } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   CalendarCheck,
@@ -9,6 +9,9 @@ import {
   Folder as FolderOutlined,
   FolderOpen as FolderOpenOutlined,
   SlidersHorizontal,
+  ShieldCheck,
+  ClipboardCheck,
+  SignOut,
   CheckCircle as CheckCircleOutlined,
   Clock as ClockCircleOutlined,
   XCircle as CloseCircleOutlined,
@@ -26,6 +29,7 @@ import {
   SidebarSimple as SidebarSimpleIcon,
   Stop as StopOutlined,
   Wrench,
+  Toolbox,
   NEW_CHAT_ICON,
 } from '@/components/common/icons';
 import { useAgentStore } from '../../stores/useAgentStore';
@@ -33,13 +37,17 @@ import { useAppStore } from '../../stores/useAppStore';
 import { useChatStore } from '../../stores/useChatStore';
 import { useSessionStore, type Session } from '../../stores/useSessionStore';
 import { useProjectStore, type Project } from '../../stores/useProjectStore';
+import WorkSidebarPanel from '../work/WorkSidebarPanel';
 import { useSettingsStore } from '../../stores/useSettingsStore';
 import SkillsDirectory from '../skills/SkillsDirectory';
 import ExecutingIndicator from '../common/ExecutingIndicator';
+import Avatar from '../auth/Avatar';
+import { useAuthStore } from '../../stores/useAuthStore';
 import type { AgentStatus } from '../../types/agent';
 import clsx from 'clsx';
 import logoPng from '../../assets/auraxis-logo.png';
 import { t, useT, type I18nKey } from '../../i18n';
+import type { PermissionProfile } from '../../types/electron-api';
 import { getContentText } from '../../types/chat';
 import { groupSessionsByTime, groupSessionsByProject } from '../../utils/groupSessions';
 
@@ -52,6 +60,7 @@ const AGENT_STATUS_ICON: Record<AgentStatus, React.ReactNode> = {
   completed: <CheckCircleOutlined />,
   error: <CloseCircleOutlined />,
   stopped: <StopOutlined />,
+  review: <ClipboardCheck size={14} />,
 };
 
 /* Agent status → Tailwind text color */
@@ -61,6 +70,7 @@ const AGENT_STATUS_COLOR: Record<string, string> = {
   error: 'text-danger',
   paused: 'text-warning',
   stopped: 'text-warning',
+  review: 'text-warning',
 };
 
 /* Sidebar top functions: new chat first, then new task, then skills/tools.
@@ -151,7 +161,7 @@ const SessionRow = memo(function SessionRow({
   return (
     <div
       className={clsx(
-        'ax-sidebar-item group w-full min-h-[34px] py-[6px] text-sm font-normal',
+        'ax-sidebar-item group w-full h-8 py-1.5 text-sm font-normal',
         isActive && 'ax-sidebar-item-active',
         s.archived && 'opacity-55',
         dropActive && 'bg-[var(--color-hover)]',
@@ -197,7 +207,7 @@ const SessionRow = memo(function SessionRow({
         <span className="flex items-center gap-1 shrink-0 ml-1 opacity-0 group-hover:opacity-100">
           <Tooltip title={s.pinned ? t('sidebar.unpin') : t('sidebar.pin')} placement="top">
             <button
-              className="flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
+              className="flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-lg cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
               onClick={(e) => { e.stopPropagation(); useSessionStore.getState().togglePin(s.id); }}
               aria-label={s.pinned ? t('sidebar.unpin') : t('sidebar.pin')}
             >
@@ -205,17 +215,17 @@ const SessionRow = memo(function SessionRow({
             </button>
           </Tooltip>
           <Tooltip title={t('sidebar.rename')} placement="top">
-            <button className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => onStartRename(e, s.id, s.title)}>
+            <button className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-lg cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => onStartRename(e, s.id, s.title)}>
               <EditOutlined style={{ fontSize: 14 }} />
             </button>
           </Tooltip>
           <Tooltip title={t('sidebar.forkTip')} placement="top">
-            <button className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => onFork(e, s.id)} aria-label={t('sidebar.fork')}>
+            <button className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-lg cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => onFork(e, s.id)} aria-label={t('sidebar.fork')}>
               <ForkOutlined style={{ fontSize: 14 }} />
             </button>
           </Tooltip>
           <Tooltip title={s.archived ? t('sidebar.unarchive') : t('sidebar.archive')} placement="top">
-            <button className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => onArchive(e, s.id)} aria-label={s.archived ? t('sidebar.unarchive') : t('sidebar.archive')}>
+            <button className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-lg cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => onArchive(e, s.id)} aria-label={s.archived ? t('sidebar.unarchive') : t('sidebar.archive')}>
               <ArchiveOutlined style={{ fontSize: 14 }} />
             </button>
           </Tooltip>
@@ -231,7 +241,7 @@ const SessionRow = memo(function SessionRow({
               }}
             >
               <button
-                className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
+                className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-lg cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
                 onClick={(e) => e.stopPropagation()}
                 aria-label={t('sidebar.moveTo')}
                 title={t('sidebar.moveTo')}
@@ -248,7 +258,7 @@ const SessionRow = memo(function SessionRow({
             cancelText={t('common.cancel')}
             okButtonProps={{ danger: true, type: 'primary', style: { color: '#fff' } }}
           >
-            <button className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => e.stopPropagation()}>
+            <button className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-lg cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => e.stopPropagation()}>
               <DeleteOutlined style={{ fontSize: 14 }} />
             </button>
           </Popconfirm>
@@ -271,7 +281,7 @@ const AgentRow = memo(function AgentRow({ agent: a, isActive, pendingCount, onSe
   return (
     <div
       className={clsx(
-        'ax-sidebar-item group w-full min-h-[34px] py-[6px]',
+        'ax-sidebar-item group w-full h-8 py-1.5',
         isActive && 'ax-sidebar-item-active',
       )}
       data-active={isActive || undefined}
@@ -281,7 +291,7 @@ const AgentRow = memo(function AgentRow({ agent: a, isActive, pendingCount, onSe
       onKeyDown={rowKey(() => onSelect(a.id))}
       title={a.description || a.name}
     >
-      <span className={clsx('shrink-0 flex items-center justify-center w-[18px] h-[18px] text-sm text-text-muted', statusColor)}>
+      <span className={clsx('shrink-0 flex items-center justify-center w-5 h-5 text-sm text-text-muted', statusColor)}>
         {AGENT_STATUS_ICON[a.status] || <ClockCircleOutlined />}
       </span>
       <span className="flex-1 min-w-0 flex items-center gap-[6px]">
@@ -292,7 +302,7 @@ const AgentRow = memo(function AgentRow({ agent: a, isActive, pendingCount, onSe
         {a.status === 'running' && (
           <Tooltip title={t('sidebar.pause')} placement="top">
             <button
-              className="flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
+              className="flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-lg cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
               onClick={(e) => { e.stopPropagation(); useAgentStore.getState().pauseAgent(a.id); }}
               aria-label={t('sidebar.pause')}
             >
@@ -303,7 +313,7 @@ const AgentRow = memo(function AgentRow({ agent: a, isActive, pendingCount, onSe
         {a.status === 'paused' && (
           <Tooltip title={t('sidebar.resume')} placement="top">
             <button
-              className="flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
+              className="flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-lg cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
               onClick={(e) => { e.stopPropagation(); useAgentStore.getState().resumeAgent(a.id); }}
               aria-label={t('sidebar.resume')}
             >
@@ -314,7 +324,7 @@ const AgentRow = memo(function AgentRow({ agent: a, isActive, pendingCount, onSe
         {a.status === 'running' || a.status === 'queued' || a.status === 'paused' ? (
           <Tooltip title={t('sidebar.stop')} placement="top">
             <button
-              className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
+              className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-lg cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
               onClick={(e) => { e.stopPropagation(); useAgentStore.getState().stopAgent(a.id); }}
               aria-label={t('sidebar.stop')}
             >
@@ -330,7 +340,7 @@ const AgentRow = memo(function AgentRow({ agent: a, isActive, pendingCount, onSe
             cancelText={t('common.cancel')}
             okButtonProps={{ danger: true, type: 'primary', style: { color: '#fff' } }}
           >
-            <button className="flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => e.stopPropagation()} aria-label={t('sidebar.deleteTask')}>
+            <button className="flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-lg cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => e.stopPropagation()} aria-label={t('sidebar.deleteTask')}>
               <DeleteOutlined style={{ fontSize: 14 }} />
             </button>
           </Popconfirm>
@@ -361,6 +371,10 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
   }, [collapsed]);
 
   const setShowSettings = useAppStore((s) => s.setShowSettings);
+  const accountName = useAuthStore((s) => s.name);
+  const accountEmail = useAuthStore((s) => s.email);
+  const accountAvatar = useAuthStore((s) => s.avatar);
+  const logout = useAuthStore((s) => s.logout);
   const showSettings = useAppStore((s) => s.showSettings);
   const sidebarMode = useAppStore((s) => s.sidebarMode);
   const setSidebarMode = useAppStore((s) => s.setSidebarMode);
@@ -380,7 +394,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
   const sessionOrder = useProjectStore((s) => s.sessionOrder);
 
   // Code-mode parallel-agent task list
-  const agents = useAgentStore((s) => s.agents);
+  const agents = useAgentStore((s) => s.agents.filter((a) => (a.surface ?? 'code') !== 'work'));
   const currentAgentId = useAgentStore((s) => s.currentAgentId);
   const setCurrentAgent = useAgentStore((s) => s.setCurrentAgent);
   const agentPermissions = useAgentStore((s) => s.agentPermissions);
@@ -393,8 +407,104 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set());
   const [showAllSessions, setShowAllSessions] = useState<Set<string>>(new Set());
   const [skillsDirOpen, setSkillsDirOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const dragStateRef = useRef<{ kind: 'workspace'; id: string } | { kind: 'session'; id: string; root: string } | null>(null);
+  const [projectProfiles, setProjectProfiles] = useState<PermissionProfile[]>([]);
+  const [projectProfileOverrides, setProjectProfileOverrides] = useState<Record<string, string>>({});
+  const [rootsModalProject, setRootsModalProject] = useState<Project | null>(null);
+  const [rootsModalRoots, setRootsModalRoots] = useState<string[]>([]);
+  const [rootsModalWritable, setRootsModalWritable] = useState<string[]>([]);
+
+  const openRootsModal = (p: Project) => {
+    const roots = p.roots.length > 0 ? [...p.roots] : [p.path];
+    setRootsModalProject(p);
+    setRootsModalRoots(roots);
+    setRootsModalWritable(p.writableRoots.length > 0 ? [...p.writableRoots] : roots);
+  };
+
+  const addRootFromPicker = async () => {
+    const result = await window.electronAPI?.project.selectDirectory();
+    const dir = result?.ok ? result.data : null;
+    if (dir && !rootsModalRoots.includes(dir)) {
+      setRootsModalRoots((prev) => [...prev, dir]);
+      setRootsModalWritable((prev) => [...prev, dir]);
+    }
+  };
+
+  const saveRootsModal = () => {
+    const p = rootsModalProject;
+    if (!p) return;
+    const store = useProjectStore.getState();
+    for (const r of rootsModalRoots) {
+      if (!p.roots.includes(r)) store.addProjectRoot(p.id, r);
+    }
+    for (const r of p.roots) {
+      if (!rootsModalRoots.includes(r)) store.removeProjectRoot(p.id, r);
+    }
+    for (const r of rootsModalRoots) {
+      store.setRootWritable(p.id, r, rootsModalWritable.includes(r));
+    }
+    setRootsModalProject(null);
+    message.success(t('sidebar.projectRootsSaved'));
+  };
+
+  /* ── 项目级权限 Profile：覆盖项随设置加载/保存 ── */
+  useEffect(() => {
+    let alive = true;
+    const pending = window.electronAPI?.permissionProfile?.listProjectProfiles?.();
+    if (pending) {
+      pending
+        .then((r) => {
+          if (!alive || !r?.ok || !r.data) return;
+          setProjectProfiles(r.data.profiles);
+          setProjectProfileOverrides(r.data.overrides ?? {});
+        })
+        .catch(() => {});
+    }
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const applyProjectProfile = useCallback(async (path: string, profileId: string | null) => {
+    const r = await window.electronAPI?.permissionProfile?.setProjectProfile?.(path, profileId);
+    if (!r?.ok) {
+      message.error(r?.error || t('sidebar.projectPermissionSaveFailed'));
+      return;
+    }
+    setProjectProfileOverrides((prev) => {
+      const next = { ...prev };
+      if (profileId) {
+        next[path] = profileId;
+      } else {
+        delete next[path];
+      }
+      return next;
+    });
+    message.success(t('sidebar.projectPermissionSaved'));
+  }, [t]);
+
+  const projectProfileMenu = (path: string): MenuProps['items'] => {
+    const current = projectProfileOverrides[path] ?? null;
+    const items: NonNullable<MenuProps['items']> = [
+      {
+        key: '__global__',
+        label: t('sidebar.projectPermissionGlobal'),
+        icon: current === null ? <CheckOutlined size={12} className="text-primary" /> : undefined,
+      },
+      { type: 'divider' },
+    ];
+    for (const p of projectProfiles) {
+      items.push({
+        key: p.id,
+        label: p.name,
+        icon: current === p.id ? <CheckOutlined size={12} className="text-primary" /> : undefined,
+      });
+    }
+    return items;
+  };
 
   const labelCls = visualCollapsed
     ? 'max-w-0 opacity-0 ml-0'
@@ -435,7 +545,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
       else next.add(id);
       return next;
     });
-  }, []);
+  }, [currentSessionId]);
 
   const toggleShowAllSessions = useCallback((id: string) => {
     setShowAllSessions((prev) => {
@@ -498,12 +608,26 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
   }, [t]);
   const handleArchiveThread = useCallback((e: React.MouseEvent, threadId: string) => {
     e.stopPropagation();
+    const wasCurrent = threadId === currentSessionId;
     useSessionStore.getState().toggleArchive(threadId);
+    if (wasCurrent) {
+      const s = useSessionStore.getState();
+      const archived = s.sessions.some((x) => x.id === threadId && x.archived);
+      if (archived) {
+        // 归档当前会话后自动进入新会话，避免停留在已归档的旧对话。
+        useChatStore.getState().clearMessages();
+        useSessionStore.getState().newSession();
+      }
+    }
   }, []);
   const handleDeleteThread = useCallback((e: React.MouseEvent, threadId: string) => {
     e.stopPropagation();
     useSessionStore.getState().deleteSession(threadId);
-    if (threadId === currentSessionId) useChatStore.getState().clearMessages();
+    if (threadId === currentSessionId) {
+      // 删除当前会话后自动新建一个空会话，避免界面停留在已删除的旧对话上。
+      useChatStore.getState().clearMessages();
+      useSessionStore.getState().newSession();
+    }
   }, [currentSessionId]);
   const handleStartRename = useCallback((e: React.MouseEvent, threadId: string, currentTitle: string) => {
     e.stopPropagation();
@@ -589,7 +713,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
       <>
         {/* ── 对话 (original session list, unchanged) ── */}
         {!visualCollapsed && <div className="ax-sidebar-label !px-[18px] !pb-[6px]">{t('nav.chat')}</div>}
-        <div className="flex flex-col gap-1 px-2 pb-1 sider-tree">
+        <div className="flex flex-col gap-1 px-0 pb-1 sider-tree">
           {activeSessions.length === 0 ? (
             <div className="ax-sidebar-group flex flex-col items-center justify-center gap-[6px] px-4 py-10 text-center">
               <MessageOutlined className="text-[26px] text-text-faint opacity-75 mb-0.5" />
@@ -600,7 +724,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
             timeGroups.map((group) => (
               <div key={group.label} className="ax-sidebar-group">
                 <div className="px-[18px] pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">{group.label}</div>
-                <div className="px-2 pb-1 flex flex-col gap-0.5">{renderSessionRows(group.items)}</div>
+                <div className="px-0 pb-1 flex flex-col gap-1">{renderSessionRows(group.items)}</div>
               </div>
             ))
           ) : (
@@ -627,7 +751,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
                     <span className="shrink-0 min-w-4 text-2xs font-semibold text-center text-text-muted">{pg.items.length}</span>
                   </button>
                   {!isCollapsed && (
-                    <div className="px-2 pb-1 flex flex-col gap-0.5">{renderSessionRows(pg.items)}</div>
+                    <div className="px-0 pb-1 mt-0.5 flex flex-col gap-1">{renderSessionRows(pg.items)}</div>
                   )}
                 </div>
               );
@@ -636,7 +760,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
           {archivedSessions.length > 0 && (
             <div className="ax-sidebar-group">
               <div className="px-[18px] pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">{t('sidebar.archived')}</div>
-              <div className="px-2 pb-1 flex flex-col gap-0.5">{renderSessionRows(archivedSessions)}</div>
+              <div className="px-0 pb-1 flex flex-col gap-1">{renderSessionRows(archivedSessions)}</div>
             </div>
           )}
         </div>
@@ -646,7 +770,8 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
 
   /* ── Code panel (parallel Agent task list) ─────────── */
   const handleNewTask = useCallback(() => {
-    useAppStore.getState().setSidebarMode('code');
+    const app = useAppStore.getState();
+    app.setSidebarMode(app.sidebarMode === 'chat' ? 'code' : app.sidebarMode);
     useAppStore.getState().setActiveToolView('none');
     useAgentStore.getState().setCurrentAgent(null);
     useChatStore.getState().setPendingNewTask(true);
@@ -690,7 +815,8 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
     const activeSessions = sessions.filter((s) => !s.archived);
     const archivedSessions = sessions.filter((s) => s.archived);
     const projectPaths = new Set(projects.map((p) => p.path));
-    const unassignedSessions = activeSessions.filter((s) => s.projectRoot && !projectPaths.has(s.projectRoot));
+    // 工作区分组下：没有 projectRoot 的会话同样不能丢，归入“未分配”。
+    const unassignedSessions = activeSessions.filter((s) => !s.projectRoot || !projectPaths.has(s.projectRoot));
     const renderAgentRow = (a: import('../../types/agent').AgentInfo) => (
       <AgentRow
         key={a.id}
@@ -708,14 +834,14 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
       />
     );
     return (
-    <div className="flex flex-col px-2 sider-code-panel">
+    <div className="flex flex-col px-0 sider-code-panel">
         {/* ── 项目工作区 （工作区树 + 会话） ── */}
         <div className="shrink-0 flex items-center px-[18px] pt-2.5 pb-[6px]">
           <span className="text-2xs font-semibold text-text-muted tracking-[0.06em]">{t('sidebar.projects')}</span>
           <Dropdown menu={{ items: viewItems }} trigger={['click']} placement="bottomRight" transitionName="">
             <button
               type="button"
-              className="ml-auto flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
+              className="ml-auto flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-lg cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
               title={t('sidebar.viewOptions')}
               aria-label={t('sidebar.viewOptions')}
             >
@@ -724,7 +850,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
           </Dropdown>
           <button
             type="button"
-            className="flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
+            className="flex items-center justify-center w-6 h-6 border-none bg-transparent text-text-muted rounded-lg cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
             onClick={addProjectWorkspace}
             title={t('sidebar.addWorkspace')}
             aria-label={t('sidebar.addWorkspace')}
@@ -734,12 +860,12 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
         </div>
 
         {projectGroupBy === 'flat' ? (
-          <div className="flex flex-col gap-1 px-2 pb-1">
+          <div className="flex flex-col gap-1 px-0 pb-1">
             {orderSessionsByKey('__flat__', activeSessions).length === 0 ? (
               <div className="px-[18px] py-2 text-2xs text-text-faint">{t('sidebar.noSessions')}</div>
             ) : orderSessionsByKey('__flat__', activeSessions).map(renderSessionRow)}
             {taskGroups.map(([root, list]) => (
-              <div key={root || '__unassigned__'} className="flex flex-col gap-0.5">
+              <div key={root || '__unassigned__'} className="flex flex-col gap-1">
                 {root && (
                   <div className="px-[18px] pt-1 pb-0.5 text-2xs text-text-faint truncate" title={root}>
                     {root.split(/[\\/]/).pop() || root}
@@ -750,16 +876,16 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
             ))}
           </div>
         ) : (
-          <div className="flex flex-col gap-1 px-2 pb-1">
+          <div className="flex flex-col gap-1 px-0 pb-1">
             {projects.length === 0 && (
               <div className="px-[18px] py-2 text-2xs text-text-faint">{t('sidebar.noProjects')}</div>
             )}
             {orderedProjects.map((p) => {
               const isCurrent = p.id === currentProjectId || (settingsProjectPath !== null && p.path === settingsProjectPath);
-              const count = activeSessions.filter((s) => s.projectRoot === p.path).length;
+              const projectTasks = taskGroupMap.get(p.path) ?? [];
+              const count = activeSessions.filter((s) => s.projectRoot === p.path).length + projectTasks.length;
               const expanded = expandedProjects.has(p.id);
               const projectSessions = orderSessionsByKey(p.path, activeSessions.filter((s) => s.projectRoot === p.path));
-              const projectTasks = taskGroupMap.get(p.path) ?? [];
               const showAll = showAllSessions.has(p.id);
               const visibleSessions = showAll ? projectSessions : projectSessions.slice(0, 5);
               const renaming = renamingProjectId === p.id;
@@ -767,7 +893,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
                 <div key={p.id} className="ax-sidebar-group">
                   <div
                     className={clsx(
-                      'ax-sidebar-item ax-project-folder group w-full min-h-[34px] py-[6px] text-sm font-normal',
+                      'ax-sidebar-item ax-project-folder group w-full h-8 py-1.5 text-sm font-normal',
                       isCurrent && 'ax-sidebar-item-active',
                     )}
                     data-active={isCurrent || undefined}
@@ -844,7 +970,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
                         <span className="flex items-center gap-1 shrink-0 ml-1 opacity-0 group-hover:opacity-100">
                           <Tooltip title={t('sidebar.newSessionInProject')} placement="top">
                             <button
-                              className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
+                              className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-lg cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
                               onClick={(e) => { e.stopPropagation(); startSessionInProject(p.path); }}
                               aria-label={t('sidebar.newSessionInProject')}
                             >
@@ -853,13 +979,42 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
                           </Tooltip>
                           <Tooltip title={t('sidebar.renameProject')} placement="top">
                             <button
-                              className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
+                              className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-lg cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
                               onClick={(e) => { e.stopPropagation(); setRenamingProjectId(p.id); setRenameProjectValue(p.name); }}
                               aria-label={t('sidebar.renameProject')}
                             >
                               <EditOutlined style={{ fontSize: 14 }} />
                             </button>
                           </Tooltip>
+                          <Tooltip title={t('sidebar.projectRootsTip')} placement="top">
+                            <button
+                              className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-lg cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
+                              onClick={(e) => { e.stopPropagation(); openRootsModal(p); }}
+                              aria-label={t('sidebar.projectRoots')}
+                            >
+                              <FolderOpenOutlined style={{ fontSize: 14 }} />
+                            </button>
+                          </Tooltip>
+                          <Dropdown
+                            trigger={['click']}
+                            placement="bottomRight"
+                            menu={{
+                              items: projectProfileMenu(p.path),
+                              onClick: ({ key, domEvent }) => {
+                                domEvent.stopPropagation();
+                                void applyProjectProfile(p.path, key === '__global__' ? null : key);
+                              },
+                            }}
+                          >
+                            <button
+                              className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-lg cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
+                              onClick={(e) => e.stopPropagation()}
+                              title={t('sidebar.projectPermissionTip')}
+                              aria-label={t('sidebar.projectPermission')}
+                            >
+                              <ShieldCheck size={14} />
+                            </button>
+                          </Dropdown>
                           <Popconfirm
                             title={t('sidebar.removeProjectConfirm')}
                             onConfirm={(e) => { e?.stopPropagation(); useProjectStore.getState().removeProject(p.id); }}
@@ -869,7 +1024,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
                             okButtonProps={{ danger: true, type: 'primary', style: { color: '#fff' } }}
                           >
                             <button
-                              className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-md cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
+                              className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-text-muted rounded-lg cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-primary"
                               onClick={(e) => e.stopPropagation()}
                               aria-label={t('sidebar.remove')}
                             >
@@ -881,21 +1036,21 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
                     )}
                   </div>
                   {expanded && (
-                    <div className="pl-[26px] pr-1 pb-1 flex flex-col gap-0.5">
+                    <div className="px-0 pb-1 mt-1 flex flex-col gap-1 sider-children opacity-0 animate-[projectExpandIn_0.18s_ease-out_forwards]">
                       {projectSessions.length === 0 ? (
-                        <div className="px-[18px] py-2 text-2xs text-text-faint">{t('sidebar.noProjectSessions')}</div>
+                        <div className="pl-[10px] pr-[18px] py-2 text-2xs text-text-faint">{t('sidebar.noProjectSessions')}</div>
                       ) : visibleSessions.map(renderSessionRow)}
                       {projectSessions.length > 5 && (
                         <button
                           type="button"
-                          className="self-start px-2 py-0.5 rounded-md border-none bg-transparent text-2xs text-text-muted cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-secondary"
+                          className="self-start ml-[28px] px-2 py-0.5 rounded-lg border-none bg-transparent text-2xs text-text-muted cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-secondary"
                           onClick={() => toggleShowAllSessions(p.id)}
                         >
                           {showAll ? t('sidebar.collapse') : t('sidebar.showAll', { n: projectSessions.length })}
                         </button>
                       )}
                       {projectTasks.length > 0 && (
-                        <div className="mt-1 pt-1 border-t border-[var(--color-border-dim)] flex flex-col gap-0.5">
+                        <div className="sider-children-tasks mt-1 flex flex-col gap-0.5">
                           {projectTasks.map(renderAgentRow)}
                         </div>
                       )}
@@ -910,13 +1065,13 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
       {projectGroupBy === 'workspace' && (taskGroupMap.get('') ?? []).length > 0 && (
         <div className="ax-sidebar-group">
           <div className="px-[18px] pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">{t('sidebar.unassignedTasks')}</div>
-          <div className="px-2 pb-1 flex flex-col gap-0.5">{(taskGroupMap.get('') ?? []).map(renderAgentRow)}</div>
+          <div className="px-0 pb-1 flex flex-col gap-1">{(taskGroupMap.get('') ?? []).map(renderAgentRow)}</div>
         </div>
       )}
       {unassignedSessions.length > 0 && (
         <div className="ax-sidebar-group">
           <div className="px-[18px] pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">{t('sidebar.unassignedSessions')}</div>
-          <div className="px-2 pb-1 flex flex-col gap-0.5">
+          <div className="px-0 pb-1 flex flex-col gap-1">
             {unassignedSessions.map(renderSessionRow)}
           </div>
         </div>
@@ -924,7 +1079,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
       {archivedSessions.length > 0 && (
         <div className="ax-sidebar-group">
           <div className="px-[18px] pt-2.5 pb-[6px] text-2xs font-semibold text-text-muted tracking-[0.06em]">{t('sidebar.archived')}</div>
-          <div className="px-2 pb-1 flex flex-col gap-0.5">
+          <div className="px-0 pb-1 flex flex-col gap-1">
             {archivedSessions.map(renderSessionRow)}
           </div>
         </div>
@@ -933,12 +1088,50 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
     );
   };
 
+  /** Render one top-nav item (新建/技能/插件/定时). */
+  const renderTopItem = (f: (typeof SIDEBAR_TOP_NAV)[number]) => {
+    const onClick = () => {
+      if (f.key === 'new') {
+        if (sidebarMode !== 'chat') handleNewTask();
+        else handleNewSession();
+      }
+      else if (f.key === 'skills') setSkillsDirOpen(true);
+      else openToolView(f.key);
+    };
+    return (
+      <button
+        key={f.key}
+        className={clsx(
+          'ax-sidebar-item h-8',
+          activeToolView === f.key && 'ax-sidebar-item-active',
+          visualCollapsed ? 'justify-center p-0 w-9 mx-auto overflow-hidden' : 'px-[10px]',
+        )}
+        onClick={onClick}
+        title={t(f.labelKey)}
+      >
+        <span className="ax-sidebar-icon">{f.icon}</span>
+        <span className={clsx('label-collapsible', labelCls)}>{t(f.labelKey)}</span>
+      </button>
+    );
+  };
+
+  const confirmLogout = () => {
+    Modal.confirm({
+      title: t('auth.logoutConfirmTitle'),
+      content: t('auth.logoutConfirmBody'),
+      okText: t('auth.logout'),
+      cancelText: t('common.cancel'),
+      okButtonProps: { danger: true },
+      onOk: () => { void logout(); },
+    });
+  };
+
   return (
     <nav className={clsx(
       'sider-nav ax-sidebar flex flex-col h-full shrink-0 min-w-[260px] p-1 pb-2 overflow-hidden',
       visualCollapsed && 'sider-nav-collapsed',
       collapsed && 'sider-nav-hidden',
-      sidebarMode === 'code' && 'code-mode',
+      sidebarMode !== 'chat' && 'code-mode',
     )}>
       <div className={clsx('ax-logo w-full shrink-0', visualCollapsed ? 'justify-center px-0 pb-2' : 'px-[10px] pb-3 pt-1')}>
         <img src={logoPng} alt="Auraxis" />
@@ -947,9 +1140,7 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
           <button
             className="ax-header-action shrink-0"
             onClick={() => {
-              const input = document.getElementById('global-search-input') as HTMLInputElement | null;
-              input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              input?.focus();
+              useAppStore.getState().setGlobalSearchOpen(true);
             }}
             title={t('sidebar.globalSearch')}
             aria-label={t('sidebar.globalSearch')}
@@ -971,59 +1162,188 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
         'scroll-thin flex flex-col flex-1 sider-scroll-area-inner mt-1 overflow-y-auto overflow-x-hidden',
       )}>
         {/* ── Top functions: normal in-flow items, scroll with the sidebar ── */}
-        <div className={clsx('shrink-0 flex flex-col gap-0', visualCollapsed ? 'px-0 pb-1' : 'px-2 pb-2')}>
-          {SIDEBAR_TOP_NAV.filter((f) => {
-            // Chat mode keeps only 新建对话; Agent mode shows it plus tools.
-            return sidebarMode === 'code' ? true : f.key === 'new';
-          }).map((f) => {
-            const onClick = () => {
-              if (f.key === 'new') {
-                if (sidebarMode === 'code') handleNewTask();
-                else handleNewSession();
-              }
-              else if (f.key === 'skills') setSkillsDirOpen(true);
-              else openToolView(f.key);
-            };
-            return (
+        <div className={clsx('shrink-0 flex flex-col gap-0.5', visualCollapsed ? 'px-0 pb-1' : 'px-0 pb-2.5')}>
+          {SIDEBAR_TOP_NAV.filter((f) => f.key === 'new').map(renderTopItem)}
+          {sidebarMode !== 'chat' && !visualCollapsed && (
+            <div className="flex flex-col gap-0">
               <button
-                key={f.key}
-                className={clsx(
-                  'ax-sidebar-item h-8',
-                  activeToolView === f.key && 'ax-sidebar-item-active',
-                  visualCollapsed ? 'justify-center p-0 w-9 mx-auto overflow-hidden' : 'px-[10px]',
-                )}
-                onClick={onClick}
-                title={t(f.labelKey)}
+                type="button"
+                className={clsx('ax-sidebar-item h-8', toolsOpen && 'ax-sidebar-item-active', 'px-[10px]')}
+                onClick={() => setToolsOpen((v) => !v)}
+                title={t('sidebar.tools')}
+                aria-expanded={toolsOpen}
               >
-                <span className="ax-sidebar-icon">{f.icon}</span>
-                <span className={clsx('label-collapsible', labelCls)}>{t(f.labelKey)}</span>
+                <span className="ax-sidebar-icon"><Toolbox size={16} /></span>
+                <span className={clsx('label-collapsible flex-1', labelCls)}>{t('sidebar.tools')}</span>
+                <CaretRight
+                  size={12}
+                  className={clsx('shrink-0 text-text-faint transition-transform duration-150', toolsOpen && 'rotate-90')}
+                />
               </button>
-            );
-          })}
+              {toolsOpen && SIDEBAR_TOP_NAV.filter((f) => f.key !== 'new').map(renderTopItem)}
+            </div>
+          )}
+          {sidebarMode !== 'chat' && visualCollapsed && SIDEBAR_TOP_NAV.filter((f) => f.key !== 'new').map(renderTopItem)}
         </div>
-        {sidebarMode === 'code'
-          ? (!visualCollapsed && renderCodePanel())
-          : renderChatPanel()}
+        {sidebarMode === 'work'
+          ? (!visualCollapsed && <WorkSidebarPanel />)
+          : sidebarMode !== 'chat'
+            ? (!visualCollapsed && renderCodePanel())
+            : renderChatPanel()}
       </div>
 
-      {/* ── Settings ── */}
-      <div className={clsx('flex flex-col mt-auto shrink-0 border-t border-[var(--color-border-dim)]', visualCollapsed ? 'px-0 pt-[6px]' : 'px-2 pt-[6px]')}>
-        <button
-          className={clsx(
-            'ax-sidebar-item h-8 text-text-muted',
-            visualCollapsed ? 'justify-center p-0 w-9 mx-auto' : 'px-[10px]',
+      {/* ── 账户：头像菜单（账户信息 / 设置 / 退出） ── */}
+      <div
+        className={clsx(
+          'mt-auto shrink-0 border-t border-[var(--color-border-dim)]',
+          visualCollapsed ? 'flex flex-col items-center gap-2 px-1 pt-2.5 pb-0' : 'flex items-center px-2.5 pt-2 pb-0',
+        )}
+      >
+        <Dropdown
+          open={avatarMenuOpen}
+          onOpenChange={setAvatarMenuOpen}
+          trigger={['click']}
+          placement="topLeft"
+          overlayClassName="account-popup"
+          menu={{ items: [] }}
+          popupRender={() => (
+            <div className="w-[236px] p-1 gap-1 bg-[var(--color-bg-elevated)] rounded-xl shadow-[var(--shadow-md)] flex flex-col opacity-0 translate-y-1 animate-[smartPanelInUp_0.18s_ease_forwards]">
+              <div className="flex items-center gap-2 px-2 pt-2 pb-2 min-w-0">
+                <Avatar name={accountName || accountEmail} src={accountAvatar} size={34} />
+                <span className="min-w-0 flex flex-col">
+                  <span className="overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium leading-[20px] text-text-primary">
+                    {accountName || t('auth.account')}
+                  </span>
+                  {accountEmail && (
+                    <span className="overflow-hidden text-ellipsis whitespace-nowrap text-2xs leading-[16px] text-text-muted">
+                      {accountEmail}
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="mx-2 my-1 h-px bg-[var(--color-border-dim)]" />
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full min-h-8 px-2 py-1.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-150 hover:bg-[var(--color-hover)]"
+                onClick={() => {
+                  setAvatarMenuOpen(false);
+                  useAppStore.getState().setSettingsInitialKey('account');
+                  setShowSettings(true);
+                }}
+              >
+                <span className="flex flex-none w-5 items-center justify-center text-text-muted"><GearSix size={16} /></span>
+                <span className="flex-1 min-w-0 text-sm leading-[20px] text-text-primary">{t('auth.account')}</span>
+              </button>
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full min-h-8 px-2 py-1.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-150 hover:bg-[var(--color-hover)]"
+                onClick={() => {
+                  setAvatarMenuOpen(false);
+                  useAppStore.getState().setSettingsInitialKey('general');
+                  setShowSettings(true);
+                }}
+              >
+                <span className="flex flex-none w-5 items-center justify-center text-text-muted"><GearSix size={16} /></span>
+                <span className="flex-1 min-w-0 text-sm leading-[20px] text-text-primary">{t('nav.settings')}</span>
+              </button>
+              <div className="mx-2 my-1 h-px bg-[var(--color-border-dim)]" />
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full min-h-8 px-2 py-1.5 border-none rounded-lg bg-transparent text-left cursor-pointer transition-colors duration-150 hover:bg-[var(--color-hover)] text-danger"
+                onClick={() => {
+                  setAvatarMenuOpen(false);
+                  confirmLogout();
+                }}
+              >
+                <span className="flex flex-none w-5 items-center justify-center"><SignOut size={16} /></span>
+                <span className="flex-1 min-w-0 text-sm leading-[20px]">{t('auth.logout')}</span>
+              </button>
+            </div>
           )}
-          onClick={() => {
-            useAppStore.getState().setSettingsInitialKey('general');
-            setShowSettings(true);
-          }}
         >
-          <span className="ax-sidebar-icon"><GearSix /></span>
-          <span className={clsx('label-collapsible', settingsLabelCls)}>{t('nav.settings')}</span>
-        </button>
+          <button
+            type="button"
+            className={clsx(
+              'flex items-center min-w-0 rounded-xl border-none bg-transparent cursor-pointer transition-colors duration-150 hover:bg-[var(--color-hover)]',
+              visualCollapsed ? 'justify-center w-11 h-11' : 'gap-2.5 h-11 flex-1 px-2 text-left',
+            )}
+            title={accountName || accountEmail || t('auth.account')}
+            aria-label={t('auth.account')}
+          >
+            <Avatar name={accountName || accountEmail} src={accountAvatar} size={30} />
+            {!visualCollapsed && (
+              <span className="min-w-0 flex flex-col">
+                <span className="overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium leading-[20px] text-text-primary">
+                  {accountName || t('auth.account')}
+                </span>
+                {accountEmail && (
+                  <span className="overflow-hidden text-ellipsis whitespace-nowrap text-2xs leading-[16px] text-text-muted">
+                    {accountEmail}
+                  </span>
+                )}
+              </span>
+            )}
+          </button>
+        </Dropdown>
       </div>
 
       <SkillsDirectory open={skillsDirOpen} onClose={() => setSkillsDirOpen(false)} />
+
+      <Modal
+        open={!!rootsModalProject}
+        onCancel={() => setRootsModalProject(null)}
+        onOk={saveRootsModal}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        title={t('sidebar.projectRoots')}
+        width={440}
+        destroyOnClose
+      >
+        <div className="flex flex-col gap-1.5 py-1">
+          {rootsModalRoots.map((root, index) => (
+            <div key={root} className="flex items-center gap-2 rounded-lg bg-[var(--color-bg-secondary)] px-2 py-1.5">
+              <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs text-text-secondary">
+                {root}
+                {index === 0 ? `（${t('sidebar.projectRootsPrimary')}）` : ''}
+              </span>
+              <Checkbox
+                checked={rootsModalWritable.includes(root)}
+                onChange={(e) => {
+                  const writable = e.target.checked;
+                  setRootsModalWritable((prev) =>
+                    writable
+                      ? prev.includes(root) ? prev : [...prev, root]
+                      : prev.filter((r) => r !== root),
+                  );
+                }}
+              >
+                {t('sidebar.projectRootsWritable')}
+              </Checkbox>
+              {index > 0 && (
+                <button
+                  type="button"
+                  className="border-none bg-transparent text-text-muted cursor-pointer w-5 h-5 rounded-md flex items-center justify-center hover:bg-[var(--color-hover)] hover:text-text-primary"
+                  onClick={() => {
+                    setRootsModalRoots((prev) => prev.filter((r) => r !== root));
+                    setRootsModalWritable((prev) => prev.filter((r) => r !== root));
+                  }}
+                  aria-label={t('sidebar.remove')}
+                >
+                  <CloseCircleOutlined style={{ fontSize: 13 }} />
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            className="flex items-center justify-center gap-1.5 mt-1 h-8 rounded-lg border border-dashed border-[var(--color-border-default)] bg-transparent text-xs text-text-muted cursor-pointer hover:bg-[var(--color-hover)] hover:text-text-secondary"
+            onClick={() => void addRootFromPicker()}
+          >
+            <PlusOutlined style={{ fontSize: 13 }} />
+            {t('sidebar.projectRootsAdd')}
+          </button>
+        </div>
+      </Modal>
     </nav>
   );
 }

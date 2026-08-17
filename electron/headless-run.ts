@@ -12,11 +12,12 @@ import type { CliArgs } from './cli-args';
 import { agentLoopRun } from './ipc/agent-loop';
 import type { AgentObserver, AgentLoopEvent, TaskPlan } from './ipc/agent-loop';
 import { getAllTools } from './tool-registry';
-import { resolveApiBase } from './ipc/model-config';
+import { resolveModelApiBase, resolveModelApiKey } from './ipc/model-config';
 import { readSettings } from './ipc/settings-store';
 import { resolveCredential } from './credentials';
 import { getAgentDef } from './ipc/agent-handlers';
 import type { SandboxMode } from './sandbox-policy';
+import { isPermissionPreset, PERMISSION_PRESETS } from './contracts/permission';
 
 /** Tools that never mutate anything — safe to allow even in headless ask mode. */
 const READ_ONLY_TOOLS = new Set([
@@ -62,6 +63,7 @@ export async function runHeadlessTask(opts: HeadlessRunOptions): Promise<number>
 
   const model = opts.model || settings.defaultModel || 'deepseek-v4-pro';
   const apiKey = opts.apiKey
+    || (await resolveModelApiKey(model))
     || process.env.DEEPSEEK_API_KEY
     || (await resolveCredential('DEEPSEEK_API_KEY').catch(() => undefined))?.value
     || settings.deepseekApiKey
@@ -71,14 +73,20 @@ export async function runHeadlessTask(opts: HeadlessRunOptions): Promise<number>
     return 2;
   }
 
-  const apiBase = opts.apiBase || resolveApiBase(model);
+  const apiBase = opts.apiBase || (await resolveModelApiBase(model));
   const projectRoot = opts.project || settings.projectPath || process.cwd();
-  const mode = opts.mode || 'afe';
+  const preset = isPermissionPreset(settings.permissionPreset)
+    ? PERMISSION_PRESETS[settings.permissionPreset]
+    : undefined;
+  const mode = opts.mode || preset?.mode || 'auto';
   const sandboxMode: SandboxMode = opts.sandbox
+    || preset?.sandboxMode
     || (settings.sandboxMode === 'read' || settings.sandboxMode === 'workspace-write' || settings.sandboxMode === 'full'
       ? settings.sandboxMode
       : 'workspace-write');
-  const autoApprove = opts.autoApprove === true || (opts.autoApprove === undefined && mode === 'afe');
+  const autoApprove = opts.autoApprove !== undefined
+    ? opts.autoApprove
+    : (preset ? preset.autoApprove : mode === 'auto');
   const json = opts.json === true;
   const verbose = opts.verbose === true || json;
 
@@ -197,6 +205,7 @@ export async function runHeadlessTask(opts: HeadlessRunOptions): Promise<number>
       signal: controller.signal,
       isDeepThink: opts.deepThink,
       reasoningEffort: opts.reasoningEffort || 'high',
+      toolChoice: opts.toolChoice,
       maxIterations: opts.maxIterations ?? 200,
       sessionId: `cli-${Date.now()}`,
     });

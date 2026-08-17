@@ -62,7 +62,7 @@ function makeHarness(overrides: Partial<AgentLoopConfig> = {}) {
     systemPrompt: '任务：测试统一循环',
     projectRoot: 'C:/proj',
     tools: [],
-    mode: 'afe',
+    mode: 'auto',
     adapter: 'unified-test',
     executeTool: (async () => ({ output: 'ok' })) as any,
     observer: {
@@ -171,7 +171,7 @@ describe('agentLoopRun — unified step-engine loop', () => {
 
   it('模型自主调用 EnterPlanMode：生成计划、等待批准后按批准步骤执行', async () => {
     const onPlanGenerated = vi.fn(async () => ['1']);
-    const { cfg, events } = makeHarness({ mode: 'afe', onPlanGenerated });
+    const { cfg, events } = makeHarness({ mode: 'auto', onPlanGenerated });
     // 1) 模型决定先规划
     llmQueue.push(toolAssistant([{ id: 'ep1', name: 'EnterPlanMode', input: { goal: '实现功能' } }]));
     // 2) EnterPlanMode 内部的规划 LLM 调用
@@ -191,7 +191,7 @@ describe('agentLoopRun — unified step-engine loop', () => {
 
   it('模型自主调用 EnterPlanMode 被拒绝后继续交互执行', async () => {
     const onPlanGenerated = vi.fn(async () => null);
-    const { cfg } = makeHarness({ mode: 'afe', onPlanGenerated });
+    const { cfg } = makeHarness({ mode: 'auto', onPlanGenerated });
     llmQueue.push(toolAssistant([{ id: 'ep1', name: 'EnterPlanMode', input: { goal: '实现功能' } }]));
     llmQueue.push(planAssistant(PLAN_JSON));
     llmQueue.push(finalAssistant());

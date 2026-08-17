@@ -6,16 +6,32 @@
  * Usage: npx tsc -p tsconfig.electron.json && npx vite build && node scripts/smoke-electron.cjs
  */
 const path = require('path');
+const os = require('os');
+const { mkdtempSync } = require('fs');
 const { _electron } = require('playwright');
 
 const root = path.join(__dirname, '..');
 
 (async () => {
   const rendererErrors = [];
+  // 隔离用户数据：登录门已上线，smoke 需显式绕过；同时避免污染真实配置。
+  const dataDir = mkdtempSync(path.join(os.tmpdir(), 'auraxis-smoke-'));
   const app = await _electron.launch({
     args: [path.join(root, 'dist-electron', 'main.js')],
     cwd: root,
-    env: { ...process.env, AURAXIS_FORCE_PRODUCTION: '1' },
+    env: {
+      ...process.env,
+      AURAXIS_FORCE_PRODUCTION: '1',
+      AURAXIS_AUTH_DISABLED: '1',
+      AURAXIS_USER_DATA_DIR: dataDir,
+      AURAXIS_CHAT_LOG_DIR: path.join(dataDir, 'chat-logs'),
+      AURAXIS_SESSION_LOG_DIR: path.join(dataDir, 'session-logs'),
+      AURAXIS_SESSION_CACHE_DIR: path.join(dataDir, 'session-cache'),
+      AURAXIS_FTS_DIR: path.join(dataDir, 'fts'),
+      AURAXIS_FEEDBACK_DIR: path.join(dataDir, 'feedback'),
+      AURAXIS_SNAPSHOT_DIR: path.join(dataDir, 'agent-snapshots'),
+      AURAXIS_HOOKS_DIR: path.join(dataDir, 'hooks'),
+    },
   });
 
   try {

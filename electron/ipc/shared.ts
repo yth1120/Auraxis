@@ -29,7 +29,15 @@ export const SAFE_EXTENSIONS = new Set([
   '.scss', '.less', '.py', '.rs', '.go', '.java',
   '.yaml', '.yml', '.toml', '.xml', '.svg', '.txt',
   '.env', '.gitignore', '.dockerignore',
+  '.docx', '.xlsx', '.pptx', '.pdf',
 ]);
+
+/** Binary document extensions handled by ReadDocument / WriteDocument. */
+export const DOCUMENT_EXTENSIONS = new Set(['.docx', '.xlsx', '.pptx', '.pdf']);
+
+export function isDocumentExtension(filePath: string): boolean {
+  return DOCUMENT_EXTENSIONS.has(path.extname(filePath).toLowerCase());
+}
 
 export function isAllowedExtension(filePath: string): boolean {
   const ext = path.extname(filePath).toLowerCase();

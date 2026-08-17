@@ -11,6 +11,7 @@ import { app } from 'electron';
 import { JsonlSessionStore } from './session-store';
 import { captureSessionTelemetry } from './ipc/session-telemetry';
 import { scheduleSessionFtsRefresh } from './fts';
+import { captureEvidenceFromEvents } from './ipc/memory-evidence';
 import type { ProjectedSession, SessionEvent } from './contracts/session-types';
 
 const agentStore = new JsonlSessionStore({
@@ -67,7 +68,18 @@ export function mapAgentEventToSessionEvent(e: Record<string, unknown>): Omit<Se
       return { type: 'system', ts, data: { event: 'context_compressed', tokensBefore: e.tokensBefore, tokensAfter: e.tokensAfter, messagesRemoved: e.messagesRemoved, tokensSaved: e.tokensSaved } };
     case 'usage':
     case 'usage_update':
-      return { type: 'system', ts, data: { event: 'usage', inputTokens: e.inputTokens, outputTokens: e.outputTokens, reasoningTokens: e.reasoningTokens } };
+      return {
+        type: 'system',
+        ts,
+        data: {
+          event: 'usage',
+          inputTokens: e.inputTokens,
+          outputTokens: e.outputTokens,
+          reasoningTokens: e.reasoningTokens,
+          cacheHitTokens: e.cacheHitTokens,
+          cacheMissTokens: e.cacheMissTokens,
+        },
+      };
     case 'system_message':
       return { type: 'system', ts, data: { event: 'system_message', level: e.level, content: e.content } };
     case 'user_message':
@@ -100,7 +112,11 @@ export function mapAgentEventToSessionEvent(e: Record<string, unknown>): Omit<Se
 }
 
 /** Append raw engine events to the durable agent log (mapped to SessionEvent). */
-export async function appendAgentLog(agentId: string, events: Array<Record<string, unknown>>): Promise<void> {
+export async function appendAgentLog(
+  agentId: string,
+  events: Array<Record<string, unknown>>,
+  scope?: string,
+): Promise<void> {
   if (!agentId || !events || events.length === 0) return;
   captureSessionTelemetry(agentId, 'agent', events);
   scheduleSessionFtsRefresh(agentId, 'agent');
@@ -111,6 +127,12 @@ export async function appendAgentLog(agentId: string, events: Array<Record<strin
   }
   if (mapped.length === 0) return;
   await agentStore.append(agentId, mapped);
+  // Eywa M1 实时钩子：agent 运行期间捕获用户输入与工具终态。
+  if (scope) {
+    try {
+      captureEvidenceFromEvents(scope, agentId, events);
+    } catch { /* evidence capture is best-effort */ }
+  }
 }
 
 /** Remove projection-cache rows for agent sessions that no longer exist. */

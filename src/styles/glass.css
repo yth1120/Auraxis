@@ -1,0 +1,22 @@
+/* ================================================================
+   Auraxis — Flat Elevated Surfaces
+   极简大厂风格：实体表面 + hairline 边框 + 分层轻阴影。
+   不做 backdrop-filter / 顶部入射光 / 渐变染色，保持界面安静。
+   ================================================================ */
+
+/* 命令面板与设置：实体 elevated + 一层柔和阴影。 */
+.command-palette-modal .ant-modal-content,
+.settings-modal .ant-modal-content {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-dim);
+  border-radius: 14px;
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+}
+
+/* 上下文计量条：Dock 内的胶囊芯片，实体次级面。 */
+.ax-context-meter {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-dim);
+  border-radius: 9999px;
+}

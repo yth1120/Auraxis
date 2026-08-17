@@ -10,6 +10,7 @@ import { app } from 'electron';
 import { JsonlSessionStore } from './session-store';
 import { captureSessionTelemetry } from './ipc/session-telemetry';
 import { scheduleSessionFtsRefresh } from './fts';
+import { captureEvidenceFromEvents } from './ipc/memory-evidence';
 import type {
   ChatLogEvent,
   ChatSessionMeta,
@@ -43,10 +44,20 @@ const chatStore = new JsonlSessionStore({
 export function appendChatEvents(
   sessionId: string,
   events: Array<Omit<ChatLogEvent, 'seq'>>,
+  scope?: string,
 ): Promise<void> {
   captureSessionTelemetry(sessionId, 'chat', events as unknown as Array<Record<string, unknown>>);
   scheduleSessionFtsRefresh(sessionId, 'chat');
-  return chatStore.append(sessionId, events);
+  const pending = chatStore.append(sessionId, events);
+  // Eywa M1 实时钩子：best-effort 捕获用户消息与工具终态证据。
+  if (scope) {
+    void pending.then(() => {
+      try {
+        captureEvidenceFromEvents(scope, sessionId, events);
+      } catch { /* evidence capture is best-effort */ }
+    }).catch(() => {});
+  }
+  return pending;
 }
 
 /** Remove projection-cache rows for chat sessions that no longer exist. */

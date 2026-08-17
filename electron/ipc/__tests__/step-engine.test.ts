@@ -11,6 +11,16 @@ vi.mock('electron', () => ({
   Notification: class {},
   safeStorage: { encryptString: vi.fn((s: string) => s), decryptString: vi.fn((s: string) => s), isEncryptionAvailable: () => true },
 }));
+vi.mock('../memory-graph', () => ({
+  createMemoryRiskGate: vi.fn(() => () => ({
+    allowed: false,
+    reason: '证据信任不足',
+    trust: 0.2,
+    evidenceCount: 0,
+  })),
+  recordRiskAudit: vi.fn(() => 'run-x'),
+  roleForAgent: vi.fn(() => 'general-purpose'),
+}));
 
 import { runStep, createStepState, buildTimeContextMessage, buildTmuxContextMessage, resolveTmuxLocation, resetTmuxLocationCache } from '../step-engine';
 import type { StepEngineConfig } from '../step-engine';
@@ -35,7 +45,7 @@ function makeCfg(overrides: Partial<StepEngineConfig> = {}) {
     apiBase: 'https://api.example.com/v1/chat/completions',
     systemPrompt: 'sys',
     projectRoot: 'C:/proj',
-    mode: 'afe',
+    mode: 'auto',
     adapter: 'step-test',
     retryBaseDelayMs: 1,
     emit: (e) => events.push(e),
@@ -116,6 +126,41 @@ describe('step-engine', () => {
     expect(events.some((e) => e.type === 'tool_end')).toBe(true);
     const stepEnd = events.find((e) => e.type === 'step_end') as any;
     expect(stepEnd).toMatchObject({ iteration: 1, toolsThisIteration: 1 });
+  });
+
+  it('AURAXIS_MEMORY_RISK_GATE=1 时默认风险门控拒绝高危工具', async () => {
+    process.env.AURAXIS_MEMORY_RISK_GATE = '1';
+    try {
+      llmMock.mockResolvedValue({
+        contentTimeline: [],
+        toolCalls: [{ id: 'c1', name: 'Write', input: { file_path: 'a.ts' } }],
+        rawText: '',
+        thinkingText: '',
+        isFinal: false,
+        completionStopReason: 'tool_use',
+      });
+      const executeTool = vi.fn(async () => ({ output: 'should-not-run' }));
+      const { cfg, events } = makeCfg({ executeTool: executeTool as any });
+      const state = createStepState([]);
+      state.iteration = 1;
+
+      const outcome = await runStep(cfg, state, 'g1');
+      expect(outcome.status).toBe('continue');
+      expect(executeTool).not.toHaveBeenCalled();
+      const toolEvents = events.filter((e) => e.type === 'tool_error' || e.type === 'tool_aborted');
+      const { roleForAgent, recordRiskAudit, createMemoryRiskGate } = await import('../memory-graph');
+      expect(toolEvents.length).toBeGreaterThan(0);
+      expect(String((toolEvents[0] as any).error)).toContain('记忆风险门控拒绝');
+
+      expect(roleForAgent).toHaveBeenCalledWith('');
+      expect(recordRiskAudit).toHaveBeenCalledWith(
+        'C:/proj',
+        'Write',
+        expect.objectContaining({ allowed: false }),
+      );
+    } finally {
+      delete process.env.AURAXIS_MEMORY_RISK_GATE;
+    }
   });
 
   it('stops on a final answer', async () => {

@@ -2,16 +2,13 @@ import { app, BrowserWindow, shell, session, ipcMain, Notification } from 'elect
 import path from 'path';
 import os from 'os';
 import { existsSync, mkdtempSync, rmSync } from 'fs';
-import { registerIpcHandlers, isWindows11 } from './ipc';
+import { registerIpcHandlers, isWindows11, markAcrylicWindowReady } from './ipc';
 import { cleanupWindowStreams } from './ipc/ai-handlers';
 import { setMainWindowRef, clearMainWindowRef } from './ipc/window-ref';
 import { startSdkServer } from './sdk-server';
 import { sessionQuerySearch } from './fts';
 
 let mainWindow: BrowserWindow | null = null;
-
-/** Persisted sidebar-glass value read at boot (0 = solid, >0 = frosted). */
-let bootSidebarGlass = 0;
 
 // AURAXIS_FORCE_PRODUCTION=1 lets an unpackaged build load the local dist/
 // renderer (used by the Playwright smoke test and local production preview).
@@ -98,10 +95,18 @@ function createWindow(useAcrylic = false) {
     minHeight: 500,
     frame: false,
     title: 'Auraxis',
-    // Acrylic needs a fully transparent base layer so the sidebar's own
-    // translucency can reveal the blurred desktop; solid fallback otherwise.
-    backgroundColor: useAcrylic ? '#00000000' : '#0a0202',
-    ...(useAcrylic ? { backgroundMaterial: 'acrylic' as const, show: false } : {}),
+    // Acrylic 需要窗口本身是 transparent（Electron #38454）：只设透明
+    // backgroundColor 不够。Windows 11 上始终以透明 + Acrylic 创建窗口，
+    // 侧边栏玻璃关闭时页面自行绘制不透明背景；开启时页面变透明，
+    // 透出 acrylic 的模糊桌面。这样运行中拖滑杆也无需重建窗口。
+    ...(useAcrylic
+      ? {
+          transparent: true,
+          backgroundColor: '#00000000',
+          backgroundMaterial: 'acrylic' as const,
+          show: false,
+        }
+      : { backgroundColor: '#0a0202' }),
     // 品牌 logo 作为开发态窗口/任务栏图标；打包后由 exe/app 图标接管。
     ...(existsSync(path.join(__dirname, '../build/icon.png'))
       ? { icon: path.join(__dirname, '../build/icon.png') }
@@ -124,8 +129,9 @@ function createWindow(useAcrylic = false) {
 
   setMainWindowRef(mainWindow);
 
-  // Avoid a transparent flash before first paint when Acrylic is enabled.
   if (useAcrylic) {
+    markAcrylicWindowReady();
+    // Avoid a transparent flash before first paint when Acrylic is enabled.
     const showTimer = setTimeout(() => mainWindow?.show(), 5000);
     mainWindow.once('ready-to-show', () => {
       clearTimeout(showTimer);
@@ -218,10 +224,6 @@ app.whenReady().then(async () => {
       const { undoManager } = await import('./ipc/undo-manager');
       await undoManager.init(bootSettings.projectPath);
     }
-    const glass = Number(bootSettings?.sidebarGlass);
-    if (Number.isFinite(glass)) {
-      bootSidebarGlass = Math.max(0, Math.min(100, Math.round(glass)));
-    }
   } catch { /* non-critical */ }
 
   const { parseCliArgs, cliUsage } = await import('./cli-args');
@@ -289,7 +291,8 @@ app.whenReady().then(async () => {
             subagentType: subagentType || 'general-purpose',
             projectRoot: root || '',
             requestId: `sdk-${Date.now()}`,
-            autoApprove: true,
+            // 默认保留审批门；只有显式 AURAXIS_SDK_AUTOAPPROVE=1 才允许全自动无头执行。
+            autoApprove: process.env.AURAXIS_SDK_AUTOAPPROVE === '1',
           });
         },
         searchSessions: (query, limit) => sessionQuerySearch(query, limit),
@@ -308,7 +311,7 @@ app.whenReady().then(async () => {
     const { runSubAgent } = await import('./ipc/agent-handlers');
     startAcpServer({
       onShutdown: () => app.exit(0),
-      runAgent: async ({ prompt, projectRoot, signal }) => {
+      runAgent: async ({ prompt, projectRoot, promptType, signal }) => {
         let root = projectRoot || '';
         if (!root) {
           try {
@@ -319,10 +322,10 @@ app.whenReady().then(async () => {
         return runSubAgent({
           description: 'ACP 任务',
           prompt,
-          subagentType: 'general-purpose',
+          subagentType: promptType === 'plan' ? 'Plan' : 'general-purpose',
           projectRoot: root,
           requestId: `acp-${Date.now()}`,
-          autoApprove: true,
+          autoApprove: process.env.AURAXIS_ACP_AUTOAPPROVE === '1',
           parentSignal: signal,
         });
       },
@@ -349,7 +352,8 @@ app.whenReady().then(async () => {
     } catch {
       /* maintenance is best-effort */
     }
-    createWindow(isWindows11() && bootSidebarGlass > 0);
+    // Windows 11: 始终以 Acrylic 窗口创建（渲染层决定何时透出）。
+    createWindow(isWindows11());
   }
 
   // Window focus IPC for notification click

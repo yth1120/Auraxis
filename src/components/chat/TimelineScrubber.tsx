@@ -21,6 +21,10 @@ interface TimelineScrubberProps {
 }
 
 const MAX_DOTS = 50;
+/** Hover must be held briefly before the flyout opens — the rail is a thin
+ *  right-edge strip, so an instant pop on mouseover feels twitchy. */
+const OPEN_DELAY_MS = 260;
+const CLOSE_DELAY_MS = 180;
 
 /**
  * Prompt Timeline Dock — VS Code "Sessions" prompt-timeline dock pattern.
@@ -38,8 +42,43 @@ export default function TimelineScrubber({
   const tScrub = useT();
   const railRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState<number | null>(null);
+
+  const clearTimers = () => {
+    if (openTimerRef.current) clearTimeout(openTimerRef.current);
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    openTimerRef.current = null;
+    closeTimerRef.current = null;
+  };
+
+  const scheduleOpen = () => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    if (openTimerRef.current) return;
+    openTimerRef.current = setTimeout(() => {
+      openTimerRef.current = null;
+      setOpen(true);
+    }, OPEN_DELAY_MS);
+  };
+
+  const scheduleClose = () => {
+    if (openTimerRef.current) {
+      clearTimeout(openTimerRef.current);
+      openTimerRef.current = null;
+    }
+    if (closeTimerRef.current) return;
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
+      setOpen(false);
+    }, CLOSE_DELAY_MS);
+  };
+
+  useEffect(() => clearTimers, []);
 
   const activeIndex = useMemo(() => {
     if (ticks.length === 0) return -1;
@@ -52,6 +91,7 @@ export default function TimelineScrubber({
     onScrubTo(tick.index, 'click');
     setCursor(i);
     setOpen(false);
+    clearTimers();
     railRef.current?.focus();
   }, [ticks, onScrubTo]);
 
@@ -66,6 +106,7 @@ export default function TimelineScrubber({
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       setOpen(true);
+      clearTimers();
       setCursor((c) => {
         const base = c ?? (activeIndex >= 0 ? activeIndex : 0);
         return e.key === 'ArrowDown'
@@ -78,6 +119,7 @@ export default function TimelineScrubber({
       if (target >= 0) jump(target);
     } else if (e.key === 'Escape') {
       setOpen(false);
+      clearTimers();
       railRef.current?.focus();
     }
   };
@@ -89,8 +131,8 @@ export default function TimelineScrubber({
   return (
     <div
       className={clsx('relative shrink-0 w-[22px] h-full z-20', className)}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      onMouseEnter={scheduleOpen}
+      onMouseLeave={scheduleClose}
     >
       <button
         ref={railRef}
@@ -99,7 +141,10 @@ export default function TimelineScrubber({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={tScrub('scrubber.aria')}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          clearTimers();
+          setOpen((v) => !v);
+        }}
         onKeyDown={onKeyDown}
       >
         {dots.map((t, i) => (

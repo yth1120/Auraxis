@@ -12,6 +12,7 @@ import {
 import { shallow } from 'zustand/shallow';
 import { t, useT } from '../../i18n';
 import type { AgentInfo, AgentLogEntry } from '../../types/agent';
+import { PERMISSION_PRESETS } from '../../types/advanced';
 import type { PermissionRequest } from '../../types/advanced';
 import type { Message } from '../../types/chat';
 import { getContentText } from '../../types/chat';
@@ -52,7 +53,7 @@ function projectUserText(text: string): ReactNode {
     parts.push(
       <span
         key={start}
-        className="inline-flex items-center px-1 rounded bg-[var(--color-bg-inset)] text-[0.92em] text-primary"
+        className="inline-flex items-center px-1 rounded-md bg-[var(--color-bg-inset)] text-xs text-primary"
       >
         {label}
       </span>,
@@ -132,6 +133,8 @@ function summarizeInput(toolName: string | undefined, input: Record<string, unkn
     case 'Write':
     case 'Edit':
     case 'NotebookEdit':
+    case 'ReadDocument':
+    case 'WriteDocument':
       return basename(input.file_path);
     case 'Bash': {
       const c = typeof input.command === 'string' ? input.command.replace(/\s+/g, ' ').trim() : '';
@@ -310,9 +313,9 @@ function Checklist({ todos }: { todos: NonNullable<AgentLogEntry['todos']> }) {
   return (
     <div className="my-1 mb-1.5">
       {todos.map((t, i) => (
-        <div key={i} className="flex items-start gap-[7px] py-[1.5px] text-xs">
+        <div key={i} className="flex items-start gap-2 py-0.5 text-xs">
           <span className={clsx(
-            'shrink-0 mt-[3px] text-xs text-[var(--color-text-faint)]',
+            'shrink-0 mt-1 text-xs text-[var(--color-text-faint)]',
             t.status === 'completed' && '!text-text-secondary',
             t.status === 'in_progress' && '!text-accent',
           )}>
@@ -565,7 +568,7 @@ const LogEntry = memo(function LogEntry({
       if (!text) return null;
       return (
         <div className="flex justify-end">
-          <div className="min-w-0 max-w-[525px] whitespace-pre-wrap break-all rounded-[22px] bg-[var(--color-bg-secondary)] px-4 py-2.5 text-base leading-6 text-text-primary">
+          <div className="min-w-0 max-w-[525px] whitespace-pre-wrap break-all rounded-2xl bg-[var(--color-bg-secondary)] px-4 py-2.5 text-base leading-6 text-text-primary">
             {projectUserText(text)}
           </div>
         </div>
@@ -766,15 +769,15 @@ export default function AgentConversation({ headerInset = 0, bottomInset = 0 }: 
 
   const implementPlan = useCallback(async () => {
     if (!agent?.planFile) return;
-    const access = useSettingsStore.getState().sandboxMode;
-    const auto = access === 'full';
+    const preset = useSettingsStore.getState().permissionPreset;
+    const spec = PERMISSION_PRESETS[preset];
     const id = await createAgent({
       name: t('conv.implementPlan'),
       type: 'general-purpose',
       instruction: `请先阅读计划文件 ${agent.planFile}，严格按其中列出的步骤逐项实施。每完成一步用 TodoWrite 更新进度；遇到阻塞或风险操作时先说明再做。不要跳过任何步骤。`,
       displayText: t('conv.implementPlanDisplay', { name: basename(agent.planFile) }),
-      mode: auto ? 'afe' : 'ask',
-      autoApprove: auto,
+      mode: spec.mode,
+      autoApprove: spec.autoApprove,
     });
     if (id) setCurrentAgent(id);
   }, [agent?.planFile, setCurrentAgent]);
@@ -1026,8 +1029,8 @@ export default function AgentConversation({ headerInset = 0, bottomInset = 0 }: 
               tail. No round cards, no round headers. */}
           <div className="flex flex-col gap-4">
             {!isSubagent && agent.description && (
-              <div className="flex flex-col items-end gap-1.5" data-time-hover-root>
-                <div className="max-w-[525px] whitespace-pre-wrap break-words rounded-[22px] bg-[var(--color-bg-secondary)] px-4 py-2.5 text-base leading-6 text-text-primary">
+              <div className="group flex flex-col items-end gap-1.5" data-time-hover-root>
+                <div className="max-w-[525px] whitespace-pre-wrap break-words rounded-2xl bg-[var(--color-bg-secondary)] px-4 py-2.5 text-base leading-6 text-text-primary">
                   {projectUserText(agent.description)}
                 </div>
                 <div className="ax-flow-actions" data-align="end">
@@ -1093,7 +1096,7 @@ export default function AgentConversation({ headerInset = 0, bottomInset = 0 }: 
               const hasTail = turn.end != null
                 && (turnText !== '' || stats !== '' || tailTime != null || durationMs != null);
               return (
-                <div key={turn.iteration} data-agent-turn={turn.iteration} className="flex flex-col gap-4">
+                <div key={turn.iteration} data-agent-turn={turn.iteration} className="group flex flex-col gap-4">
                   {visibleTurnEntries.map((entry, i) => (
                     <div
                       key={i}
@@ -1156,28 +1159,13 @@ export default function AgentConversation({ headerInset = 0, bottomInset = 0 }: 
               <MarkdownRenderer content={cleanText(agent.result || agent.error)} />
             </div>
           )}
-          {isTerminal && (
+          {isTerminal && agent.planFile && (
             <div className="ax-session-tail">
-              <div className="ax-session-stats">
-                <span className="tabular-nums">
-                  {tConv('conv.roundsTools', { n: agent.iteration ?? 0, m: agent.toolCallCount ?? 0 })}
-                </span>
-                {(agent.totalInputTokens > 0 || agent.totalOutputTokens > 0) && (
-                  <>
-                    <span className="ax-session-sep" aria-hidden>|</span>
-                    <span className="tabular-nums">
-                      {tConv('dashboard.tokens', { in: agent.totalInputTokens.toLocaleString(), out: agent.totalOutputTokens.toLocaleString() })}
-                    </span>
-                  </>
-                )}
+              <div className="ax-session-actions">
+                <button type="button" className="ax-session-action" onClick={implementPlan}>
+                  {tConv('conv.implementPlan')}
+                </button>
               </div>
-              {agent.planFile && (
-                <div className="ax-session-actions">
-                  <button type="button" className="ax-session-action" onClick={implementPlan}>
-                    {tConv('conv.implementPlan')}
-                  </button>
-                </div>
-              )}
             </div>
           )}
           {agent.error && (

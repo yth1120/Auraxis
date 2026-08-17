@@ -10,6 +10,7 @@
  */
 import { createInterface } from 'readline';
 import net from 'net';
+import crypto from 'crypto';
 import type { FtsHit } from './fts';
 
 export interface SdkDeps {
@@ -47,6 +48,15 @@ export async function handleSdkRequest(deps: SdkDeps, raw: unknown): Promise<Sdk
   if (!req || req.jsonrpc !== '2.0' || req.id === undefined) {
     return { jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Invalid Request' } };
   }
+  // 可选鉴权：配置 AURAXIS_SDK_TOKEN 后，agent.run / session.search 必须携带匹配的 token。
+  const expectedToken = process.env.AURAXIS_SDK_TOKEN;
+  const authorize = (params: any): boolean => {
+    if (!expectedToken) return true;
+    const got = typeof params?.token === 'string' ? params.token : '';
+    const a = Buffer.from(got);
+    const b = Buffer.from(expectedToken);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  };
   try {
     switch (req.method) {
       case 'ping':
@@ -54,6 +64,7 @@ export async function handleSdkRequest(deps: SdkDeps, raw: unknown): Promise<Sdk
 
       case 'agent.run': {
         const p = req.params ?? {};
+        if (!authorize(p)) throw new SdkError(-32603, '未授权：缺少或错误的 SDK token');
         if (typeof p.prompt !== 'string' || !p.prompt.trim()) {
           throw new SdkError(-32602, 'prompt 必填');
         }
@@ -69,6 +80,7 @@ export async function handleSdkRequest(deps: SdkDeps, raw: unknown): Promise<Sdk
 
       case 'session.search': {
         const p = req.params ?? {};
+        if (!authorize(p)) throw new SdkError(-32603, '未授权：缺少或错误的 SDK token');
         if (typeof p.query !== 'string' || !p.query.trim()) {
           throw new SdkError(-32602, 'query 必填');
         }
@@ -119,6 +131,7 @@ export function startSdkTcpServer(
   deps: SdkDeps,
   port = 0,
 ): Promise<{ port: number; close: () => void }> {
+  const MAX_LINE_BYTES = 1024 * 1024;
   const server = net.createServer((socket) => {
     socket.setEncoding('utf8');
     let buffer = '';
@@ -128,6 +141,10 @@ export function startSdkTcpServer(
       buffer = lines.pop() || '';
       for (const line of lines) {
         if (!line.trim()) continue;
+        if (line.length > MAX_LINE_BYTES) {
+          socket.write(`${JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32600, message: '请求过大（超过 1MB）' } })}\n`);
+          continue;
+        }
         let req: unknown;
         try {
           req = JSON.parse(line);
@@ -137,6 +154,7 @@ export function startSdkTcpServer(
         }
         void handleSdkRequest(deps, req).then((res) => socket.write(`${JSON.stringify(res)}\n`));
       }
+      if (buffer.length > MAX_LINE_BYTES) buffer = '';
     });
     socket.on('error', () => { /* client disconnected */ });
   });

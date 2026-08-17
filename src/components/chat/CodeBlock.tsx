@@ -4,6 +4,7 @@ import { useT } from '../../i18n';
 import {
   Copy as CopyOutlined,
   Check as CheckOutlined,
+  Play as PlayOutlined,
 } from '@/components/common/icons'
 import hljs from 'highlight.js/lib/core';
 import typescript from 'highlight.js/lib/languages/typescript';
@@ -20,6 +21,13 @@ import java from 'highlight.js/lib/languages/java';
 import sql from 'highlight.js/lib/languages/sql';
 import yaml from 'highlight.js/lib/languages/yaml';
 import { useSettingsStore } from '../../stores/useSettingsStore';
+import { useChatStore } from '../../stores/useChatStore';
+import { useAppStore } from '../../stores/useAppStore';
+import { useAgentStore } from '../../stores/useAgentStore';
+import { createAgent } from '../../constants/commands';
+import { resolveFollowTarget } from '../../utils/followTarget';
+import { scrubSandboxPaths } from '../../utils/scrub';
+import { mapThinkingLevelToEffort } from '../../types/chat';
 
 // Register only commonly used languages for bundle size
 hljs.registerLanguage('typescript', typescript);
@@ -94,6 +102,63 @@ function CodeBlock({ language, code, onApply, onPreview }: CodeBlockProps) {
       message.error(t('code.copyFailed'));
     }
   }, [code, t]);
+
+  // 继续写：Chat 走官方前缀续写；Work/Code 走 Agent 任务链路（续接/排队/新建）。
+  const handleContinue = useCallback(() => {
+    const mode = useAppStore.getState().sidebarMode;
+    const instructionText = `请继续写下面的 ${language} 代码，从已有代码的末尾接着实现，不要重复已有内容。\n\n\`\`\`${language}\n${code}\n\`\`\``;
+    if (mode === 'chat') {
+      if (useChatStore.getState().isStreaming) {
+        message.info(t('code.continueBusy'));
+        return;
+      }
+      useChatStore.getState().continueCode(language, code);
+      return;
+    }
+
+    const agentState = useAgentStore.getState();
+    const current = agentState.currentAgentId
+      ? agentState.agents.find((a) => a.id === agentState.currentAgentId) ?? null
+      : null;
+    // Agent 正在运行/暂停/排队 → 作为跟进消息入队，任务结束后自动继续。
+    if (current && (current.status === 'running' || current.status === 'paused' || current.status === 'queued')) {
+      useChatStore.getState().enqueueAgentMessage(instructionText);
+      message.info(t('code.continueQueued'));
+      return;
+    }
+    // 有已结束/可续接的任务 → 续接同一任务（保留上下文与工作目录）。
+    const follow = resolveFollowTarget({ selected: current, agents: agentState.agents, pendingNewTask: false });
+    if (follow) {
+      const priorResult = scrubSandboxPaths(follow.result || '（无结果记录）').slice(0, 2000);
+      const finalInstruction = `请继续当前任务，在前序工作的基础上推进。\n\n【任务背景】\n${follow.description || follow.name}\n\n【当前进展】\n${priorResult}\n\n【现在请继续】\n${instructionText}\n\n请继续在同一个工作目录内工作，不要访问历史任务的沙箱目录。`;
+      void useAgentStore.getState().continueAgent(follow.id, finalInstruction, instructionText).then((cont) => {
+        if (cont.ok) {
+          useAgentStore.getState().setCurrentAgent(follow.id);
+        } else {
+          message.error(cont.error || t('composer.continueFailed'));
+        }
+      });
+      return;
+    }
+    // 无任务可续 → 新建一个 Agent 任务。
+    const projectPath = useSettingsStore.getState().projectPath || useChatStore.getState().currentProjectPath || '';
+    if (!projectPath) {
+      message.warning(t('code.noProject'));
+      return;
+    }
+    const chatState = useChatStore.getState();
+    void createAgent({
+      name: '继续写代码',
+      type: 'general-purpose',
+      instruction: instructionText,
+      displayText: instructionText,
+      model: chatState.selectedModel,
+      isDeepThink: true,
+      reasoningEffort: mapThinkingLevelToEffort(chatState.reasoningEffort),
+    }).then((id) => {
+      if (id) useAgentStore.getState().setCurrentAgent(id);
+    });
+  }, [language, code, t]);
 
   const extMap: Record<string, string> = {
     typescript: '.ts', ts: '.ts', tsx: '.tsx',
@@ -194,10 +259,16 @@ function CodeBlock({ language, code, onApply, onPreview }: CodeBlockProps) {
     <div className="my-4 rounded-xl overflow-hidden bg-[var(--color-code-bg)]">
       <div className="flex items-center justify-between px-3 py-1.5 font-mono text-xs text-[var(--color-text-muted)] select-none bg-[var(--color-bg-tertiary)]">
         <span className="font-medium lowercase tracking-wide">{language}</span>
-        <button className="inline-flex items-center gap-1 border-none bg-transparent text-[var(--color-text-muted)] text-2xs cursor-pointer px-1.5 py-0.5 rounded-md hover:text-[var(--color-text-secondary)] hover:bg-white/8 transition-colors duration-150" onClick={handleCopy} type="button">
-          {copied ? <CheckOutlined /> : <CopyOutlined />}
-          <span>{copied ? t('code.copiedShort') : t('code.copy')}</span>
-        </button>
+        <span className="inline-flex items-center gap-1">
+          <button className="inline-flex items-center gap-1 border-none bg-transparent text-[var(--color-text-muted)] text-2xs cursor-pointer px-1.5 py-0.5 rounded-md hover:text-[var(--color-text-secondary)] hover:bg-white/8 transition-colors duration-150" onClick={handleContinue} type="button" title={t('code.continueTip')}>
+            <PlayOutlined size={12} />
+            <span>{t('code.continue')}</span>
+          </button>
+          <button className="inline-flex items-center gap-1 border-none bg-transparent text-[var(--color-text-muted)] text-2xs cursor-pointer px-1.5 py-0.5 rounded-md hover:text-[var(--color-text-secondary)] hover:bg-white/8 transition-colors duration-150" onClick={handleCopy} type="button">
+            {copied ? <CheckOutlined /> : <CopyOutlined />}
+            <span>{copied ? t('code.copiedShort') : t('code.copy')}</span>
+          </button>
+        </span>
       </div>
       <HighlightedCode language={language} code={code} />
 

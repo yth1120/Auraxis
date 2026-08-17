@@ -1,17 +1,19 @@
 import { Wrench } from '@/components/common/icons';
 import type { AgentSkill } from '@/core/skills';
 import { useT, agentSkillNameKey, agentSkillDescKey } from '../../i18n';
+import clsx from 'clsx';
 
 interface SkillMentionDropdownProps {
   skills: AgentSkill[];
   query: string;
   selected: number;
+  position?: 'center' | 'center-flow' | 'bottom';
   onSelect: (skill: AgentSkill) => void;
   onHover: (idx: number) => void;
 }
 
 /** `$`-mention 技能下拉。 */
-export default function SkillMentionDropdown({ skills, query, selected, onSelect, onHover }: SkillMentionDropdownProps) {
+export default function SkillMentionDropdown({ skills, query, selected, position, onSelect, onHover }: SkillMentionDropdownProps) {
   const t = useT();
   const q = query.trim().toLowerCase();
   const visible = skills.filter(
@@ -24,13 +26,18 @@ export default function SkillMentionDropdown({ skills, query, selected, onSelect
   if (visible.length === 0) return null;
 
   return (
-    <div className="absolute bottom-[calc(100%+6px)] left-[-6px] right-[-6px] bg-[var(--color-bg-elevated)] rounded-card overflow-hidden z-[100] max-h-[260px] flex flex-col border border-[var(--color-border-dim)] shadow-[var(--shadow-md)]">
+    <div className={clsx(
+      'absolute left-[-6px] right-[-6px] bg-[var(--color-bg-elevated)] rounded-card overflow-hidden z-[100] max-h-[260px] flex flex-col border border-[var(--color-border-dim)] shadow-[var(--shadow-md)]',
+      position === 'center' || position === 'center-flow'
+        ? 'top-[calc(100%+6px)]'
+        : 'bottom-[calc(100%+6px)]',
+    )}>
       <div className="overflow-y-auto flex-1">
         {visible.map((skill, idx) => (
           <div
             key={skill.key}
               className={[
-                'px-3 py-[9px] cursor-pointer text-text-secondary font-body text-sm flex items-center gap-[10px]',
+                'px-3 py-2 cursor-pointer text-text-secondary font-body text-sm flex items-center gap-2',
                 'transition-colors duration-150',
                 idx === selected
                   ? 'bg-primary-soft text-text-primary'
@@ -39,7 +46,7 @@ export default function SkillMentionDropdown({ skills, query, selected, onSelect
             onMouseDown={(e) => { e.preventDefault(); onSelect(skill); }}
             onMouseEnter={() => onHover(idx)}
           >
-            <span className="w-[18px] h-[18px] rounded-md flex items-center justify-center text-2xs shrink-0 bg-[var(--color-primary-soft)] text-primary">
+            <span className="w-5 h-5 rounded-md flex items-center justify-center text-2xs shrink-0 bg-[var(--color-primary-soft)] text-primary">
               <Wrench size={12} weight="fill" />
             </span>
             <span className="min-w-0 flex flex-col gap-[1px]">

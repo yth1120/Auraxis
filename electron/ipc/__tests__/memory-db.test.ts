@@ -12,6 +12,9 @@ vi.mock('electron', () => ({
 import {
   addMemory, getMemoriesByProject, getMemoriesByType, getMemoriesByTag,
   searchMemories, updateMemory, archiveMemory, getActiveMemories, deleteMemory,
+  evidenceContentHash, addEvidence, listEvidence, getEvidenceById,
+  findEvidenceByHash, deleteEvidence,
+  setBackendModeForTest,
 } from '../memory-db';
 
 function mem(overrides: Record<string, unknown> = {}) {
@@ -29,6 +32,7 @@ function mem(overrides: Record<string, unknown> = {}) {
 }
 
 beforeAll(() => {
+  setBackendModeForTest('json');
   h.userData = mkdtempSync(path.join(os.tmpdir(), 'auraxis-mem-'));
 });
 
@@ -78,5 +82,61 @@ describe('MemoryDatabase — JSON 回退后端', () => {
     deleteMemory('m2');
     expect(getMemoriesByProject('C:/proj').map((m) => m.id)).toEqual(['m1']);
     expect(getMemoriesByTag('C:/proj', 'network')).toEqual([]);
+  });
+});
+
+describe('MemoryDatabase — 不可变证据（Eywa M1）', () => {
+  function ev(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'ev1',
+      scope: 'C:/proj',
+      session_id: 's1',
+      event_id: null,
+      role: 'user' as const,
+      ts: 1000,
+      content_hash: evidenceContentHash('C:/proj', 'user', '你好'),
+      content: '你好',
+      metadata: JSON.stringify({ source: 'session' }),
+      deleted_at: null,
+      ...overrides,
+    };
+  }
+
+  it('evidenceContentHash 稳定且随 scope/role/content 变化', () => {
+    const a = evidenceContentHash('C:/proj', 'user', '你好');
+    const b = evidenceContentHash('C:/proj', 'user', '你好');
+    const c = evidenceContentHash('C:/proj', 'assistant', '你好');
+    const d = evidenceContentHash('C:/other', 'user', '你好');
+    expect(a).toBe(b);
+    expect(a).not.toBe(c);
+    expect(a).not.toBe(d);
+  });
+
+  it('addEvidence 持久化并按时间倒序列出', () => {
+    addEvidence(ev());
+    addEvidence(ev({ id: 'ev2', content: '项目用 React', ts: 2000 }));
+
+    const all = listEvidence('C:/proj');
+    expect(all.map((e) => e.id)).toEqual(['ev2', 'ev1']);
+    expect(all.every((e) => e.deleted_at === null)).toBe(true);
+    expect(listEvidence('C:/proj', 1)).toHaveLength(1);
+    expect(listEvidence('C:/other')).toEqual([]);
+  });
+
+  it('getEvidenceById 命中与缺失', () => {
+    expect(getEvidenceById('ev1')).toMatchObject({ scope: 'C:/proj', role: 'user', content: '你好' });
+    expect(getEvidenceById('missing')).toBeNull();
+  });
+
+  it('findEvidenceByHash 去重：同 scope/role/content 返回已有记录', () => {
+    const dup = findEvidenceByHash('C:/proj', 'user', evidenceContentHash('C:/proj', 'user', '你好'));
+    expect(dup?.id).toBe('ev1');
+    expect(findEvidenceByHash('C:/proj', 'assistant', evidenceContentHash('C:/proj', 'assistant', '你好'))).toBeNull();
+  });
+
+  it('deleteEvidence 删除后不可再查', () => {
+    deleteEvidence('ev2');
+    expect(getEvidenceById('ev2')).toBeNull();
+    expect(listEvidence('C:/proj').map((e) => e.id)).toEqual(['ev1']);
   });
 });

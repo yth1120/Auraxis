@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'events';
 import path from 'path';
+import os from 'os';
 
 const electronMock = vi.hoisted(() => ({
   handle: vi.fn(),
@@ -139,7 +140,7 @@ vi.mock('../settings-store', () => ({
 vi.mock('../model-config', () => ({ getAllModels: registerFns.getAllModels }));
 vi.mock('../tool-handlers', () => ({ getActiveWorktree: registerFns.getActiveWorktree }));
 
-import { registerIpcHandlers } from '../index';
+import { registerIpcHandlers, markAcrylicWindowReady } from '../index';
 
 type Handler = (event: any, ...args: any[]) => any;
 
@@ -178,6 +179,7 @@ describe('index — registerIpcHandlers 总注册与窗口/shell/设置处理器
     const h = handlers();
     for (const channel of [
       'window:minimize', 'window:maximize', 'window:close', 'window:isMaximized', 'window:zoom',
+      'window:setBackgroundMaterial', 'window:backgroundMaterialSupported', 'window:glassState',
       'shell:openExternal', 'shell:openPath', 'shell:openInVSCode', 'shell:openFileInVSCode',
       'shell:openSkillsDirectory', 'settings:get', 'settings:set', 'settings:getApiKey',
       'api:setKey', 'model:getAll', 'worktree:getStatus',
@@ -215,6 +217,43 @@ describe('index — registerIpcHandlers 总注册与窗口/shell/设置处理器
     expect(sender.setZoomLevel).toHaveBeenCalledWith(3);
     expect(h.get('window:zoom')!({ sender }, -9)).toBe(-3);
     expect(h.get('window:zoom')!({ sender }, null)).toBe(0);
+  });
+
+  it('window:setBackgroundMaterial 开启时切透明底色 + acrylic，关闭时恢复', () => {
+    const win = fakeWin() as any;
+    win.setBackgroundColor = vi.fn();
+    win.setBackgroundMaterial = vi.fn();
+    (electronMock.BrowserWindow as any).fromWebContents = () => win;
+    const releaseSpy = vi.spyOn(os, 'release').mockReturnValue('10.0.22631');
+    registerIpcHandlers();
+    const h = handlers();
+
+    h.get('window:setBackgroundMaterial')!({ sender: {} }, true);
+    expect(win.setBackgroundColor).toHaveBeenCalledWith('#00000000');
+    expect(win.setBackgroundMaterial).toHaveBeenCalledWith('acrylic');
+
+    h.get('window:setBackgroundMaterial')!({ sender: {} }, false);
+    expect(win.setBackgroundColor).toHaveBeenCalledWith('#0a0202');
+    expect(win.setBackgroundMaterial).toHaveBeenCalledWith('none');
+    releaseSpy.mockRestore();
+  });
+
+  it('window:glassState 返回系统支持与当前窗口是否已预置 Acrylic', () => {
+    const releaseSpy = vi.spyOn(os, 'release').mockReturnValue('10.0.22631');
+    registerIpcHandlers();
+    const h = handlers();
+
+    expect(h.get('window:glassState')!({})).toEqual({
+      ok: true,
+      data: { supported: true, ready: false },
+    });
+
+    markAcrylicWindowReady();
+    expect(h.get('window:glassState')!({})).toEqual({
+      ok: true,
+      data: { supported: true, ready: true },
+    });
+    releaseSpy.mockRestore();
   });
 
   it('shell:openExternal 仅放行 http/https', async () => {

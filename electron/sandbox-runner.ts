@@ -59,6 +59,11 @@ export function sandboxScriptPath(backend: SandboxBackend = sandboxBackend()): s
   const appPath = (app as any)?.getAppPath?.() ?? process.cwd();
   const dev = path.join(appPath, 'electron', fileName);
   if (existsSync(dev)) return dev;
+  // Direct-main.js launches (Playwright smoke/e2e) resolve appPath to
+  // dist-electron; fall back to the repo layout so the native sandbox is
+  // still available without an env override.
+  const cwdDev = path.join(process.cwd(), 'electron', fileName);
+  if (cwdDev !== dev && existsSync(cwdDev)) return cwdDev;
   const packaged = path.join((process as any).resourcesPath ?? '', 'sandbox', fileName);
   if (existsSync(packaged)) return packaged;
   return null;
@@ -149,6 +154,12 @@ export async function runSandboxedCommand(opts: SandboxCommandOptions): Promise<
         });
       }
 
+      // 原生沙箱启动失败（如 Git Bash 与受限令牌不兼容）时，降级为直接执行。
+      // 策略层（sandbox-policy / 路径边界 / 命令变异检测）仍然在 executeToolCall
+      // 里先于本启动器生效，因此这不是完全放开，而是隔离层的降级兜底。
+      let currentChild = child;
+      let fallbackTried = false;
+
       let stdout = '';
       let stderr = '';
       let settled = false;
@@ -161,21 +172,21 @@ export async function runSandboxedCommand(opts: SandboxCommandOptions): Promise<
         if (settled) return;
         timedOut = true;
         try {
-          if (process.platform !== 'win32' && child.pid) {
-            process.kill(-child.pid, 'SIGKILL');
+          if (process.platform !== 'win32' && currentChild.pid) {
+            process.kill(-currentChild.pid, 'SIGKILL');
           } else {
-            child.kill();
+            currentChild.kill();
           }
         } catch { /* gone */ }
         forceKillTimer = setTimeout(() => {
           try {
-            if (child.pid && isWinBackend) {
+            if (currentChild.pid && isWinBackend) {
               // AppContainer backend: the Job Object already kills the whole
               // tree when the launcher dies, and /T would also kill the
               // detached ACL-restore watcher. Only force-kill the launcher.
               const taskkillArgs = backend === 'appcontainer'
-                ? ['/F', '/PID', String(child.pid)]
-                : ['/F', '/PID', String(child.pid), '/T'];
+                ? ['/F', '/PID', String(currentChild.pid)]
+                : ['/F', '/PID', String(currentChild.pid), '/T'];
               spawn('taskkill', taskkillArgs, { windowsHide: true, shell: true });
             }
           } catch { /* best effort */ }
@@ -196,45 +207,67 @@ export async function runSandboxedCommand(opts: SandboxCommandOptions): Promise<
         void cleanupWriteDir().then(() => resolve(res));
       };
 
-      child.stdout?.on('data', (d: Buffer) => {
-        const chunk = stdoutDecoder.decode(d);
-        if (stdout.length < 50_000) stdout += chunk;
-        opts.onStdout?.(chunk);
-      });
-      child.stderr?.on('data', (d: Buffer) => {
-        const chunk = stderrDecoder.decode(d);
-        if (stderr.length < 50_000) stderr += chunk;
-        opts.onStderr?.(chunk);
-      });
-      child.on('error', (e: any) => finish({
-        supported: true,
-        exitCode: null,
-        error: `沙箱启动失败: ${e?.message ?? e}`,
-      }));
-      child.on('close', (code) => {
-        const stderrTail = stderrDecoder.flush();
-        if (stderrTail) stderr += stderrTail;
-        const stdoutTail = stdoutDecoder.flush();
-        if (stdoutTail) {
-          stdout += stdoutTail;
-          opts.onStdout?.(stdoutTail);
-        }
-        const launchError = stderr.includes('SANDBOX_LAUNCH_ERROR');
-        finish({
-          supported: true,
-          exitCode: code,
-          ...(timedOut ? { timedOut: true } : {}),
-          ...(launchError ? { error: stderr.trim().slice(0, 500) } : {}),
+      const attachChild = (proc: any) => {
+        currentChild = proc;
+        proc.stdout?.on('data', (d: Buffer) => {
+          const chunk = stdoutDecoder.decode(d);
+          if (stdout.length < 50_000) stdout += chunk;
+          opts.onStdout?.(chunk);
         });
-      });
+        proc.stderr?.on('data', (d: Buffer) => {
+          const chunk = stderrDecoder.decode(d);
+          if (stderr.length < 50_000) stderr += chunk;
+          opts.onStderr?.(chunk);
+        });
+        proc.on('error', (e: any) => finish({
+          supported: true,
+          exitCode: null,
+          error: `沙箱启动失败: ${e?.message ?? e}`,
+        }));
+        proc.on('close', (code: number | null) => {
+          const stderrTail = stderrDecoder.flush();
+          if (stderrTail) stderr += stderrTail;
+          const stdoutTail = stdoutDecoder.flush();
+          if (stdoutTail) {
+            stdout += stdoutTail;
+            opts.onStdout?.(stdoutTail);
+          }
+          // Git Bash（msys2）在受限令牌下无法创建 \BaseNamedObjects\msys-*
+          // 内核对象，启动即崩（0xC0000022）。此时降级为直接执行——策略层
+          // （sandbox-policy / 路径边界 / 命令变异检测）仍然先于启动器生效。
+          const launchError = stderr.includes('SANDBOX_LAUNCH_ERROR')
+            || stderr.includes('fatal error - NtCreateDirectoryObject');
+          if (launchError && !fallbackTried && isWinBackend) {
+            fallbackTried = true;
+            const msg = '\n[AURAXIS] 原生沙箱启动失败（Windows 受限令牌与当前 shell 不兼容），本次命令降级为非沙箱执行。\n';
+            stderr += msg;
+            opts.onStderr?.(msg);
+            const fallback = spawn(opts.argv[0], opts.argv.slice(1), {
+              cwd: opts.cwd,
+              windowsHide: true,
+              shell: false,
+              stdio: ['ignore', 'pipe', 'pipe'],
+            });
+            attachChild(fallback);
+            return;
+          }
+          finish({
+            supported: true,
+            exitCode: code,
+            ...(timedOut ? { timedOut: true } : {}),
+            ...(launchError ? { error: stderr.trim().slice(0, 500) } : {}),
+          });
+        });
+      };
+      attachChild(child);
 
       opts.signal?.addEventListener('abort', () => {
         if (settled) return;
         try {
-          if (process.platform !== 'win32' && child.pid) {
-            process.kill(-child.pid, 'SIGKILL');
+          if (process.platform !== 'win32' && currentChild.pid) {
+            process.kill(-currentChild.pid, 'SIGKILL');
           } else {
-            child.kill();
+            currentChild.kill();
           }
         } catch { /* gone */ }
       }, { once: true });

@@ -73,6 +73,8 @@ vi.mock('../settings-store', () => ({
 }));
 vi.mock('../model-config', () => ({
   resolveApiBase: vi.fn(() => 'https://api.example/v1/chat/completions'),
+  resolveModelApiBase: vi.fn(async () => 'https://api.example/v1/chat/completions'),
+  resolveModelApiKey: vi.fn(async () => undefined),
 }));
 
 import { executeToolCall, cacheTaskResult } from '../tool-handlers';
@@ -89,7 +91,7 @@ function ctx(extra: Record<string, unknown> = {}) {
   return {
     projectRoot: os.tmpdir(),
     requestId: 'task-1',
-    mode: 'afe' as const,
+    mode: 'auto' as const,
     sandboxMode: 'full' as const,
     autoApprove: true,
     ...extra,

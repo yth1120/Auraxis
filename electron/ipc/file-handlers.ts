@@ -1,8 +1,8 @@
 import { ipcMain, dialog } from 'electron';
-import { readFile, writeFile, readdir, rm, rename, mkdir, stat } from 'fs/promises';
+import { readFile, writeFile, readdir, rm, rename, mkdir, stat, open } from 'fs/promises';
 import path from 'path';
 import mime from 'mime-types';
-import { normalizeWinPath, isPathInside, isAllowedExtension, assertString } from './shared';
+import { normalizeWinPath, isPathInside, isAllowedExtension, isDocumentExtension, assertString } from './shared';
 import { estimateTokens } from './token-estimate';
 
 const PREVIEW_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.pdf']);
@@ -133,6 +133,9 @@ export function registerFileHandlers() {
       if (!isAllowedExtension(normalizedPath)) {
         return { ok: false, error: `不允许写入该文件类型: ${path.extname(normalizedPath)}` };
       }
+      if (isDocumentExtension(normalizedPath)) {
+        return { ok: false, error: '文档文件（.docx/.xlsx/.pptx/.pdf）请使用模型文档工具或对应办公软件编辑' };
+      }
 
       await writeFile(normalizedPath, content, 'utf-8');
       return { ok: true };
@@ -148,8 +151,14 @@ export function registerFileHandlers() {
       }
 
       const root = path.resolve(projectRoot);
-      const results: { name: string; path: string; isDirectory: boolean }[] = [];
+      const results: { name: string; path: string; isDirectory: boolean; snippet?: string; matchType?: 'name' | 'content' }[] = [];
       const lowerKeyword = keyword.toLowerCase();
+      const TEXT_EXT = new Set([
+        'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'json', 'md', 'mdx', 'css', 'scss', 'html',
+        'py', 'rs', 'go', 'java', 'c', 'cc', 'cpp', 'h', 'hpp', 'cs', 'rb', 'php', 'sh',
+        'yml', 'yaml', 'toml', 'txt', 'vue', 'svelte', 'xml', 'svg',
+      ]);
+      const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-electron', 'release', 'coverage', 'out', 'build', '.git']);
 
       const searchDir = async (dirPath: string, depth: number): Promise<void> => {
         if (depth > 4 || results.length >= 50) return;
@@ -158,7 +167,7 @@ export function registerFileHandlers() {
           const entries = await readdir(dirPath, { withFileTypes: true });
 
           for (const entry of entries) {
-            if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+            if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue;
 
             const fullPath = path.join(dirPath, entry.name);
 
@@ -167,11 +176,41 @@ export function registerFileHandlers() {
                 name: entry.name,
                 path: fullPath,
                 isDirectory: entry.isDirectory(),
+                matchType: 'name' as const,
               });
             }
 
             if (entry.isDirectory()) {
               await searchDir(fullPath, depth + 1);
+            } else if (!entry.name.toLowerCase().includes(lowerKeyword) && results.length < 50) {
+              const ext = entry.name.includes('.') ? entry.name.split('.').pop()!.toLowerCase() : '';
+              if (!TEXT_EXT.has(ext)) continue;
+              try {
+                // 只读前 256KB，避免把超大文件整体载入内存。
+                const fh = await open(fullPath, 'r');
+                let text = '';
+                try {
+                  const buf = Buffer.alloc(256 * 1024);
+                  const { bytesRead } = await fh.read(buf, 0, buf.length, 0);
+                  text = buf.toString('utf8', 0, bytesRead);
+                } finally {
+                  await fh.close();
+                }
+                const idx = text.toLowerCase().indexOf(lowerKeyword);
+                if (idx >= 0) {
+                  const start = Math.max(0, idx - 40);
+                  const end = Math.min(text.length, idx + lowerKeyword.length + 80);
+                  results.push({
+                    name: entry.name,
+                    path: fullPath,
+                    isDirectory: false,
+                    snippet: text.slice(start, end).replace(/\s+/g, ' ').trim(),
+                    matchType: 'content' as const,
+                  });
+                }
+              } catch {
+                // 二进制或不可读文件跳过
+              }
             }
           }
         } catch {
@@ -250,6 +289,9 @@ export function registerFileHandlers() {
       }
       if (!isAllowedExtension(normalizedPath)) {
         return { ok: false, error: `不允许创建该文件类型: ${path.extname(normalizedPath)}` };
+      }
+      if (isDocumentExtension(normalizedPath)) {
+        return { ok: false, error: '文档文件（.docx/.xlsx/.pptx/.pdf）请通过模型 WriteDocument 工具生成' };
       }
       await writeFile(normalizedPath, '', 'utf-8');
       return { ok: true };

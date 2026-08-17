@@ -2,7 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
-import { ensureSkillsDirectory, listSkills, readSkill, writeSkill } from '../../skill-store';
+import {
+  ensureSkillsDirectory, listSkills, readSkill, writeSkill,
+  seedBuiltinSkills, BUILTIN_SKILLS,
+} from '../../skill-store';
 
 let root: string;
 
@@ -15,6 +18,21 @@ afterEach(async () => {
 });
 
 describe('skill-store', () => {
+  it('seedBuiltinSkills creates built-in skills once and never overwrites user edits', async () => {
+    const seeded = await seedBuiltinSkills(root);
+    expect(seeded).toBe(Object.keys(BUILTIN_SKILLS).length);
+    const { skills } = await listSkills(root);
+    expect(skills.length).toBe(Object.keys(BUILTIN_SKILLS).length);
+    // Second run is a no-op.
+    expect(await seedBuiltinSkills(root)).toBe(0);
+    // User edits survive reseeding.
+    const target = path.join(root, 'word-documents', 'SKILL.md');
+    await fs.writeFile(target, '---\nname: 自定义\ndescription: 用户改过\n---\n\n我的版本', 'utf8');
+    await seedBuiltinSkills(root);
+    const custom = await readSkill(root, '自定义');
+    expect(custom?.body).toContain('我的版本');
+  });
+
   it('writeSkill creates a discoverable skill, adding frontmatter when missing', async () => {
     const file = await writeSkill(root, '发布检查', '1. 跑 lint\n2. 跑测试\n3. 构建产物\n');
     expect(file.endsWith(path.join('发布检查', 'SKILL.md'))).toBe(true);

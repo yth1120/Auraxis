@@ -1,4 +1,5 @@
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import clsx from 'clsx';
 import TerminalPanel from '../tools/TerminalPanel';
 import { useT } from '../../i18n';
 
@@ -10,10 +11,12 @@ const MAX_H = 560;
  * taller/shorter with the grabber handle at its top edge.
  */
 export default function TerminalDrawer({
+  open,
   height,
   onChange,
   onClose,
 }: {
+  open: boolean;
   height: number;
   onChange: (h: number) => void;
   onClose: () => void;
@@ -41,8 +44,12 @@ export default function TerminalDrawer({
 
   return (
     <div
-      className="shrink-0 flex flex-col bg-[var(--color-glass-panel)] border-t border-[var(--color-border-dim)]"
-      style={{ height }}
+      className={clsx(
+        'shrink-0 flex flex-col bg-[var(--color-glass-panel)] border-t border-[var(--color-border-dim)] overflow-hidden transition-[height] duration-300 ease-out',
+        !open && '!border-t-transparent',
+      )}
+      style={{ height: open ? height : 0 }}
+      aria-hidden={!open || undefined}
     >
       <div
         className="group h-3 shrink-0 flex items-center justify-center cursor-row-resize select-none"

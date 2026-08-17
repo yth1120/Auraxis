@@ -11,10 +11,12 @@
  * event types (ToolStreamEvent vs AgentLoopEvent), track stats, update plans,
  * and handle sub-agent bookkeeping.
  */
-import type { PermissionMode } from '../types';
+import type { ApprovalPolicy } from '../types';
+import type { WorkAutonomyTier } from '../types';
 import type { SandboxMode } from '../sandbox-policy';
 import { splitIntoConcurrencyBatches, isToolConcurrencySafe } from '../tool-registry';
 import { executeToolCall } from './tool-handlers';
+import { toolInertia } from '../tool-inertia';
 
 export interface RunnerToolCall {
   /** Position in the original tool_calls array (used for order reassembly). */
@@ -61,13 +63,26 @@ export interface ToolRunContext {
   /** Stable agent/session identity for goal + report tools. */
   sessionId?: string;
   checkPermission?: (toolName: string, input: Record<string, unknown>, toolCallId?: string) => Promise<boolean>;
+  /**
+   * 记忆风险门控（M5，MAP-Graph）：高风险工具要求更高的证据信任。
+   * 默认 undefined；仅在显式配置或 AURAXIS_MEMORY_RISK_GATE=1 时生效。
+   */
+  riskGate?: (toolName: string, input: Record<string, unknown>, toolCallId: string) => Promise<{ allowed: boolean; reason?: string }>;
   autoApprove?: boolean;
   abortSignal?: AbortSignal;
-  mode: PermissionMode;
+  mode: ApprovalPolicy;
   approvedPlanSteps?: string[];
+  /** Work 模式执行自主度档位（透传到工具门禁）。 */
+  workTier?: WorkAutonomyTier;
+  /** 项目工作区根目录（含主根）。 */
+  workspaceRoots?: string[];
+  /** 项目可写根目录（roots 的子集）。 */
+  writableRoots?: string[];
   depth?: number;
   /** Per-call sandbox mode ('read' hard-denies mutations). Defaults to full. */
   sandboxMode?: SandboxMode;
+  /** Which UI surface created this run — 'work' enforces docs-only writes. */
+  surface?: 'chat' | 'work' | 'code';
   /** Groups tool calls from the same LLM turn (renderer tree grouping). */
   stepGroupId?: string;
   /** Test seam — defaults to the real tool dispatcher. */
@@ -117,15 +132,41 @@ export async function runToolBatch(
 
     // ── Pre-flight permission gate (optional) ──
     const denied = new Set<number>();
-    if (cb.preCheckPermission) {
+    if (cb.preCheckPermission || ctx.riskGate) {
       for (const idx of batchIndices) {
         const tc = batchCalls[idx];
         const toolCallId = makeToolCallId(tc);
-        let allowed = false;
-        try {
-          allowed = await cb.preCheckPermission(tc.name, tc.input, toolCallId);
-        } catch {
-          allowed = false;
+        let allowed = !cb.preCheckPermission;
+        if (cb.preCheckPermission) {
+          try {
+            allowed = await cb.preCheckPermission(tc.name, tc.input, toolCallId);
+          } catch {
+            allowed = false;
+          }
+        }
+        if (allowed && ctx.riskGate) {
+          try {
+            const verdict = await ctx.riskGate(tc.name, tc.input, toolCallId);
+            if (!verdict.allowed) {
+              allowed = false;
+              const deniedResult: RunnerToolResult = {
+                index: idx,
+                toolUseId: tc.id,
+                toolName: tc.name,
+                input: tc.input,
+                output: null,
+                error: `工具 ${tc.name} 被记忆风险门控拒绝：${verdict.reason || '证据信任不足'}`,
+                durationMs: 0,
+              };
+              denied.add(idx);
+              resultMap.set(idx, deniedResult);
+              anyError = true;
+              try { cb.onToolResult(deniedResult, tc, toolCallId); } catch { /* best-effort */ }
+              continue;
+            }
+          } catch {
+            allowed = false;
+          }
         }
         if (!allowed) {
           denied.add(idx);
@@ -190,8 +231,12 @@ export async function runToolBatch(
           sessionId: ctx.sessionId ?? ctx.agentId ?? ctx.requestId,
           mode: ctx.mode,
           approvedPlanSteps: ctx.approvedPlanSteps,
+          workTier: ctx.workTier,
+          workspaceRoots: ctx.workspaceRoots,
+          writableRoots: ctx.writableRoots,
           depth: ctx.depth,
           sandboxMode: ctx.sandboxMode,
+          surface: ctx.surface,
           onProgress: (chunk: string) => {
             try { cb.onToolProgress?.(tc, toolCallId, chunk); } catch { /* best-effort */ }
           },
@@ -278,5 +323,11 @@ export async function runToolBatch(
       });
     }
   }
+
+  // AutoTool：登记本批工具调用序列（跨批次衔接由惯性图内部处理）。
+  try {
+    toolInertia.observeSequence(ctx.sessionId ?? ctx.requestId, calls.map((c) => c.name));
+  } catch { /* 统计层不允许影响工具执行 */ }
+
   return results;
 }

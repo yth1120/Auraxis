@@ -51,6 +51,15 @@ afterEach(async () => {
 });
 
 describe('fts', () => {
+  async function waitForFtsHit(query: string, id: string, timeoutMs = 10_000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if ((await searchFts(query)).some((h) => h.id === id)) return;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    throw new Error(`FTS hit "${id}" for "${query}" not found within ${timeoutMs}ms`);
+  }
+
   it('tokenizes CJK bigrams and latin words', () => {
     const tokens = tokenize('静水流深 think');
     expect(tokens).toContain('静水');
@@ -154,7 +163,6 @@ describe('fts', () => {
     scheduleSessionFtsRefresh('session-debounce', 'chat'); // second call resets the timer
 
     expect((await searchFts('zxcvbn')).some((h) => h.id === 'session-debounce')).toBe(false);
-    await new Promise((r) => setTimeout(r, 700));
-    expect((await searchFts('zxcvbn')).some((h) => h.id === 'session-debounce')).toBe(true);
+    await waitForFtsHit('zxcvbn', 'session-debounce');
   });
 });

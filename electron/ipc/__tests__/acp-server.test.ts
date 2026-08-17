@@ -1,4 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
+import { mkdtempSync, readFileSync, rmSync } from 'fs';
+import os from 'os';
+import path from 'path';
 import { AcpServer, type AcpDeps, type AcpRpcMessage } from '../../acp-server';
 
 function makeServer(deps: Partial<AcpDeps> = {}) {
@@ -18,7 +21,9 @@ describe('acp-server', () => {
     const res = sent[0];
     expect(res.id).toBe(1);
     expect((res.result as any).protocolVersion).toEqual({ major: 0, minor: 1 });
-    expect((res.result as any).agentCapabilities.promptTypes).toEqual(['text']);
+    expect((res.result as any).agentCapabilities.promptTypes).toEqual(['text', 'plan']);
+    expect((res.result as any).agentCapabilities.transcriptTypes).toEqual(['text', 'plan']);
+    expect((res.result as any).agentCapabilities.fileTypes).toEqual(['text']);
     expect((res.result as any).agentInfo.name).toBe('auraxis');
   });
 
@@ -88,5 +93,41 @@ describe('acp-server', () => {
     server.handle({ jsonrpc: '2.0', id: 10, method: 'shutdown' });
     expect(sent[0]).toMatchObject({ id: 10, result: {} });
     expect(onShutdown).toHaveBeenCalledTimes(1);
+  });
+
+  it('session/read_file and session/update_file stay inside the project root', async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'acp-fs-'));
+    try {
+      const { server, sent } = makeServer();
+      await server.handle({ jsonrpc: '2.0', id: 1, method: 'session/new', params: { cwd: dir } });
+      const sessionId = (sent[0].result as any).sessionId as string;
+      const filePath = path.join(dir, 'sub', 'a.txt');
+
+      await server.handle({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'session/update_file',
+        params: { sessionId, filePath, content: 'hello acp' },
+      });
+      expect(readFileSync(filePath, 'utf8')).toBe('hello acp');
+
+      await server.handle({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'session/read_file',
+        params: { sessionId, filePath },
+      });
+      expect((sent.at(-1)?.result as any).content).toBe('hello acp');
+
+      await server.handle({
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'session/read_file',
+        params: { sessionId, filePath: path.join(os.tmpdir(), 'outside.txt') },
+      });
+      expect(String((sent.at(-1)?.error as any)?.message)).toContain('项目目录');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

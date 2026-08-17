@@ -79,7 +79,7 @@ export default function ScheduledPanel({ onClose }: { onClose?: () => void }) {
       onClose={onClose}
     >
       {jobs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-[6px] py-16 text-center rounded-xl bg-[var(--color-bg-secondary)]">
+        <div className="flex flex-col items-center justify-center gap-[6px] py-16 text-center rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border-dim)]">
           <span className="flex items-center justify-center w-11 h-11 rounded-2xl bg-[var(--color-bg-inset)] text-text-faint">
             <CalendarCheck size={20} />
           </span>
@@ -91,17 +91,17 @@ export default function ScheduledPanel({ onClose }: { onClose?: () => void }) {
           {jobs.map((job) => {
             const run = job.lastRun;
             return (
-              <li key={job.id} className="px-4 py-3 rounded-xl bg-[var(--color-bg-secondary)]">
+              <li key={job.id} className="px-4 py-3 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border-dim)]">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-text-primary truncate">{job.name}</span>
-                  <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-md bg-[var(--color-bg-inset)] text-2xs text-text-muted font-mono">
+                  <span className="shrink-0 inline-flex items-center h-5 px-1.5 rounded-md bg-[var(--color-bg-inset)] text-2xs text-text-muted font-mono">
                     {job.cron}
                   </span>
                   <span className="shrink-0 text-2xs text-text-faint">{job.recurring ? tPanel('sched.recurring') : tPanel('sched.once')}</span>
                   {run && (
                     <span
                       className={clsx(
-                        'shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-full text-2xs font-medium',
+                        'shrink-0 inline-flex items-center h-5 px-1.5 rounded-full text-2xs font-medium',
                         run.status === 'success' && 'bg-[var(--color-success-soft)] text-text-secondary',
                         run.status === 'error' && 'bg-[var(--color-danger-soft)] text-text-secondary',
                         run.status === 'running' && 'bg-[var(--color-primary-soft)] text-text-secondary',

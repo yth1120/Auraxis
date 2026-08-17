@@ -1,20 +1,16 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import { useSettingsStore } from './useSettingsStore';
 import { useChatStore } from './useChatStore';
+import type {
+  ProjectGlobalState,
+  ProjectGroupBy,
+  ProjectOrderBy,
+  ProjectRecord,
+} from '../../electron/contracts/project';
 
-export interface Project {
-  id: string;
-  /** Display name — defaults to the directory basename, editable. */
-  name: string;
-  /** Absolute directory path (the project's identity for matching sessions). */
-  path: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
-export type ProjectGroupBy = 'workspace' | 'flat';
-export type ProjectOrderBy = 'manual' | 'updated';
+/** 项目记录类型统一来自 electron/contracts/project.ts。 */
+export type Project = ProjectRecord;
+export type { ProjectGlobalState, ProjectGroupBy, ProjectOrderBy };
 
 interface ProjectStore {
   projects: Project[];
@@ -36,6 +32,12 @@ interface ProjectStore {
   renameProject: (id: string, name: string) => void;
   /** Re-point a project to another directory (选择/更换目录). */
   retargetProject: (id: string, path: string) => void;
+  /** Add an extra workspace root (writable by default). */
+  addProjectRoot: (id: string, path: string) => void;
+  /** Remove a secondary workspace root (primary root cannot be removed). */
+  removeProjectRoot: (id: string, path: string) => void;
+  /** Toggle whether a root is writable. */
+  setRootWritable: (id: string, path: string, writable: boolean) => void;
   /** Remove from the registry; sessions keep their history. */
   removeProject: (id: string) => void;
   setGroupBy: (mode: ProjectGroupBy) => void;
@@ -59,9 +61,7 @@ function syncActivePath(path: string): void {
   useChatStore.getState().setCurrentProjectPath(path);
 }
 
-export const useProjectStore = create<ProjectStore>()(
-  persist(
-    (set, get) => ({
+export const useProjectStore = create<ProjectStore>()((set, get) => ({
       projects: [],
       currentProjectId: null,
       view: { groupBy: 'workspace', orderBy: 'manual' },
@@ -77,6 +77,8 @@ export const useProjectStore = create<ProjectStore>()(
           id: projectId(),
           name: basename(p),
           path: p,
+          roots: [p],
+          writableRoots: [p],
           createdAt: Date.now(),
           updatedAt: Date.now(),
         };
@@ -111,17 +113,79 @@ export const useProjectStore = create<ProjectStore>()(
       retargetProject: (id, path) => {
         const p = path.trim();
         if (!p) return;
+        const prev = get().projects.find((x) => x.id === id);
         set((s) => ({
           projects: s.projects.map((x) =>
             x.id === id
-              ? { ...x, path: p, name: x.name === basename(x.path) ? basename(p) : x.name, updatedAt: Date.now() }
+              ? {
+                  ...x,
+                  path: p,
+                  name: x.name === basename(x.path) ? basename(p) : x.name,
+                  roots: x.roots.map((r) => (r === x.path ? p : r)),
+                  writableRoots: x.writableRoots.map((r) => (r === x.path ? p : r)),
+                  updatedAt: Date.now(),
+                }
               : x,
           ),
         }));
         if (get().currentProjectId === id) syncActivePath(p);
+        // 项目换目录时把该项目级权限覆盖一起迁移，避免静默失效。
+        if (prev && prev.path !== p && typeof window !== 'undefined') {
+          void window.electronAPI?.permissionProfile?.moveProjectProfile?.(prev.path, p)?.catch(() => {});
+        }
+      },
+
+      addProjectRoot: (id, path) => {
+        const p = path.trim();
+        if (!p) return;
+        set((s) => ({
+          projects: s.projects.map((x) =>
+            x.id === id && !x.roots.includes(p)
+              ? {
+                  ...x,
+                  roots: [...x.roots, p],
+                  writableRoots: [...x.writableRoots, p],
+                  updatedAt: Date.now(),
+                }
+              : x,
+          ),
+        }));
+      },
+
+      removeProjectRoot: (id, path) => {
+        const p = path.trim();
+        if (!p) return;
+        set((s) => ({
+          projects: s.projects.map((x) => {
+            if (x.id !== id || p === x.path) return x;
+            return {
+              ...x,
+              roots: x.roots.filter((r) => r !== p),
+              writableRoots: x.writableRoots.filter((r) => r !== p),
+              updatedAt: Date.now(),
+            };
+          }),
+        }));
+      },
+
+      setRootWritable: (id, path, writable) => {
+        const p = path.trim();
+        if (!p) return;
+        set((s) => ({
+          projects: s.projects.map((x) => {
+            if (x.id !== id || !x.roots.includes(p)) return x;
+            const writableRoots = writable
+              ? x.writableRoots.includes(p)
+                ? x.writableRoots
+                : [...x.writableRoots, p]
+              : x.writableRoots.filter((r) => r !== p);
+            return { ...x, writableRoots, updatedAt: Date.now() };
+          }),
+        }));
       },
 
       removeProject: (id) => {
+        const removed = get().projects.find((x) => x.id === id);
         set((s) => {
           const remaining = s.projects.filter((x) => x.id !== id);
           const wasCurrent = s.currentProjectId === id;
@@ -140,6 +204,10 @@ export const useProjectStore = create<ProjectStore>()(
             currentProjectId: nextId,
           };
         });
+        // 项目删除后清理它的权限覆盖，避免残留脏键。
+        if (removed && typeof window !== 'undefined') {
+          void window.electronAPI?.permissionProfile?.setProjectProfile?.(removed.path, null)?.catch(() => {});
+        }
       },
 
       setGroupBy: (mode) => set((s) => ({ view: { ...s.view, groupBy: mode } })),
@@ -159,9 +227,58 @@ export const useProjectStore = create<ProjectStore>()(
         ids.splice(at < 0 ? ids.length : at, 0, sessionId);
         return { sessionOrder: { ...s.sessionOrder, [key]: ids } };
       }),
-    }),
-    {
-      name: 'auraxis-projects',
+    }));
+
+/** 用磁盘/旧 localStorage 数据填充项目注册表（渲染入口启动时调用一次）。 */
+export function hydrateProjectStore(state: ProjectGlobalState | null | undefined): void {
+  if (!state) return;
+  const normalizeProject = (p: ProjectRecord): ProjectRecord => ({
+    ...p,
+    roots: Array.isArray(p.roots) && p.roots.length > 0 ? p.roots : [p.path],
+    writableRoots:
+      Array.isArray(p.writableRoots) && p.writableRoots.length > 0
+        ? p.writableRoots
+        : (Array.isArray(p.roots) && p.roots.length > 0 ? p.roots : [p.path]),
+  });
+  useProjectStore.setState({
+    projects: (state.projects ?? []).map(normalizeProject),
+    currentProjectId: state.currentProjectId ?? null,
+    view: {
+      groupBy: state.view?.groupBy === 'flat' ? 'flat' : 'workspace',
+      orderBy: state.view?.orderBy === 'updated' ? 'updated' : 'manual',
     },
-  ),
-);
+    workspaceOrder: Array.isArray(state.workspaceOrder) ? state.workspaceOrder : [],
+    sessionOrder: state.sessionOrder && typeof state.sessionOrder === 'object'
+      ? state.sessionOrder
+      : {},
+  });
+}
+
+function snapshotProjectState(state: ProjectStore): ProjectGlobalState {
+  return {
+    projects: state.projects,
+    currentProjectId: state.currentProjectId,
+    view: state.view,
+    workspaceOrder: state.workspaceOrder,
+    sessionOrder: state.sessionOrder,
+  };
+}
+
+/**
+ * 启动磁盘持久化：项目注册表从 localStorage 迁移到主进程
+ * auraxis-global-state.json（对齐 Codex 的 global-state 语义）。
+ * 必须在 hydrateProjectStore 之后调用，避免空初始态覆盖磁盘。
+ */
+export function startProjectPersistence(): void {
+  if (typeof window === 'undefined') return;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  useProjectStore.subscribe((state) => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      if (typeof window === 'undefined') return;
+      const snapshot = snapshotProjectState(state);
+      window.electronAPI?.project?.saveGlobalState?.(snapshot)?.catch(() => {});
+    }, 250);
+  });
+}

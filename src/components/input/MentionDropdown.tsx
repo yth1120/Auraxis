@@ -1,12 +1,13 @@
 import { getExtensionColor } from '../../constants/extensionColors';
 import { ChatTeardropDots as ChatIcon } from '@/components/common/icons';
 import { useT } from '../../i18n';
+import clsx from 'clsx';
 
 interface MentionDropdownProps {
   items: string[];
   sessions?: { id: string; title: string }[];
   selected: number;
-  position?: 'center' | 'bottom';
+  position?: 'center' | 'center-flow' | 'bottom';
   onSelect: (item: string) => void;
   onSelectSession?: (sessionId: string) => void;
   onHover: (idx: number) => void;
@@ -17,7 +18,7 @@ function getFileIcon(filePath: string) {
   const color = getExtensionColor(ext);
   const label = ext.slice(0, 2).toUpperCase() || '?';
   return (
-    <span className="w-[18px] h-[18px] rounded-md flex items-center justify-center text-2xs font-bold font-body shrink-0 text-text-on-accent" style={{ background: color }}>
+    <span className="w-5 h-5 rounded-md flex items-center justify-center text-2xs font-bold font-body shrink-0 text-text-on-accent" style={{ background: color }}>
       {label}
     </span>
   );
@@ -46,13 +47,18 @@ export default function MentionDropdown({
   const total = sessions.length + items.length;
 
   return (
-    <div className="mention-dropdown absolute bottom-[calc(100%+6px)] left-[-6px] right-[-6px] bg-[var(--color-bg-elevated)] rounded-card overflow-hidden z-[100] max-h-[260px] flex flex-col border border-[var(--color-border-dim)] shadow-[var(--shadow-md)]">
+    <div className={clsx(
+      'mention-dropdown absolute left-[-6px] right-[-6px] bg-[var(--color-bg-elevated)] rounded-card overflow-hidden z-[100] max-h-[260px] flex flex-col border border-[var(--color-border-dim)] shadow-[var(--shadow-md)]',
+      position === 'center' || position === 'center-flow'
+        ? 'top-[calc(100%+6px)]'
+        : 'bottom-[calc(100%+6px)]',
+    )}>
       <div className="overflow-y-auto flex-1">
         {sessions.map((s, idx) => (
           <div
             key={`session-${s.id}`}
             className={[
-              'px-3 py-[9px] cursor-pointer text-text-secondary font-body text-sm flex items-center gap-[10px]',
+              'px-3 py-2 cursor-pointer text-text-secondary font-body text-sm flex items-center gap-2',
               'transition-colors duration-150',
               idx === selected
                 ? 'bg-primary-soft text-primary'
@@ -61,7 +67,7 @@ export default function MentionDropdown({
             onMouseDown={(e) => { e.preventDefault(); onSelectSession?.(s.id); }}
             onMouseEnter={() => onHover(idx)}
           >
-            <span className="w-[18px] h-[18px] rounded-md flex items-center justify-center shrink-0 bg-[var(--color-primary-soft)] text-[var(--color-primary)]">
+            <span className="w-5 h-5 rounded-md flex items-center justify-center shrink-0 bg-[var(--color-primary-soft)] text-[var(--color-primary)]">
               <ChatIcon size={12} />
             </span>
             <span className="overflow-hidden text-ellipsis whitespace-nowrap">
@@ -77,7 +83,7 @@ export default function MentionDropdown({
             <div
               key={item}
               className={[
-                'px-3 py-[9px] cursor-pointer text-text-secondary font-body text-sm flex items-center gap-[10px]',
+                'px-3 py-2 cursor-pointer text-text-secondary font-body text-sm flex items-center gap-2',
                 'transition-colors duration-150',
                 globalIdx === selected
                   ? 'bg-primary-soft text-primary'

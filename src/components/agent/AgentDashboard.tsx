@@ -13,10 +13,10 @@ import {
   Lightning,
   Code,
 } from '@/components/common/icons';
-import { useAgentStore } from '../../stores/useAgentStore';
 import type { AgentInfo, AgentLogEntry } from '../../types/agent';
-import { createAgent } from '../../constants/commands';
+import { useAgentStore } from '../../stores/useAgentStore';
 import clsx from 'clsx';
+import { createAgent } from '../../constants/commands';
 import EmptyState from '../common/EmptyState';
 import ExecutingIndicator from '../common/ExecutingIndicator';
 import { useT, type I18nKey } from '../../i18n';
@@ -160,7 +160,7 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
               setAgentPriority(id, next);
             }}
             className={clsx(
-              'inline-flex items-center rounded-full h-[18px] px-1.5 text-2xs font-medium leading-none cursor-pointer border transition-colors duration-150',
+              'inline-flex items-center rounded-full h-5 px-1.5 text-2xs font-medium leading-none cursor-pointer border transition-colors duration-150',
               priority === 'high'
                 ? 'bg-[var(--color-danger-soft)] text-[var(--color-danger)] border-[var(--color-danger-border)] hover:bg-[var(--color-danger-border)]'
                 : priority === 'normal'
@@ -330,17 +330,17 @@ export default function AgentDashboard() {
         <span className="text-sm font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
           <Lightning /> {t('dashboard.title')}
           {activeCount > 0 && (
-            <span className="ml-2 inline-flex items-center rounded-full h-[18px] px-1.5 text-2xs font-medium bg-[var(--color-violet-soft)] text-[var(--color-violet)] border border-[var(--color-violet-border)]">
+            <span className="ml-2 inline-flex items-center rounded-full h-5 px-1.5 text-2xs font-medium bg-[var(--color-violet-soft)] text-[var(--color-violet)] border border-[var(--color-violet-border)]">
               {t('dashboard.activeCount', { n: activeCount })}
             </span>
           )}
           {pausedCount > 0 && (
-            <span className="ml-1 inline-flex items-center rounded-full h-[18px] px-1.5 text-2xs font-medium bg-[var(--color-warning-soft)] text-[var(--color-warning)] border border-[var(--color-warning-border)]">
+            <span className="ml-1 inline-flex items-center rounded-full h-5 px-1.5 text-2xs font-medium bg-[var(--color-warning-soft)] text-[var(--color-warning)] border border-[var(--color-warning-border)]">
               {t('dashboard.pausedCount', { n: pausedCount })}
             </span>
           )}
           {queuedCount > 0 && (
-            <span className="ml-1 inline-flex items-center rounded-full h-[18px] px-1.5 text-2xs font-medium bg-[var(--color-bg-secondary)] text-text-secondary border border-[var(--color-border-dim)]">
+            <span className="ml-1 inline-flex items-center rounded-full h-5 px-1.5 text-2xs font-medium bg-[var(--color-bg-secondary)] text-text-secondary border border-[var(--color-border-dim)]">
               {t('dashboard.queuedCount', { n: queuedCount })}
             </span>
           )}

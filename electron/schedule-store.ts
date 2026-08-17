@@ -173,7 +173,7 @@ export async function runScheduledEntry(entry: ScheduleEntry): Promise<void> {
       apiKey,
       priority: 'normal',
       autoApprove: true,
-      mode: 'afe',
+      mode: 'auto',
       maxIterations: 50,
       metadata: { scheduleId: entry.id },
     },

@@ -31,7 +31,7 @@ export interface ToolStreamEvent {
   reasoningTokens?: number;
   planId?: string;
   steps?: Array<{ id: string; toolName: string; description: string; parameters: Record<string, unknown> }>;
-  source?: 'instructions' | 'memory';
+  source?: 'instructions' | 'memory' | 'workspace';
   producer?: string;
   detail?: string;
   /** Groups tool calls from the same LLM turn into a collapsible tree node. */
@@ -474,7 +474,7 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
   // ── Git Worktree Isolation ─────────────────────────────
   {
     name: 'EnterWorktree',
-    description: 'Create an isolated Git worktree sandbox. ALL subsequent tool calls (Read, Write, Edit, Bash) will be automatically redirected to the sandbox path. This prevents the agent from modifying the main branch directly. Useful in AFE mode to isolate changes.',
+    description: 'Create an isolated Git worktree sandbox. ALL subsequent tool calls (Read, Write, Edit, Bash) will be automatically redirected to the sandbox path. This prevents the agent from modifying the main branch directly. Useful in auto mode to isolate changes.',
     input_schema: {
       type: 'object',
       properties: {
@@ -599,6 +599,123 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
         },
       },
       required: ['question'],
+      additionalProperties: false,
+    },
+    isConcurrencySafe: false,
+  },
+
+  // ── Professional document skills (Office / PDF) ──────
+  {
+    name: 'ReadDocument',
+    description: 'Read a professional document file (.docx/.xlsx/.pptx/.pdf) and return its text content as plain text (xlsx also returns structured sheets). Use this instead of Read for binary document formats.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        file_path: { type: 'string', description: 'Absolute path to the document (.docx/.xlsx/.pptx/.pdf)' },
+      },
+      required: ['file_path'],
+      additionalProperties: false,
+    },
+    isConcurrencySafe: true,
+  },
+  {
+    name: 'WriteDocument',
+    description: 'Create or overwrite a professional document (.docx/.xlsx/.pptx/.pdf) from a structured spec. For docx/pdf: { title?, blocks: [{type:"paragraph|heading|bullet|numbered|table|pageBreak", text?, level?, rows?}] }. For xlsx: { sheets: [{ name, rows: string[][] }] }. For pptx: { slides: [{ title?, subtitle?, bullets?, notes? }] }. Returns the written path and byte size.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        file_path: { type: 'string', description: 'Absolute output path ending in .docx/.xlsx/.pptx/.pdf' },
+        spec: {
+          type: 'object',
+          description: 'Structured document content (title/blocks for Word & PDF, sheets for Excel, slides for PowerPoint)',
+        },
+      },
+      required: ['file_path', 'spec'],
+      additionalProperties: false,
+    },
+    isConcurrencySafe: false,
+  },
+
+  // ── Cloud connectors (Slack / Drive / Notion) ────────
+  {
+    name: 'SlackListChannels',
+    description: 'List Slack channels (public + private) the configured bot/user can access. Tokens come from Settings → 连接器; do not ask the user for a token.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'number', description: 'Max channels to return (1-200, default 100)', default: 100 },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+    isConcurrencySafe: true,
+  },
+  {
+    name: 'SlackPostMessage',
+    description: 'Post a message to a Slack channel by id (from SlackListChannels). External side effect — confirm intent before use.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        channel: { type: 'string', description: 'Slack channel id (C…)' },
+        text: { type: 'string', description: 'Message body' },
+      },
+      required: ['channel', 'text'],
+      additionalProperties: false,
+    },
+    isConcurrencySafe: false,
+  },
+  {
+    name: 'DriveList',
+    description: 'List Google Drive files/folders the configured token can access. Optional query follows the Drive API `q` syntax (e.g. "name contains \'Report\'").',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Optional Drive API query (q)' },
+        page_size: { type: 'number', description: 'Max results (1-100, default 50)', default: 50 },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+    isConcurrencySafe: true,
+  },
+  {
+    name: 'DriveRead',
+    description: 'Read a Google Drive file by id (from DriveList). Text files return text; other files return base64 content.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        file_id: { type: 'string', description: 'Drive file id' },
+      },
+      required: ['file_id'],
+      additionalProperties: false,
+    },
+    isConcurrencySafe: true,
+  },
+  {
+    name: 'NotionSearch',
+    description: 'Search Notion pages/databases the integration token can access. Returns page id, title and url.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Optional search text' },
+        page_size: { type: 'number', description: 'Max results (1-50, default 10)', default: 10 },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+    isConcurrencySafe: true,
+  },
+  {
+    name: 'NotionCreatePage',
+    description: 'Create a Notion page under a parent page (from NotionSearch). Markdown (headings/bullets/numbered/code/paragraphs) becomes Notion blocks. External side effect — confirm intent before use.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        parent_page_id: { type: 'string', description: 'Parent page id' },
+        title: { type: 'string', description: 'New page title' },
+        markdown: { type: 'string', description: 'Optional Markdown content converted to page blocks' },
+      },
+      required: ['parent_page_id', 'title'],
       additionalProperties: false,
     },
     isConcurrencySafe: false,

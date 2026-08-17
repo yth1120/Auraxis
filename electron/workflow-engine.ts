@@ -284,7 +284,7 @@ async function executeWorkflow(def: WorkflowDef, projectRoot: string, state: Wor
               apiKey,
               priority: 'normal',
               autoApprove: true,
-              mode: 'afe',
+              mode: 'auto',
               maxIterations: 50,
               metadata: { workflowRunId: state.runId, stepId: step.id },
             },

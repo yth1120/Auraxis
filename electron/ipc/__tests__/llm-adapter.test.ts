@@ -68,6 +68,39 @@ describe('llm-adapter format helpers', () => {
     });
   });
 
+  it('strict 模式：所有函数 strict=true 且所有属性 required', () => {
+    const tools = buildOpenAIFormatTools([
+      {
+        name: 'WebFetch',
+        description: 'fetch',
+        isConcurrencySafe: true,
+        input_schema: {
+          type: 'object',
+          properties: {
+            url: { type: 'string' },
+            prompt: { type: 'string' },
+            timeout: { type: 'number', default: 30000 },
+          },
+          required: ['url'],
+          additionalProperties: false,
+        },
+      },
+    ], { strict: true });
+    expect(tools[0].function.strict).toBe(true);
+    expect(tools[0].function.parameters.required).toEqual(['url', 'prompt', 'timeout']);
+    expect(tools[0].function.parameters.additionalProperties).toBe(false);
+    // strict 模式不支持 default 关键字：归一化时剥离，避免服务端校验失败
+    expect(tools[0].function.parameters.properties.timeout.default).toBeUndefined();
+  });
+
+  it('非 strict 模式不强制 required 也不带 strict 字段', () => {
+    const tools = buildOpenAIFormatTools([
+      { name: 'Read', description: 'read', isConcurrencySafe: true, input_schema: { type: 'object', properties: { p: { type: 'string' } }, required: ['p'] } },
+    ]);
+    expect(tools[0].function.strict).toBeUndefined();
+    expect(tools[0].function.parameters.required).toEqual(['p']);
+  });
+
   it('builds Anthropic tools', () => {
     const tools = buildAnthropicFormatTools([
       { name: 'Read', description: 'read', isConcurrencySafe: true, input_schema: { type: 'object', properties: {}, required: [] } },
@@ -150,6 +183,44 @@ describe('invokeDeepSeekOpenAI — 流式解析', () => {
     expect(onThinkingChunk.mock.calls[1]).toEqual(['think', false]);
   });
 
+  it('解析末尾 usage 块（含推理 tokens 与缓存命中）', async () => {
+    vi.mocked(axios.post).mockResolvedValue(openaiBody([
+      'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
+      'data: {"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":20,"prompt_cache_hit_tokens":70,"prompt_cache_miss_tokens":30,"completion_tokens_details":{"reasoning_tokens":12}}}\n\n',
+      'data: [DONE]\n\n',
+    ]) as any);
+    const onUsage = vi.fn();
+    const out = await llmClientInvoke({ ...baseParams(), onUsage });
+    expect(out!.rawText).toBe('hi');
+    expect(onUsage).toHaveBeenCalledWith({
+      inputTokens: 100,
+      outputTokens: 20,
+      reasoningTokens: 12,
+      cacheHitTokens: 70,
+      cacheMissTokens: 30,
+    });
+  });
+
+  it('response_format json_object 写入请求体', async () => {
+    vi.mocked(axios.post).mockResolvedValue(openaiBody(['data: [DONE]\n\n']) as any);
+    await llmClientInvoke({ ...baseParams(), responseFormat: 'json_object' });
+    const body = vi.mocked(axios.post).mock.calls.at(-1)![1] as any;
+    expect(body.response_format).toEqual({ type: 'json_object' });
+  });
+
+  it('tool_choice 透传到请求体（required / 指定工具）', async () => {
+    vi.mocked(axios.post).mockResolvedValue(openaiBody(['data: [DONE]\n\n']) as any);
+    const tool = { name: 'Read', description: 'd', isConcurrencySafe: true, input_schema: { type: 'object' as const, properties: {}, required: [] } };
+
+    await llmClientInvoke({ ...baseParams(), tools: [tool], toolChoice: 'required' });
+    let body = vi.mocked(axios.post).mock.calls.at(-1)![1] as any;
+    expect(body.tool_choice).toBe('required');
+
+    await llmClientInvoke({ ...baseParams(), tools: [tool], toolChoice: { type: 'function', function: { name: 'WebSearch' } } });
+    body = vi.mocked(axios.post).mock.calls.at(-1)![1] as any;
+    expect(body.tool_choice).toEqual({ type: 'function', function: { name: 'WebSearch' } });
+  });
+
   it('流式过滤器剥离 <FINAL_ANSWER> 标记', async () => {
     vi.mocked(axios.post).mockResolvedValue(openaiBody([
       'data: {"choices":[{"delta":{"content":"done <FINAL_ANSWER>"}}]}\n\n',
@@ -209,7 +280,7 @@ describe('invokeDeepSeekOpenAI — 流式解析', () => {
     await llmClientInvoke({
       ...baseParams(),
       messages,
-      tools: [{ name: 'Read', description: 'd', isConcurrencySafe: true, input_schema: { type: 'object', properties: {}, required: [] } }],
+      tools: [{ name: 'Read', description: 'd', isConcurrencySafe: true, input_schema: { type: 'object', properties: { p: { type: 'string' } }, required: ['p'] } }],
       isDeepThink: true,
       temperature: 0.2,
     });
@@ -220,9 +291,22 @@ describe('invokeDeepSeekOpenAI — 流式解析', () => {
     expect(body.temperature).toBe(0.2);
     expect(body.thinking).toEqual({ type: 'enabled' });
     expect(body.reasoning_effort).toBe('high');
+    expect(body.stream_options).toEqual({ include_usage: true });
+    expect(body.tools[0].function.strict).toBe(true);
     // DeepSeek 非视觉模型剔除 image 部分
     expect(body.messages[1].content).toHaveLength(1);
     expect(opts.headers.Authorization).toBe('Bearer key');
+  });
+
+  it('空入参工具不启用 strict，避免 DeepSeek 400', async () => {
+    vi.mocked(axios.post).mockResolvedValue(openaiBody(['data: [DONE]\n\n']) as any);
+    await llmClientInvoke({
+      ...baseParams(),
+      tools: [{ name: 'ListSkills', description: 'd', isConcurrencySafe: true, input_schema: { type: 'object', properties: {}, required: [] } }],
+    });
+    const body = vi.mocked(axios.post).mock.calls.at(-1)![1] as any;
+    expect(body.tools[0].function.strict).toBeUndefined();
+    expect(body.tools[0].function.parameters).toEqual({ type: 'object' });
   });
 
   it('已中止信号立即返回 null', async () => {
@@ -254,7 +338,12 @@ describe('invokeDeepSeekAnthropic — 流式解析', () => {
     expect(out!.thinkingText).toBe('沉思');
     expect(out!.completionStopReason).toBe('end_turn');
     expect(onThinkingChunk).toHaveBeenCalledWith('沉思', false);
-    expect(onUsage).toHaveBeenCalledWith(10, 2);
+    expect(onUsage).toHaveBeenCalledWith({
+      inputTokens: 10,
+      outputTokens: 2,
+      cacheHitTokens: 0,
+      cacheMissTokens: 10,
+    });
   });
 
   it('解析 tool_use 分片', async () => {
@@ -267,6 +356,19 @@ describe('invokeDeepSeekAnthropic — 流式解析', () => {
     ]) as any);
     const out = await llmClientInvoke(anthropicBase());
     expect(out!.toolCalls).toEqual([{ id: 'tu1', name: 'Bash', input: { cmd: 'ls' } }]);
+  });
+
+  it('Anthropic tool_choice 映射（any / tool）', async () => {
+    vi.mocked(axios.post).mockResolvedValue(openaiBody(['data: [DONE]\n\n']) as any);
+    const tool = { name: 'Read', description: 'd', isConcurrencySafe: true, input_schema: { type: 'object' as const, properties: {}, required: [] } };
+
+    await llmClientInvoke({ ...anthropicBase(), tools: [tool], toolChoice: 'required' });
+    let body = vi.mocked(axios.post).mock.calls.at(-1)![1] as any;
+    expect(body.tool_choice).toEqual({ type: 'any' });
+
+    await llmClientInvoke({ ...anthropicBase(), tools: [tool], toolChoice: { type: 'function', function: { name: 'WebSearch' } } });
+    body = vi.mocked(axios.post).mock.calls.at(-1)![1] as any;
+    expect(body.tool_choice).toEqual({ type: 'tool', name: 'WebSearch' });
   });
 
   it('system 消息提升为顶层字段并转换图像块', async () => {

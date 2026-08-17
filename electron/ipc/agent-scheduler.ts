@@ -7,7 +7,7 @@ import { BrowserWindow, app, ipcMain } from 'electron';
 import { existsSync } from 'fs';
 import { agentLoopRun, AgentObserver, type AgentStateSnapshot, type TaskPlan } from './agent-loop';
 import { TOOL_DEFINITIONS } from '../tool-defs';
-import { resolveApiBase } from './model-config';
+import { resolveModelApiBase, resolveModelApiKey } from './model-config';
 import { requestPermission } from './permission-handlers';
 import { assertObject, assertString } from './shared';
 import { waitForPlanApproval } from './plan-handlers';
@@ -17,8 +17,13 @@ import { ptyRegistry } from './pty-tool';
 import { readSettings } from './settings-store';
 import { appendAgentLog } from '../session-log';
 import { removeFtsDoc } from '../fts';
-import type { PermissionMode } from '../types';
+import { isPermissionPreset, PERMISSION_PRESETS } from '../contracts/permission';
+import type { DeepSeekToolChoice } from '../contracts/advanced';
+import { normalizeWorkAutonomyTier, type WorkAutonomyTier, type WorkDelivery } from '../contracts/advanced';
+import { normalizeApprovalPolicy } from '../contracts/core';
+import type { ApprovalPolicy } from '../types';
 import type { SandboxMode } from '../sandbox-policy';
+import { appendWorkDocsSystemRule } from '../work-docs-policy';
 
 /** Convert backend TaskPlan to the {todos: [...]} shape AgentDashboard / AgentPanel render. */
 function taskPlanToFrontendPlan(plan: TaskPlan | null | undefined): { todos: { content: string; status: string; activeForm: string }[] } | null {
@@ -51,7 +56,13 @@ export interface AgentConfig {
   apiKey: string;
   priority?: 'high' | 'normal' | 'low';
   autoApprove?: boolean;
-  mode?: PermissionMode;
+  mode?: ApprovalPolicy;
+  /** Work 模式执行自主度档位（plan/smart/full）。 */
+  workTier?: WorkAutonomyTier;
+  /** 项目工作区根目录（含主根）；工具读写边界由它界定。 */
+  workspaceRoots?: string[];
+  /** 项目可写根目录（roots 的子集）。 */
+  writableRoots?: string[];
   /** Per-task sandbox override — falls back to the global setting when absent. */
   sandboxMode?: SandboxMode;
   approvedPlanSteps?: string[];
@@ -61,8 +72,10 @@ export interface AgentConfig {
   isDeepThink?: boolean;
   /** Reasoning effort level: low/medium/high/max. */
   reasoningEffort?: 'low' | 'medium' | 'high' | 'max';
+  /** DeepSeek tool_choice：auto/none/required/强制指定工具。 */
+  toolChoice?: DeepSeekToolChoice;
   /** Which UI surface created this task — 'chat' is rejected (pure conversation). */
-  surface?: 'chat' | 'code';
+  surface?: 'chat' | 'work' | 'code';
   /** Active goal for this run （目标状态）. */
   goal?: { text: string; maxRounds: number } | null;
   /** Opaque caller metadata (e.g. cron job id) surfaced on terminal listeners. */
@@ -72,7 +85,7 @@ export interface AgentConfig {
 export interface AgentInstance {
   agentId: string;
   config: AgentConfig;
-  status: 'idle' | 'running' | 'completed' | 'error' | 'stopped' | 'queued' | 'paused';
+  status: 'idle' | 'running' | 'completed' | 'error' | 'stopped' | 'queued' | 'paused' | 'review';
   priority: 'high' | 'normal' | 'low';
   queuePosition: number;
   startTime: number;
@@ -87,6 +100,8 @@ export interface AgentInstance {
   plan?: any;
   result?: string;
   error?: string;
+  /** Work 模式交付验收数据（结构化，非日志反推）。 */
+  delivery?: WorkDelivery;
   toolCallCount: number;
   iterations: number;
   /** LLM message count snapshot — updated by observer.onStateChange. Distinct
@@ -162,6 +177,9 @@ function notifyFrontend(win: BrowserWindow | null, inst: AgentInstance) {
       toolCallCount: inst.toolCallCount,
       messagesCount: inst.messagesCount,
       model: inst.config.model,
+      surface: inst.config.surface,
+      workTier: inst.config.workTier,
+      delivery: inst.delivery,
       error: inst.error,
       result: inst.result,
       plan: taskPlanToFrontendPlan(inst.plan),
@@ -201,16 +219,21 @@ class AgentScheduler {
       displayDescription: inst.config.displayDescription,
       type: inst.config.type || 'general-purpose',
       model: inst.config.model,
+      surface: inst.config.surface,
       projectPath: inst.projectPath,
       priority: inst.config.priority || 'normal',
       autoApprove: inst.config.autoApprove,
       mode: inst.config.mode,
+      workTier: inst.config.workTier,
+      workspaceRoots: inst.config.workspaceRoots,
+      writableRoots: inst.config.writableRoots,
       sandboxMode: inst.config.sandboxMode,
       approvedPlanSteps: inst.config.approvedPlanSteps,
       tools: inst.config.tools,
       maxIterations: inst.maxIterations,
       isDeepThink: inst.config.isDeepThink,
       reasoningEffort: inst.config.reasoningEffort,
+      toolChoice: inst.config.toolChoice,
       systemPrompt: inst.config.systemPrompt,
       goal: inst.config.goal,
       status: inst.status as AgentSnapshotStatus,
@@ -221,6 +244,7 @@ class AgentScheduler {
       messagesCount: inst.messagesCount,
       result: inst.result,
       error: inst.error,
+      delivery: inst.delivery,
       plan: inst.plan,
       log: inst.log,
       savedState: inst.savedState,
@@ -228,9 +252,9 @@ class AgentScheduler {
     };
     void saveAgentSnapshot(record).catch(() => {});
     void pruneSnapshots().catch(() => {});
-    if (inst.status === 'completed' || inst.status === 'error' || inst.status === 'stopped') {
+    if (inst.status === 'completed' || inst.status === 'error' || inst.status === 'stopped' || inst.status === 'review') {
       const batch = inst.logBuffer?.length ? inst.logBuffer.splice(0) : [];
-      if (batch.length > 0) void appendAgentLog(inst.agentId, batch).catch(() => {});
+      if (batch.length > 0) void appendAgentLog(inst.agentId, batch, inst.projectPath).catch(() => {});
     }
   }
 
@@ -262,23 +286,28 @@ class AgentScheduler {
         displayDescription: r.displayDescription,
         type: r.type,
         model: r.model,
+        surface: r.surface,
         apiKey,
         priority: r.priority,
         autoApprove: r.autoApprove,
-        mode: r.mode as PermissionMode | undefined,
+        mode: r.mode ? normalizeApprovalPolicy(r.mode) : undefined,
+        workTier: r.workTier ? normalizeWorkAutonomyTier(r.workTier) : undefined,
+        workspaceRoots: r.workspaceRoots,
+        writableRoots: r.writableRoots,
         sandboxMode: r.sandboxMode as SandboxMode | undefined,
         approvedPlanSteps: r.approvedPlanSteps,
         tools: r.tools,
         maxIterations: r.maxIterations,
         isDeepThink: r.isDeepThink,
         reasoningEffort: r.reasoningEffort as AgentConfig['reasoningEffort'],
+        toolChoice: r.toolChoice as AgentConfig['toolChoice'],
         systemPrompt: r.systemPrompt,
         goal: r.goal,
       };
       const inst: AgentInstance = {
         agentId: r.id,
         config,
-        status: r.status,
+        status: r.status as AgentInstance['status'],
         priority: r.priority,
         queuePosition: 0,
         startTime: r.startTime,
@@ -289,6 +318,7 @@ class AgentScheduler {
         plan: r.plan,
         result: r.result,
         error: r.error,
+        delivery: r.delivery,
         toolCallCount: r.toolCallCount,
         iterations: r.iteration,
         messagesCount: r.messagesCount,
@@ -302,8 +332,15 @@ class AgentScheduler {
           : (toolName, input, toolCallId, agentId) => {
               const win = this.getWindow();
               if (!win) return Promise.resolve(false);
+              // Same review-gate override as agent:start — a resumed auto-tier
+              // task must still pause for the human on a failed quality gate.
+              // Work 全自动档位：高危工具必须真的弹出确认，requestPermission
+              // 内部按 ask 模式走，避免 mode='auto' 提前放行。
+              const isReviewGate =
+                toolName === 'ReviewArtifact'
+                && input?.action === 'continue_after_failed_review';
               return requestPermission(toolName, input, win, toolCallId, {
-                mode: config.mode || 'ask',
+                mode: isReviewGate || config.workTier === 'full' ? 'ask' : normalizeApprovalPolicy(config.mode),
                 approvedPlanSteps: config.approvedPlanSteps,
                 projectRoot: r.projectPath,
                 agentId,
@@ -387,6 +424,7 @@ class AgentScheduler {
       const task = inst.config.description || inst.config.name || '完成用户指定的任务';
       inst.config.systemPrompt = agentDef.getSystemPrompt(task, platform, shellHint, inst.projectPath);
     }
+    inst.config.systemPrompt = appendWorkDocsSystemRule(inst.config.systemPrompt, inst.config.surface);
 
     const win = this.getWindow();
     notifyFrontend(win, inst);
@@ -419,6 +457,19 @@ class AgentScheduler {
           // {todos} progress bar refreshes without waiting for refreshStates.
           notifyFrontend(win, i);
         }
+        // Work 交付物结构化采集：Write/Edit/NotebookEdit 成功即登记，
+        // 验收面板不再只靠日志反推。
+        if (
+          i.config.surface === 'work'
+          && event.type === 'tool_end'
+          && (event.toolName === 'Write' || event.toolName === 'Edit' || event.toolName === 'NotebookEdit')
+        ) {
+          const p = event.input?.file_path;
+          if (typeof p === 'string' && p.trim()) {
+            i.delivery = i.delivery ?? { files: [], result: '' };
+            if (!i.delivery.files.includes(p)) i.delivery.files.push(p);
+          }
+        }
         if (event.type === 'text_chunk' && i.log.length < 500) {
           i.log.push({ type: 'text', text: event.text, timestamp: Date.now() });
         }
@@ -428,7 +479,7 @@ class AgentScheduler {
         i.logBuffer.push(event);
         if (i.logBuffer.length >= 100) {
           const batch = i.logBuffer.splice(0, 100);
-          void appendAgentLog(agentId, batch).catch(() => {});
+          void appendAgentLog(agentId, batch, i.projectPath).catch(() => {});
         }
       },
       onStateChange: (snapshot: AgentStateSnapshot) => {
@@ -445,13 +496,20 @@ class AgentScheduler {
     const runtimeSettings = await readSettings().catch(() => null) as Record<string, any> | null;
     const model = runtimeSettings?.executeModel || inst.config.model || 'deepseek-v4-pro';
     const planModel = runtimeSettings?.planModel || model;
-    const apiBase = resolveApiBase(model);
+    const apiBase = await resolveModelApiBase(model);
+    const modelApiKey = await resolveModelApiKey(model);
+    // Unified permission preset fallback: tasks created outside the composer
+    // (CLI, restore, plugins) still honor the user's selected preset.
+    const presetSpec = isPermissionPreset(runtimeSettings?.permissionPreset)
+      ? PERMISSION_PRESETS[runtimeSettings.permissionPreset]
+      : undefined;
     const requestedSandbox = inst.config.sandboxMode === 'read'
       || inst.config.sandboxMode === 'workspace-write'
       || inst.config.sandboxMode === 'full'
       ? inst.config.sandboxMode
       : undefined;
     const sandboxMode = requestedSandbox
+      ?? presetSpec?.sandboxMode
       ?? (runtimeSettings?.sandboxMode === 'read' || runtimeSettings?.sandboxMode === 'workspace-write' || runtimeSettings?.sandboxMode === 'full'
         ? runtimeSettings.sandboxMode
         : 'workspace-write');
@@ -464,20 +522,28 @@ class AgentScheduler {
     agentLoopRun({
       model,
       // Renderer may not have a key yet (fresh install) — fall back to .env.
-      apiKey: inst.config.apiKey || process.env.DEEPSEEK_API_KEY || '',
+      apiKey: inst.config.apiKey || modelApiKey || process.env.DEEPSEEK_API_KEY || '',
       apiBase,
       systemPrompt: inst.config.systemPrompt, projectRoot: inst.projectPath,
+      agentName: inst.config.name,
       tools,
       signal: inst.abortController.signal, observer: inst.observer,
       // Bind this task's agentId so per-task permission prompts route to its view.
       checkPermission: checkPermission
         ? (tn: string, inp: Record<string, unknown>, tcid?: string) => checkPermission(tn, inp, tcid, agentId)
         : (() => Promise.resolve(true)),
-      autoApprove: inst.config.autoApprove,
-      mode: inst.config.mode || 'ask',
+      autoApprove: inst.config.autoApprove ?? presetSpec?.autoApprove ?? false,
+      mode: inst.config.mode || presetSpec?.mode || 'ask',
+      workTier: inst.config.workTier,
+      surface: inst.config.surface,
+      workspaceRoots: inst.config.workspaceRoots,
+      writableRoots: inst.config.writableRoots,
       approvedPlanSteps: inst.config.approvedPlanSteps,
       isDeepThink: inst.config.isDeepThink,
-      reasoningEffort: (inst.config.reasoningEffort === 'low' || inst.config.reasoningEffort === 'medium') ? 'high' : inst.config.reasoningEffort as 'high' | 'max' | undefined,
+      reasoningEffort: inst.config.reasoningEffort === 'medium'
+        ? 'high'
+        : inst.config.reasoningEffort as 'low' | 'high' | 'max' | undefined,
+      toolChoice: inst.config.toolChoice,
       onPlanGenerated: (plan) =>
         waitForPlanApproval(plan, win, { projectRoot: inst.projectPath, title: inst.config.name, agentId: inst.agentId }),
       maxIterations: inst.maxIterations,
@@ -535,13 +601,23 @@ class AgentScheduler {
     if (!inst) return;
     // Don't overwrite status if already stopped or paused by user
     if (inst.status === 'stopped' || inst.status === 'paused') return;
-    inst.status = 'completed';
+    // Work 模式收口：非全自动档位先进入「交付验收」（review），用户通过后才
+    // 真正 completed；全自动档位直接完成。
+    const needsDeliveryGate = inst.config.surface === 'work' && inst.config.workTier !== 'full';
+    inst.status = needsDeliveryGate ? 'review' : 'completed';
     inst.endTime = Date.now();
     inst.result = result.allText.slice(0, 500);
     inst.plan = result.plan;
     inst.toolCallCount = result.toolCallCount;
     inst.iterations = result.iterations;
     inst.lastMessages = Array.isArray(result.messages) ? result.messages : undefined;
+    if (inst.config.surface === 'work') {
+      inst.delivery = {
+        files: inst.delivery?.files ?? [],
+        result: result.allText.slice(0, 2000),
+        summary: result.allText.slice(0, 2000),
+      };
+    }
     const win = this.getWindow();
     notifyFrontend(win, inst);
     broadcast(win, agentId, {
@@ -549,15 +625,36 @@ class AgentScheduler {
       summary: result.allText.slice(0, 500),
       toolCallCount: result.toolCallCount, iterations: result.iterations,
     });
+    if (needsDeliveryGate) {
+      broadcast(win, agentId, {
+        type: 'delivery_ready',
+        files: inst.delivery?.files ?? [],
+        result: inst.result,
+      });
+    }
     this.processQueue();
     this.pruneStale();
     this.persistAgent(inst);
-    this.notifyTerminal(inst);
+    if (!needsDeliveryGate) this.notifyTerminal(inst);
     // Lazy-import to avoid circular dep in test env
     import('./conflict-detector').then(({ conflictDetector }) => {
       conflictDetector.releaseAllForAgent(agentId);
     }).catch(() => {});
     ptyRegistry.clearOwner(agentId);
+  }
+
+  /** 交付验收通过：review → completed（任务真正收口）。 */
+  approveDelivery(agentId: string): boolean {
+    const inst = instances.get(agentId);
+    if (!inst || inst.status !== 'review') return false;
+    inst.status = 'completed';
+    inst.endTime = Date.now();
+    const win = this.getWindow();
+    notifyFrontend(win, inst);
+    broadcast(win, agentId, { type: 'delivery_approved', agentId });
+    this.persistAgent(inst);
+    this.notifyTerminal(inst);
+    return true;
   }
 
   private onAgentError(agentId: string, err: any) {
@@ -742,7 +839,7 @@ class AgentScheduler {
       inst = instances.get(agentId);
       if (!inst) return { ok: false, error: '任务不存在或已被清理，无法续写' };
     }
-    if (inst.status !== 'completed' && inst.status !== 'error' && inst.status !== 'stopped') {
+    if (inst.status !== 'completed' && inst.status !== 'error' && inst.status !== 'stopped' && inst.status !== 'review') {
       return { ok: false, error: `任务当前状态为 ${inst.status}，无法续写` };
     }
     let history = inst.lastMessages;
@@ -822,6 +919,7 @@ class AgentScheduler {
       iteration: inst.iterations,
       toolCallCount: inst.toolCallCount, messagesCount: inst.log.length,
       plan: inst.plan ?? null,
+      surface: inst.config.surface,
     };
   }
 
@@ -843,6 +941,9 @@ class AgentScheduler {
         messagesCount: inst.log.length,
         plan: inst.plan ?? null,
         model: inst.config.model,
+        surface: inst.config.surface,
+        workTier: inst.config.workTier,
+        delivery: inst.delivery,
         error: inst.error,
         result: inst.result,
       });
@@ -867,6 +968,7 @@ class AgentScheduler {
         messagesCount: (sa as any).messagesCount ?? sa.log?.length ?? 0,
         plan: null,
         model: (sa as any).model,
+        surface: 'code',
         error: sa.error,
         result: sa.result,
       });
@@ -1028,7 +1130,7 @@ export function registerSchedulerIpc() {
       }
       // Backend-enforced mode isolation: chat mode must never create Agent tasks.
       if (params.config.surface === 'chat') {
-        return { ok: false, error: '对话模式不支持创建 Agent 任务，请切换到 Work 或 Agent 模式。' };
+        return { ok: false, error: 'Chat 模式不支持创建 Agent 任务，请切换到 Work 或 Code 模式。' };
       }
       const sender = event.sender;
       const checkPermission = params.config.autoApprove
@@ -1036,7 +1138,20 @@ export function registerSchedulerIpc() {
         : async (toolName: string, input: Record<string, unknown>, toolCallId?: string, agentId?: string) => {
             if (!sender || sender.isDestroyed()) return false;
             const win = BrowserWindow.fromWebContents(sender) || null;
-            return requestPermission(toolName, input, win!, toolCallId, { mode: params.config.mode || 'ask', approvedPlanSteps: params.config.approvedPlanSteps, projectRoot: params.projectPath, agentId });
+            // The auto tier's review gate must always ask, even though the
+            // task itself runs in auto mode — otherwise shouldAutoApprove
+            // would silently approve the "continue after failed review?"
+            // checkpoint. Forcing mode 'ask' for this synthetic request keeps
+            // the pause real without changing the task's own policy.
+            const isReviewGate =
+              toolName === 'ReviewArtifact'
+              && input?.action === 'continue_after_failed_review';
+            return requestPermission(toolName, input, win!, toolCallId, {
+              mode: isReviewGate || params.config.workTier === 'full' ? 'ask' : normalizeApprovalPolicy(params.config.mode),
+              approvedPlanSteps: params.config.approvedPlanSteps,
+              projectRoot: params.projectPath,
+              agentId,
+            });
           };
       const agentId = scheduler.startAgent(params.config, params.projectPath, checkPermission);
       return { ok: true, data: { agentId } };
@@ -1085,6 +1200,14 @@ export function registerSchedulerIpc() {
       return r.ok
         ? { ok: true, data: { continued: true } }
         : { ok: false, error: r.error };
+    } catch (error: any) { return { ok: false, error: error.message }; }
+  });
+
+  ipcMain.handle('agent:approveDelivery', async (_e, agentId: string) => {
+    try {
+      assertString(agentId, 'agentId');
+      const ok = scheduler.approveDelivery(agentId);
+      return ok ? { ok: true, data: { approved: true } } : { ok: false, error: '任务不存在或不在待验收状态' };
     } catch (error: any) { return { ok: false, error: error.message }; }
   });
 

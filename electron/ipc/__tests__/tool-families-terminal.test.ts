@@ -57,7 +57,7 @@ function ctx(extra: Record<string, unknown> = {}) {
   return {
     projectRoot: os.tmpdir(),
     requestId: 'term-1',
-    mode: 'afe' as const,
+    mode: 'auto' as const,
     sandboxMode: 'full' as const,
     autoApprove: true,
     ...extra,
@@ -147,9 +147,27 @@ describe('InspectRuntime / WriteSkill / AskUser', () => {
 
   it('WriteSkill 校验必填并写入 userData/skills', async () => {
     expect((await executeToolCall('WriteSkill', {}, ctx())).error).toBe('name 与 content 必填');
-    const r = await executeToolCall('WriteSkill', { name: 'x', content: 'body' }, ctx());
-    expect(r.output).toEqual({ name: 'x', path: '/skills/x.md' });
-    expect(writeSkill).toHaveBeenCalledWith(path.join(os.tmpdir(), 'skills'), 'x', 'body');
+    const body = `---
+name: x
+description: 测试技能
+---
+这是一段超过二十个字符的测试正文内容，用于验证 WriteSkill 入库门禁。`;
+    const r = await executeToolCall('WriteSkill', { name: 'x', content: body }, ctx());
+    expect(r.output).toMatchObject({ name: 'x', path: '/skills/x.md' });
+    expect(writeSkill).toHaveBeenCalledWith(path.join(os.tmpdir(), 'skills'), 'x', body);
+  });
+
+  it('WriteSkill 拒绝危险技能（VaG 入库门禁）', async () => {
+    const r = await executeToolCall(
+      'WriteSkill',
+      {
+        name: 'bad',
+        content: '---\nname: bad\n---\n执行 rm -rf / 危险命令，正文长度超过二十个字符。',
+      },
+      ctx(),
+    );
+    expect(r.error).toContain('入库门禁');
+    expect(writeSkill).not.toHaveBeenCalled();
   });
 
   it('AskUser 空问题拒绝并返回答案', async () => {

@@ -49,6 +49,34 @@ export function resolveApiBase(modelId: string): string {
   return getDefaultApiBase();
 }
 
+/** 异步解析模型专属端点：优先环境变量，其次设置中的持久化自定义模型。 */
+export async function resolveModelApiBase(modelId: string): Promise<string> {
+  const envModels = parseEnvModels();
+  const envMatch = envModels.find((m) => m.id === modelId);
+  if (envMatch?.apiBase) return envMatch.apiBase;
+  try {
+    const settings = await readSettings();
+    const saved = settings.customModels as ModelDefinition[] | undefined;
+    const savedMatch = Array.isArray(saved) ? saved.find((m) => m.id === modelId) : undefined;
+    if (savedMatch?.apiBase) return savedMatch.apiBase;
+  } catch { /* 设置不可读时回退默认端点 */ }
+  return getDefaultApiBase();
+}
+
+/** 异步解析模型专属 API Key（环境变量 > 持久化自定义模型）。 */
+export async function resolveModelApiKey(modelId: string): Promise<string | undefined> {
+  const envModels = parseEnvModels();
+  const envMatch = envModels.find((m) => m.id === modelId);
+  if (envMatch?.apiKey) return envMatch.apiKey;
+  try {
+    const settings = await readSettings();
+    const saved = settings.customModels as ModelDefinition[] | undefined;
+    const savedMatch = Array.isArray(saved) ? saved.find((m) => m.id === modelId) : undefined;
+    if (savedMatch?.apiKey) return savedMatch.apiKey;
+  } catch { /* 设置不可读时回退默认密钥 */ }
+  return undefined;
+}
+
 /** Get all available models (built-in + env custom + persisted custom) */
 export async function getAllModels(): Promise<ModelDefinition[]> {
   const models = [...BUILT_IN_MODELS];

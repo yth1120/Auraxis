@@ -54,7 +54,7 @@ function ctx(extra: Record<string, unknown> = {}) {
   return {
     projectRoot: root,
     requestId: 'files-1',
-    mode: 'afe' as const,
+    mode: 'auto' as const,
     sandboxMode: 'full' as const,
     autoApprove: true,
     ...extra,
@@ -123,6 +123,29 @@ describe('Read / ReadImage', () => {
 });
 
 describe('Write / Edit', () => {
+  it('multi-root：附加根可读，非可写根拒绝写入', async () => {
+    const secondary = mkdtempSync(path.join(tmpRoot, 'sec-'));
+    writeFileSync(path.join(secondary, 'x.ts'), 'x', 'utf-8');
+    const multi = ctx({
+      sandboxMode: 'workspace-write',
+      autoApprove: false,
+      workspaceRoots: [secondary],
+      writableRoots: [root],
+    });
+
+    const read = await executeToolCall('Read', { file_path: path.join(secondary, 'x.ts') }, multi);
+    expect(read.error).toBeUndefined();
+
+    const write = await executeToolCall('Write', { file_path: path.join(secondary, 'x.ts'), content: 'y' }, multi);
+    expect(write.error).toContain('写入越权');
+
+    const primaryWrite = await executeToolCall('Write', { file_path: 'new.ts', content: 'y' }, multi);
+    expect(primaryWrite.error).toBeUndefined();
+    expect(readFileSync(path.join(root, 'new.ts'), 'utf-8')).toBe('y');
+
+    rmSync(secondary, { recursive: true, force: true });
+  });
+
   it('Write 新建与覆写', async () => {
     const created = await executeToolCall('Write', { file_path: 'new.ts', content: 'x' }, ctx());
     expect(created.output).toMatchObject({ action: 'created', size: 1 });

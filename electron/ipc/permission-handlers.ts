@@ -2,11 +2,12 @@ import { ipcMain, BrowserWindow } from 'electron';
 import { readFile } from 'fs/promises';
 import { resolve } from 'path';
 import type { PermissionRule, PermissionRequest } from '../advanced-defs';
-import type { PermissionMode } from '../types';
+import type { ApprovalPolicy } from '../types';
 import { readSettings, writeSettings } from './settings-store';
+import { approvalFatigue } from '../approval-fatigue';
 
 export interface PermissionContext {
-  mode: PermissionMode;
+  mode: ApprovalPolicy;
   approvedPlanSteps?: string[];
   projectRoot?: string;
   /** When set, the request belongs to a background agent task (routed per-task in the UI). */
@@ -16,7 +17,12 @@ export interface PermissionContext {
 const FILE_DIFF_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit']);
 
 const permissionRules: PermissionRule[] = [];
-const pendingRequests = new Map<string, { resolve: (allowed: boolean) => void; timer: NodeJS.Timeout }>();
+const pendingRequests = new Map<string, {
+  resolve: (allowed: boolean) => void;
+  timer: NodeJS.Timeout;
+  toolName: string;
+  agentId?: string;
+}>();
 
 /** Load persisted rules (settings.json) — called at startup so "始终允许"
  *  rules survive app restarts. */
@@ -41,12 +47,16 @@ async function persistPermissionRules(): Promise<void> {
 }
 
 /** Safe read-only tools that don't modify files or execute code. */
-const SAFE_READONLY_TOOLS = new Set(['Read', 'Grep', 'Glob']);
+const SAFE_READONLY_TOOLS = new Set([
+  'Read', 'Grep', 'Glob',
+  'ReadDocument',
+  'SlackListChannels', 'DriveList', 'DriveRead', 'NotionSearch',
+]);
 
 /**
  * Mode-aware auto-approval guard.
  *
- * - 'afe' (full-auto):  approve everything.
+ * - 'auto' (full-auto): approve everything.
  * - 'ask'  (interactive): auto-approve only Read/Grep/Glob.
  * - 'plan' (plan-tracked): the plan approval itself authorizes the run —
  *   approvedPlanSteps carries approved plan task ids (not toolCallIds), so a
@@ -58,7 +68,7 @@ export function shouldAutoApprove(
   toolCallId: string | undefined,
   ctx: PermissionContext,
 ): boolean {
-  if (ctx.mode === 'afe') return true;
+  if (ctx.mode === 'auto') return true;
   if (ctx.mode === 'plan') {
     if (ctx.approvedPlanSteps && ctx.approvedPlanSteps.length > 0) return true;
     // Compatibility: explicit toolCallId-level approvals still honored.
@@ -139,7 +149,11 @@ export async function requestPermission(
   ctx?: PermissionContext,
 ): Promise<boolean> {
   // ── Step 0: Mode-aware auto-approval (before rule check) ──
-  if (ctx && shouldAutoApprove(toolName, toolCallId, ctx)) return true;
+  if (ctx && shouldAutoApprove(toolName, toolCallId, ctx)) {
+    // Oversight：自动放行计入疲劳统计（不占人工注意力）。
+    try { approvalFatigue.record(ctx.agentId || 'default', toolName, 'auto'); } catch { /* best-effort */ }
+    return true;
+  }
 
   // ── Step 1: Rule-based check (auto-allow / auto-deny from stored rules) ──
   const check = checkPermission(toolName, input);
@@ -174,10 +188,16 @@ export async function requestPermission(
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       pendingRequests.delete(requestId);
+      try { approvalFatigue.record(request.agentId || 'default', request.toolName, 'rejected'); } catch { /* best-effort */ }
       resolve(false); // Timeout = deny
     }, 120000); // 2 minute timeout
 
-    pendingRequests.set(requestId, { resolve, timer });
+    pendingRequests.set(requestId, {
+      resolve,
+      timer,
+      toolName: request.toolName,
+      agentId: request.agentId,
+    });
 
     if (win && !win.isDestroyed()) {
       win.webContents.send('permission:request', request);
@@ -195,6 +215,13 @@ export function registerPermissionHandlers() {
     if (pending) {
       clearTimeout(pending.timer);
       pendingRequests.delete(requestId);
+      try {
+        approvalFatigue.record(
+          pending.agentId || 'default',
+          pending.toolName,
+          allowed ? 'approved' : 'rejected',
+        );
+      } catch { /* best-effort */ }
       pending.resolve(allowed);
     }
     return { ok: true };

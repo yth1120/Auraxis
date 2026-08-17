@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { AppStore, LeftPanelTab, ThemeMode } from '../types/chat';
+import type { WorkAutonomyTier } from '../types/advanced';
 
 let navigating = false;
 const MAX_FILE_TABS = 8;
@@ -11,6 +12,7 @@ export const useAppStore = create<AppStore>()(
       theme: 'light',
       sidebarCollapsed: false,
       sidebarMode: 'chat' as const,
+      workAutonomyTier: 'smart' as WorkAutonomyTier,
       showSettings: false,
       showRightPanel: false,
       sidebarWidth: 260,
@@ -18,8 +20,10 @@ export const useAppStore = create<AppStore>()(
       rightPanelWidth: 320,
       paneSizes: null,
       activeLeftPanel: 'files' as LeftPanelTab,
+      glassLayoutMounted: false,
       activeToolView: 'none' as const,
       settingsInitialKey: 'general',
+      globalSearchOpen: false,
       terminalHeight: 300,
       agentLogFocusRequest: null,
       trajectoryFocusRequest: null,
@@ -55,17 +59,23 @@ export const useAppStore = create<AppStore>()(
         set({ sidebarMode: mode });
       },
 
+      setWorkAutonomyTier: (tier) => set({ workAutonomyTier: tier }),
+
       toggleRightPanel: () => set((s) => ({ showRightPanel: !s.showRightPanel })),
 
       setShowSettings: (show: boolean) => set({ showSettings: show }),
 
       setActiveToolView: (view) => set({ activeToolView: view }),
 
+      setGlassLayoutMounted: (v) => set({ glassLayoutMounted: !!v }),
+
       openToolView: (view) => set((s) => ({
         activeToolView: s.activeToolView === view ? 'none' : view,
       })),
 
       setSettingsInitialKey: (key) => set({ settingsInitialKey: key }),
+
+      setGlobalSearchOpen: (open) => set({ globalSearchOpen: open }),
 
       setTerminalHeight: (h) =>
         set({ terminalHeight: Math.min(560, Math.max(160, Math.round(h))) }),
@@ -269,14 +279,8 @@ export const useAppStore = create<AppStore>()(
       name: 'auraxis-app-storage',
       version: 3,
       // Version bumps must never brick hydration: keep old persisted values
-      // (partialize + onRehydrateStorage normalize what matters).
+      // (partialize defines what is persisted).
       migrate: (persisted) => persisted as any,
-      onRehydrateStorage: () => (state) => {
-        // Work mode is shelved for now — normalize any persisted value to chat.
-        if (state && (state as { sidebarMode?: string }).sidebarMode === 'work') {
-          (state as { sidebarMode: 'chat' }).sidebarMode = 'chat';
-        }
-      },
       partialize: (state) => ({
         sidebarCollapsed: state.sidebarCollapsed,
         sidebarMode: state.sidebarMode,

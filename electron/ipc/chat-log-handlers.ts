@@ -14,10 +14,10 @@ import { removeFtsDoc } from '../fts';
 
 /** Chat-log IPC — durable session event stream + authoritative session directory. */
 export function registerChatLogHandlers() {
-  ipcMain.handle('chatLog:append', async (_e, sessionId: string, events: Array<Omit<ChatLogEvent, 'seq'>>) => {
+  ipcMain.handle('chatLog:append', async (_e, sessionId: string, events: Array<Omit<ChatLogEvent, 'seq'>>, projectRoot?: string) => {
     try {
       if (!sessionId || typeof sessionId !== 'string') return { ok: false, error: '会话 ID 无效' };
-      await appendChatEvents(sessionId, events || []);
+      await appendChatEvents(sessionId, events || [], projectRoot);
       return { ok: true };
     } catch (error: any) {
       return { ok: false, error: error.message };

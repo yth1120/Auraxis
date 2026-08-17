@@ -26,6 +26,7 @@ vi.mock('../../skill-store', () => ({
   ensureSkillsDirectory: vi.fn(),
   listSkills: vi.fn(),
   readSkill: vi.fn(),
+  seedBuiltinSkills: vi.fn(),
 }));
 vi.mock('../../session-log', () => ({
   readAgentLog: vi.fn(),
@@ -77,7 +78,7 @@ import path from 'path';
 import { loadProjectActions } from '../../actions';
 import { loadRules } from '../../rules';
 import { describeCredential, setCredential, unsetCredential } from '../../credentials';
-import { ensureSkillsDirectory, listSkills, readSkill } from '../../skill-store';
+import { ensureSkillsDirectory, listSkills, readSkill, seedBuiltinSkills } from '../../skill-store';
 import { readAgentLog, projectAgentLog } from '../../session-log';
 import { listWorkflows, startWorkflow, getWorkflowRun, listWorkflowRuns } from '../../workflow-engine';
 import {
@@ -256,7 +257,7 @@ describe('IPC 小型处理器（actions/rules/credentials/skills/session-log/wor
   it('chatLog — 追加/读取/列表/投影/删除/分叉/元数据', async () => {
     const h = await capture(registerChatLogHandlers);
     await expect(h.get('chatLog:append')!({}, 's1', [{ type: 'user', ts: 1, data: {} }])).resolves.toEqual({ ok: true });
-    expect(appendChatEvents).toHaveBeenCalledWith('s1', expect.any(Array));
+    expect(appendChatEvents).toHaveBeenCalledWith('s1', expect.any(Array), undefined);
     await expect(h.get('chatLog:read')!({}, 's1')).resolves.toMatchObject({ ok: true });
     await expect(h.get('chatLog:list')!({})).resolves.toMatchObject({ ok: true });
     await expect(h.get('chatLog:project')!({}, 's1')).resolves.toMatchObject({ ok: true });

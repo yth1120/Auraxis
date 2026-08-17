@@ -55,21 +55,21 @@ export function AgentReadCard({ label, content, startLine = 1, totalLines }: Age
 
   const row = (text: string, number: number) => (
     <div key={number} className="flex min-h-[22px] leading-[22px] whitespace-pre">
-      <span className="w-12 shrink-0 pr-[14px] text-right text-[var(--color-text-faint)] select-none">{number}</span>
+      <span className="w-12 shrink-0 pr-3.5 text-right text-[var(--color-text-faint)] select-none">{number}</span>
       <span className="min-w-0 text-[var(--color-text-primary)]">{text}</span>
     </div>
   );
 
   return (
     <div className="rounded-xl border border-border-default bg-code-bg overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-[14px] py-[9px] bg-[var(--color-bg-inset)] border-b border-border-dim">
+      <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 bg-[var(--color-bg-inset)] border-b border-border-dim">
         <span className="min-w-0 truncate font-mono text-2xs text-text-primary">{label ? basename(label) : ''}</span>
         <span className="flex items-center gap-3 shrink-0">
           {windowed && <span className="text-2xs text-text-muted">{t('tool.showLines', { shown: lines.length, total: totalLines })}</span>}
           <CopyButton text={raw} />
         </span>
       </div>
-      <div className="py-3 font-mono text-[13px] overflow-x-auto">
+      <div className="py-3 font-mono text-sm overflow-x-auto">
         {head.map((line, i) => row(line, startLine + i))}
         {hidden > 0 && (
           <button
@@ -129,15 +129,15 @@ export function AgentSearchCard({ kind, files = [], paths = [], total, truncated
 
   return (
     <div className="rounded-xl border border-border-default bg-code-bg overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-[14px] py-[9px] bg-[var(--color-bg-inset)] border-b border-border-dim">
+      <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 bg-[var(--color-bg-inset)] border-b border-border-dim">
         <span className="min-w-0 truncate text-2xs text-text-secondary">{summary}</span>
         <CopyButton text={raw} />
       </div>
       <div className="py-1.5 pr-3 font-mono text-xs overflow-x-auto">
         {head.map((row, i) => row.type === 'path' ? (
-          <div key={i} className="min-h-[20px] leading-[20px] pl-[14px] whitespace-pre text-text-secondary">{row.path}</div>
+          <div key={i} className="min-h-[20px] leading-[20px] pl-3.5 whitespace-pre text-text-secondary">{row.path}</div>
         ) : (
-          <div key={`${row.fi}:${row.lineNumber}`} className="min-h-[20px] leading-[20px] pl-[14px] whitespace-pre">
+          <div key={`${row.fi}:${row.lineNumber}`} className="min-h-[20px] leading-[20px] pl-3.5 whitespace-pre">
             <span className="text-text-faint">{row.lineNumber}: </span>
             <span className="text-text-secondary">{row.line}</span>
           </div>
@@ -152,7 +152,7 @@ export function AgentSearchCard({ kind, files = [], paths = [], total, truncated
           </button>
         )}
         {capped && tail.map((row, i) => row.type === 'path' ? (
-          <div key={`t${i}`} className="min-h-[20px] leading-[20px] pl-[14px] whitespace-pre text-text-secondary">{row.path}</div>
+          <div key={`t${i}`} className="min-h-[20px] leading-[20px] pl-3.5 whitespace-pre text-text-secondary">{row.path}</div>
         ) : (
           <div key={`t${row.fi}:${row.lineNumber}`} className="min-h-[20px] leading-[20px] pl-[14px] whitespace-pre">
             <span className="text-text-faint">{row.lineNumber}: </span>
@@ -286,7 +286,7 @@ export function AgentRunCodeCard({
   const output = [stdout, stderr].filter(Boolean).join('\n');
   return (
     <div className="rounded-xl border border-border-default bg-code-bg overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-[14px] py-[9px] bg-[var(--color-bg-inset)] border-b border-border-dim">
+      <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 bg-[var(--color-bg-inset)] border-b border-border-dim">
         <span className="min-w-0 truncate text-2xs text-text-secondary">
           {language ? `RunCode · ${language}` : 'RunCode'}
           {exitCode != null && (

@@ -20,6 +20,8 @@ vi.mock('../../tool-registry', () => ({
 }));
 vi.mock('../model-config', () => ({
   resolveApiBase: vi.fn(() => 'https://api.example/v1/chat/completions'),
+  resolveModelApiBase: vi.fn(async () => 'https://api.example/v1/chat/completions'),
+  resolveModelApiKey: vi.fn(async () => undefined),
 }));
 vi.mock('../agent-loop', () => ({
   agentLoopRun: (opts: any) =>

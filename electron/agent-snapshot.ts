@@ -9,7 +9,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { app } from 'electron';
 
-export type AgentSnapshotStatus = 'paused' | 'completed' | 'error' | 'stopped';
+export type AgentSnapshotStatus = 'paused' | 'completed' | 'error' | 'stopped' | 'review';
 
 export interface AgentSnapshotRecord {
   id: string;
@@ -18,17 +18,28 @@ export interface AgentSnapshotRecord {
   displayDescription?: string;
   type: string;
   model: string;
+  /** Which UI surface created this task — 'chat' is rejected (pure conversation). */
+  surface?: 'chat' | 'work' | 'code';
   projectPath: string;
   workspacePath?: string;
   priority: 'high' | 'normal' | 'low';
   autoApprove?: boolean;
   mode?: string;
+  /** Work 模式执行自主度档位。 */
+  workTier?: string;
+  /** 项目工作区根目录（含主根）。 */
+  workspaceRoots?: string[];
+  /** 项目可写根目录（roots 的子集）。 */
+  writableRoots?: string[];
+  /** Work 模式交付验收数据。 */
+  delivery?: { files: string[]; result: string; summary?: string };
   sandboxMode?: string;
   approvedPlanSteps?: string[];
   tools?: string[];
   maxIterations: number;
   isDeepThink?: boolean;
   reasoningEffort?: string;
+  toolChoice?: unknown;
   systemPrompt?: string;
   goal?: { text: string; maxRounds: number } | null;
   status: AgentSnapshotStatus;

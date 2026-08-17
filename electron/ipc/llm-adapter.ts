@@ -13,6 +13,9 @@
 import axios from 'axios';
 import type { ToolDef } from '../tool-defs';
 import { createStreamFilter } from './text-filter';
+import { getDeepSeekUserId } from '../auth-store';
+import { readSettings, resolveMaxOutputTokens } from './settings-store';
+import type { DeepSeekToolChoice } from '../contracts/advanced';
 import type { AssistantMessage, ContentBlock, ToolCall } from './agent-loop';
 
 // ─── LLM types ───────────────────────────────────────────
@@ -25,12 +28,22 @@ export type LlmInvokeParams = {
   messages: any[];
   tools: ToolDef[];
   isDeepThink?: boolean;
-  reasoningEffort?: 'high' | 'max';
+  reasoningEffort?: 'low' | 'high' | 'max';
   temperature?: number;
+  /** DeepSeek JSON Output：{ "type": "json_object" }（OpenAI 格式端点）。 */
+  responseFormat?: 'json_object';
+  /** DeepSeek tool_choice：auto/none/required/强制指定工具。 */
+  toolChoice?: DeepSeekToolChoice;
   signal: AbortSignal;
   onTextChunk?: (text: string) => void;
   onThinkingChunk?: (chunk: string, isNewBlock: boolean) => void;
-  onUsage?: (inputTokens: number, outputTokens: number) => void;
+  onUsage?: (usage: {
+    inputTokens: number;
+    outputTokens: number;
+    reasoningTokens?: number;
+    cacheHitTokens?: number;
+    cacheMissTokens?: number;
+  }) => void;
 };
 
 export type LlmAdapter = (params: LlmInvokeParams) => Promise<AssistantMessage | null>;
@@ -65,18 +78,81 @@ export async function invokeLlm(
 
 // ─── Format builders ─────────────────────────────────────
 
-export function buildOpenAIFormatTools(tools: ToolDef[]) {
-  return tools.map((t) => ({
-    type: 'function' as const,
-    function: {
-      name: t.name,
-      description: t.description,
-      parameters: {
-        ...t.input_schema,
-        additionalProperties: t.input_schema.additionalProperties ?? false,
+function isPlainObject(v: unknown): v is Record<string, any> {
+  return !!v && typeof v === 'object' && !Array.isArray(v);
+}
+
+/** 递归归一化 strict schema：每个对象节点都补齐 required + additionalProperties，
+ *  避免嵌套空对象被 DeepSeek 拒绝。 */
+function normalizeStrictSchema(schema: Record<string, any>): Record<string, any> {
+  const properties = (schema.properties ?? {}) as Record<string, any>;
+  const out: Record<string, any> = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === 'default' || key === 'properties' || key === 'required' || key === 'additionalProperties') continue;
+    out[key] = isPlainObject(value) ? normalizeStrictSchema(value) : value;
+  }
+  out.properties = {};
+  for (const [k, v] of Object.entries(properties)) {
+    out.properties[k] = isPlainObject(v) ? normalizeStrictSchema(v) : v;
+  }
+  out.required = Object.keys(properties);
+  out.additionalProperties = false;
+  return out;
+}
+
+/** 递归清洗 schema：任何「没有可用属性的 object 节点」都返回 null（由父级丢弃），
+ *  保证发给 DeepSeek 的请求里不会出现空对象 —— 这是 400
+ *  “An object with no properties is not allowed” 的直接来源。 */
+function sanitizeSchemaForApi(node: unknown): Record<string, any> | null {
+  if (!isPlainObject(node)) return node as Record<string, any>;
+  const n = node as Record<string, any>;
+  const out: Record<string, any> = { ...n };
+
+  if (n.type === 'object' || n.properties !== undefined) {
+    const props = n.properties;
+    if (!isPlainObject(props) || Object.keys(props).length === 0) return null;
+    const cleanedProps: Record<string, any> = {};
+    for (const [key, value] of Object.entries(props)) {
+      const cleaned = sanitizeSchemaForApi(value);
+      if (cleaned !== null) cleanedProps[key] = cleaned;
+    }
+    if (Object.keys(cleanedProps).length === 0) return null;
+    out.properties = cleanedProps;
+    if (Array.isArray(n.required)) {
+      out.required = n.required.filter((k: unknown) => typeof k === 'string' && k in cleanedProps);
+    }
+  }
+
+  if (n.items !== undefined) {
+    const cleanedItems = sanitizeSchemaForApi(n.items);
+    if (cleanedItems === null) delete out.items;
+    else out.items = cleanedItems;
+  }
+
+  return out;
+}
+
+export function buildOpenAIFormatTools(tools: ToolDef[], opts?: { strict?: boolean }) {
+  return tools.map((t) => {
+    const cleaned = sanitizeSchemaForApi(t.input_schema);
+    const strict = !!opts?.strict && cleaned !== null;
+    return {
+      type: 'function' as const,
+      function: {
+        name: t.name,
+        description: t.description,
+        ...(strict ? { strict: true } : {}),
+        parameters: cleaned === null
+          ? { type: 'object' }
+          : strict
+            ? normalizeStrictSchema(cleaned)
+            : {
+                ...cleaned,
+                additionalProperties: cleaned.additionalProperties ?? false,
+              },
       },
-    },
-  }));
+    };
+  });
 }
 
 export function buildAnthropicFormatTools(tools: ToolDef[]) {
@@ -228,6 +304,8 @@ async function invokeDeepSeekAnthropic(params: LlmInvokeParams): Promise<Assista
   // Stateful per-invoke filter — catches XML tool-call rehearsal spanning chunks.
   const streamFilter = createStreamFilter();
   const anthropicTools = buildAnthropicFormatTools(tools);
+  const userId = await getDeepSeekUserId();
+  const maxTokens = resolveMaxOutputTokens(await readSettings().catch(() => null));
 
   // Anthropic Messages API: system must be a top-level field; messages array
   // must only contain user/assistant roles. Strip any system-role message from
@@ -240,11 +318,19 @@ async function invokeDeepSeekAnthropic(params: LlmInvokeParams): Promise<Assista
     .map((m) => normalizeProviderContent(m, 'anthropic', model));
 
   const body: Record<string, unknown> = {
-    model, max_tokens: 8192, messages: effectiveMessages, stream: true, system: systemContent,
+    model, max_tokens: maxTokens, messages: effectiveMessages, stream: true, system: systemContent,
   };
 
   if (anthropicTools.length > 0) {
     body.tools = anthropicTools;
+    const tc = params.toolChoice;
+    if (tc === 'none') {
+      body.tool_choice = { type: 'none' };
+    } else if (tc === 'required') {
+      body.tool_choice = { type: 'any' };
+    } else if (tc && typeof tc === 'object') {
+      body.tool_choice = { type: 'tool', name: tc.function.name };
+    }
   }
 
   if (params.temperature !== undefined) {
@@ -253,6 +339,10 @@ async function invokeDeepSeekAnthropic(params: LlmInvokeParams): Promise<Assista
 
   if (isDeepThink && model.startsWith('deepseek-')) {
     body.output_config = { effort: params.reasoningEffort || 'high' };
+  }
+
+  if (userId) {
+    body.metadata = { user_id: userId };
   }
 
   const response = await axios.post(apiBase, body, {
@@ -334,7 +424,14 @@ async function invokeDeepSeekAnthropic(params: LlmInvokeParams): Promise<Assista
               completionStopReason = p.delta.stop_reason as string;
             }
             if (p.usage && onUsage) {
-              onUsage(p.usage.input_tokens || 0, p.usage.output_tokens || 0);
+              const inputTokens = p.usage.input_tokens || 0;
+              const cacheHitTokens = p.usage.cache_read_input_tokens || 0;
+              onUsage({
+                inputTokens,
+                outputTokens: p.usage.output_tokens || 0,
+                cacheHitTokens,
+                cacheMissTokens: Math.max(0, inputTokens - cacheHitTokens),
+              });
             }
             break;
         }
@@ -366,10 +463,15 @@ async function invokeDeepSeekAnthropic(params: LlmInvokeParams): Promise<Assista
 }
 
 async function invokeDeepSeekOpenAI(params: LlmInvokeParams): Promise<AssistantMessage | null> {
-  const { model, apiKey, apiBase, systemPrompt, messages, tools, isDeepThink, signal, onTextChunk, onThinkingChunk } = params;
+  const { model, apiKey, apiBase, systemPrompt, messages, tools, isDeepThink, signal, onTextChunk, onThinkingChunk, onUsage } = params;
   // Stateful per-invoke filter — catches XML tool-call rehearsal spanning chunks.
   const streamFilter = createStreamFilter();
-  const formattedTools = buildOpenAIFormatTools(tools);
+  // strict tools 是 DeepSeek 官方 Beta 能力，仅对官方端点启用；
+  // 自定义 OpenAI 兼容端点不强制（避免 schema 语义被改变）。
+  const useStrict = apiBase.includes('api.deepseek.com');
+  const formattedTools = buildOpenAIFormatTools(tools, { strict: useStrict });
+  const userId = await getDeepSeekUserId();
+  const maxTokens = resolveMaxOutputTokens(await readSettings().catch(() => null));
 
   // Ensure system prompt is in messages (OpenAI format: system-role message at position 0).
   // Callers may pass systemPrompt separately (e.g. Planning phase); inject it if missing.
@@ -379,12 +481,14 @@ async function invokeDeepSeekOpenAI(params: LlmInvokeParams): Promise<AssistantM
   ).map((m) => normalizeProviderContent(m, 'openai', model));
 
   const body: Record<string, unknown> = {
-    model, max_tokens: 8192, messages: effectiveMessages, stream: true,
+    model, max_tokens: maxTokens, messages: effectiveMessages, stream: true,
+    // 官方用法：流式末尾额外返回 usage（含缓存命中与推理 tokens）。
+    stream_options: { include_usage: true },
   };
 
   if (formattedTools.length > 0) {
     body.tools = formattedTools;
-    body.tool_choice = 'auto';
+    body.tool_choice = params.toolChoice ?? 'auto';
   }
 
   if (params.temperature !== undefined) {
@@ -394,6 +498,14 @@ async function invokeDeepSeekOpenAI(params: LlmInvokeParams): Promise<AssistantM
   if (isDeepThink && model.startsWith('deepseek-')) {
     body.thinking = { type: 'enabled' };
     body.reasoning_effort = params.reasoningEffort || 'high';
+  }
+
+  if (params.responseFormat === 'json_object') {
+    body.response_format = { type: 'json_object' };
+  }
+
+  if (userId) {
+    body.user_id = userId;
   }
 
   const response = await axios.post(apiBase, body, {
@@ -428,6 +540,16 @@ async function invokeDeepSeekOpenAI(params: LlmInvokeParams): Promise<AssistantM
       if (data === '[DONE]') continue;
       try {
         const p = JSON.parse(data);
+        // usage 块位于流末尾（choices 为空数组）——必须先于 choice 判断处理。
+        if (p.usage) {
+          onUsage?.({
+            inputTokens: p.usage.prompt_tokens || 0,
+            outputTokens: p.usage.completion_tokens || 0,
+            reasoningTokens: p.usage.completion_tokens_details?.reasoning_tokens,
+            cacheHitTokens: p.usage.prompt_cache_hit_tokens,
+            cacheMissTokens: p.usage.prompt_cache_miss_tokens,
+          });
+        }
         const choice = p.choices?.[0];
         if (!choice) continue;
         const delta = choice.delta;

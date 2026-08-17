@@ -1,11 +1,17 @@
 import { useCallback, useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  Brain,
+  Desktop as DesktopIcon,
+  FileText as FileTextIcon,
   FolderOpen as FolderOpenIcon,
+  GitBranch as GitBranchIcon,
   GlobeHemisphereWest,
+  Wrench,
   Image as ImageIcon,
   Paperclip,
   Plus,
+  ListChecks,
   Microphone,
   Play,
   ArrowUp,
@@ -20,6 +26,7 @@ import { useSessionStore } from '../../stores/useSessionStore';
 import { useInspectorStore, selectPendingPlan } from '../../stores/useInspectorStore';
 import { useAutoResize } from '../../hooks/useAutoResize';
 import { useSettingsStore } from '../../stores/useSettingsStore';
+import { useProjectStore } from '../../stores/useProjectStore';
 import MentionDropdown from './MentionDropdown';
 import SkillMentionDropdown from './SkillMentionDropdown';
 import CommandDropdown from './CommandDropdown';
@@ -27,17 +34,21 @@ import InputDock from './InputDock';
 import PlanApprovalPanel from './PlanApprovalPanel';
 import ContextMeter from './ContextMeter';
 import { ModeTrigger, ModePanelContent } from './ModeToggler';
-import AccessSelector, { type AccessMode } from './AccessSelector';
+import PermissionSelector from './PermissionSelector';
+import WorkTierSelector from './WorkTierSelector';
 import { resolveSessionRefs } from '../../utils/sessionRefs';
 import { resolveFollowTarget } from '../../utils/followTarget';
-import { t, useT, agentSkillNameKey } from '../../i18n';
+import { t, useT, agentSkillNameKey, type I18nKey } from '../../i18n';
+import { mapThinkingLevelToEffort } from '../../types/chat';
+import { PERMISSION_PRESETS, type PermissionPreset } from '../../types/advanced';
+import type { WorkAutonomyTier } from '../../types/advanced';
 import GhostToast from '../layout/GhostToast';
 import { SLASH_COMMANDS, executeCommand, createAgent, type SlashCommand } from '../../constants/commands';
 import { listSlashCommands, findPluginCommand, resolveSkillRefs } from '../../utils/slashCommands';
 import { scrubSandboxPaths } from '../../utils/scrub';
 import { useAgentStore } from '../../stores/useAgentStore';
 import { AGENT_SKILLS, type AgentSkill } from '../../core/skills';
-import { ACCOUNT_NAME } from '../../constants/account';
+import { useAuthStore } from '../../stores/useAuthStore';
 import logoPng from '../../assets/auraxis-logo.png';
 
 function greeting(now = Date.now()): string {
@@ -67,29 +78,48 @@ function parsePendingImages(text: string): PendingImage[] {
 }
 
 interface ChatInputProps {
-  position?: 'center' | 'bottom';
+  position?: 'center' | 'center-flow' | 'bottom';
+  /** 居中 Hero 模式的副标题文案 key（默认聊天通用提示）。 */
+  heroSubtitleKey?: I18nKey;
 }
 
-/** Access → background-agent config (type + permission mode + auto-approve).
- *  read / workspace-write = Confirm: 直接执行，风险操作按沙箱与确认流处理。
- *  full                   = Execute: 直接执行，完全访问，无中断。
- *  Plan mode is armed separately via /plan and resolved at send time. */
-function resolveAgentConfig(access: AccessMode): {
+/** Preset → background-agent config (type + permission mode + auto-approve).
+ *  The canonical mapping lives in electron/contracts/permission.ts — keep the
+ *  two in sync; plan mode is armed separately via /plan / Work mode. */
+function resolveAgentConfig(preset: PermissionPreset): {
   type: 'general-purpose';
-  mode: 'ask' | 'afe';
+  mode: 'ask' | 'auto';
   autoApprove: boolean;
 } {
-  if (access === 'full') {
-    return { type: 'general-purpose', mode: 'afe', autoApprove: true };
-  }
-  return { type: 'general-purpose', mode: 'ask', autoApprove: false };
+  const spec = PERMISSION_PRESETS[preset];
+  return { type: 'general-purpose', mode: spec.mode, autoApprove: spec.autoApprove };
 }
 
-const PLAN_TASK_CONFIG = {
-  type: 'general-purpose' as const,
-  mode: 'plan' as const,
-  autoApprove: false,
-};
+/** Plan overlay: approval becomes the authorization step, but the preset's
+ *  autoApprove axis is preserved (full → bypass hygiene after approval). */
+function resolvePlanAgentConfig(preset: PermissionPreset): {
+  type: 'general-purpose';
+  mode: 'plan';
+  autoApprove: boolean;
+} {
+  return {
+    type: 'general-purpose',
+    mode: 'plan',
+    autoApprove: PERMISSION_PRESETS[preset].autoApprove,
+  };
+}
+
+/** Work 档位 → 后端审批策略。smart 走 ask + 分级门禁；full 走 auto +
+ * 高危仍问；plan 走 plan（计划审批后计划内自动）。 */
+function resolveWorkAgentConfig(tier: WorkAutonomyTier): {
+  type: 'general-purpose';
+  mode: 'ask' | 'plan' | 'auto';
+  autoApprove: boolean;
+} {
+  if (tier === 'plan') return { type: 'general-purpose', mode: 'plan', autoApprove: false };
+  if (tier === 'full') return { type: 'general-purpose', mode: 'auto', autoApprove: false };
+  return { type: 'general-purpose', mode: 'ask', autoApprove: false };
+}
 function parseTreePaths(treeText: string): string[] {
   const lines = treeText.split('\n').filter(Boolean);
   const paths: string[] = [];
@@ -118,8 +148,9 @@ function parseTreePaths(treeText: string): string[] {
   return paths;
 }
 
-export default function ChatInput({ position }: ChatInputProps) {
+export default function ChatInput({ position, heroSubtitleKey }: ChatInputProps) {
   const t = useT();
+  const accountName = useAuthStore((s) => s.name);
   // Re-render every minute so the greeting follows the real clock across
   // morning / afternoon / evening boundaries while the app stays open.
   const [, setClockTick] = useState(0);
@@ -131,6 +162,8 @@ export default function ChatInput({ position }: ChatInputProps) {
   const messagesLen = useChatStore((s) => s.messages.length);
   const resolvedPosition = position ?? (messagesLen === 0 ? 'center' : 'bottom');
   const isCenter = resolvedPosition === 'center';
+  const isFlowCenter = resolvedPosition === 'center-flow';
+  const heroSizing = isCenter || isFlowCenter;
   const inputValue = useChatStore((s) => s.inputValue);
   const setInputValue = useChatStore((s) => s.setInputValue);
   const sendMessage = useChatStore((s) => s.sendMessage);
@@ -140,12 +173,13 @@ export default function ChatInput({ position }: ChatInputProps) {
   const toggleWebSearch = useChatStore((s) => s.toggleWebSearch);
   const selectedModel = useChatStore((s) => s.selectedModel);
   const isDeepThink = useChatStore((s) => s.isDeepThink);
+  const toggleDeepThink = useChatStore((s) => s.toggleDeepThink);
   const reasoningEffort = useChatStore((s) => s.reasoningEffort);
   const projectPath = useSettingsStore((s) => s.projectPath);
   const sidebarMode = useAppStore((s) => s.sidebarMode);
-  const { ref: textareaRef, resize } = useAutoResize(1, isCenter ? 10 : 8);
+  const workAutonomyTier = useAppStore((s) => s.workAutonomyTier);
+  const { ref: textareaRef, resize } = useAutoResize(1, heroSizing ? 10 : 8);
 
-  const isCode = sidebarMode === 'code';
   /** Work / Agent share the agent-capable surface; chat is pure conversation. */
   const isAgentSurface = sidebarMode !== 'chat';
   const currentAgentId = useAgentStore((s) => s.currentAgentId);
@@ -161,17 +195,26 @@ export default function ChatInput({ position }: ChatInputProps) {
   const [toastMsg, setToastMsg] = useState('');
   const [showToast, setShowToast] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  /** Current Git branch of the open project ('' when none / not a repo). */
+  const [gitBranch, setGitBranch] = useState('');
   // Code-mode launcher config — store-backed (persisted, survives remounts).
   const pendingPlanMode = useChatStore((s) => s.pendingPlanMode);
-  const accessMode = useSettingsStore((s) => s.sandboxMode);
-  const setAccessMode = useSettingsStore((s) => s.setSandboxMode);
+  const pendingToolChoice = useChatStore((s) => s.pendingToolChoice);
+  const setPendingToolChoice = useChatStore((s) => s.setPendingToolChoice);
+  const modelPanelRequest = useChatStore((s) => s.modelPanelRequest);
+  const permissionPreset = useSettingsStore((s) => s.permissionPreset);
+  const setPermissionPreset = useSettingsStore((s) => s.setPermissionPreset);
   const taskPriority = useChatStore((s) => s.taskPriority);
   const plans = useInspectorStore((s) => s.plans);
   const pendingPlan = useMemo(() => selectPendingPlan(plans, currentAgentId), [plans, currentAgentId]);
   // ── Smart dropdown refs & hooks ──
   const moreTriggerRef = useRef<HTMLButtonElement>(null);
   const modeTriggerRef = useRef<HTMLButtonElement>(null);
-  const smartMore = useSmartDropdown(moreTriggerRef, { panelHeight: 180, gap: 10 });
+  const smartMore = useSmartDropdown(moreTriggerRef, {
+    panelHeight: 180,
+    gap: 10,
+    direction: heroSizing ? 'down' : 'up',
+  });
 
   // ── Mode panel (direct state, no useSmartDropdown middleman) ──
   const [modePanelOpen, setModePanelOpen] = useState(false);
@@ -222,9 +265,10 @@ export default function ChatInput({ position }: ChatInputProps) {
     const rect = trigger.getBoundingClientRect();
     const panelH = 400;
     const gap = 10;
-    // Code mode input is pinned to the bottom — always pop up.
+    // Agent/Work input is pinned to the bottom — always pop up.
     // Chat mode start page has the input centered — pop down.
-    const dropUp = isCode || messagesLenRef.current > 0;
+    // 统一规则：输入框居中时向下弹，贴底时向上弹。
+    const dropUp = !heroSizing;
     setModePanelPos({
       left: rect.left,
       direction: dropUp ? 'up' : 'down',
@@ -232,7 +276,7 @@ export default function ChatInput({ position }: ChatInputProps) {
         ? { bottom: window.innerHeight - rect.top + gap }
         : { top: rect.bottom + gap }),
     });
-  }, [isCode]);
+  }, [heroSizing]);
 
   useEffect(() => {
     if (modePanelOpen) {
@@ -245,6 +289,21 @@ export default function ChatInput({ position }: ChatInputProps) {
       window.removeEventListener('scroll', recalcModePanelPos, true);
     };
   }, [modePanelOpen, recalcModePanelPos]);
+
+  // 状态栏等外部入口请求打开模型选择面板。
+  useEffect(() => {
+    if (modelPanelRequest > 0) {
+      setModePanelOpen(true);
+      recalcModePanelPos();
+      // 消费请求：否则历史请求会在组件重挂载时自动重放打开面板。
+      useChatStore.getState().consumeModelPanelRequest();
+    }
+  }, [modelPanelRequest, recalcModePanelPos]);
+
+  // 切换模式时关闭模型面板，避免面板跨模式“自动弹出”。
+  useEffect(() => {
+    setModePanelOpen(false);
+  }, [sidebarMode]);
 
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
@@ -303,6 +362,11 @@ export default function ChatInput({ position }: ChatInputProps) {
   }, [dollarQuery, allSkills, t]);
 
   const hasInput = inputValue.trim().length > 0;
+  const micSupported = useMemo(
+    () => typeof window !== 'undefined'
+      && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition),
+    [],
+  );
 
   useEffect(() => {
     resize();
@@ -333,6 +397,25 @@ export default function ChatInput({ position }: ChatInputProps) {
   }, [projectPath]);
 
   useEffect(() => {
+    let cancelled = false;
+    if (!projectPath) {
+      setGitBranch('');
+      return;
+    }
+    window.electronAPI?.system?.getGitBranches?.(projectPath)
+      .then((r) => {
+        if (cancelled) return;
+        setGitBranch(r?.ok && r.data?.current ? r.data.current : '');
+      })
+      .catch(() => {
+        if (!cancelled) setGitBranch('');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectPath]);
+
+  useEffect(() => {
     clearTimeout(mentionDebounceRef.current);
     mentionDebounceRef.current = setTimeout(() => {
       const cursorPos = textareaRef.current?.selectionStart ?? inputValue.length;
@@ -360,7 +443,7 @@ export default function ChatInput({ position }: ChatInputProps) {
         }
         setMentionOpen(false);
         setDollarOpen(false);
-      } else if (lastDollarIdx > lastAtIndex && isCode) {
+      } else if (lastDollarIdx > lastAtIndex && isAgentSurface) {
         // `$`-mention: skill invocation entry (skills engine lands later).
         const query = textBefore.slice(lastDollarIdx + 1);
         if (!query.includes(' ') && !query.includes('\n') && !query.includes('$')) {
@@ -401,7 +484,7 @@ export default function ChatInput({ position }: ChatInputProps) {
       }
     }, 60);
     return () => clearTimeout(mentionDebounceRef.current);
-  }, [inputValue, allFilePaths, allSessions, isCode]);
+  }, [inputValue, allFilePaths, allSessions, isAgentSurface]);
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -475,8 +558,24 @@ export default function ChatInput({ position }: ChatInputProps) {
     // /plan arms the next send in plan mode; resolve fresh at send time.
     const planNext = useChatStore.getState().pendingPlanMode;
     if (planNext) useChatStore.getState().setPendingPlanMode(false);
-    const cfg = planNext ? PLAN_TASK_CONFIG : resolveAgentConfig(accessMode);
+    // /tool arms the next task's tool_choice; consume once.
+    const toolChoice = useChatStore.getState().pendingToolChoice;
+    if (toolChoice) useChatStore.getState().setPendingToolChoice(null);
+    // Work 模式使用自己的执行档位；Code 模式仍走全局权限预设。
+    const isWorkMode = useAppStore.getState().sidebarMode === 'work';
+    const workTier = useAppStore.getState().workAutonomyTier;
+    // /plan 显式武装时，Work 也强制计划审批（不随档位变化）。
+    const effectiveWorkTier: WorkAutonomyTier = isWorkMode && planNext ? 'plan' : workTier;
+    const cfg = isWorkMode
+      ? resolveWorkAgentConfig(effectiveWorkTier)
+      : planNext
+        ? resolvePlanAgentConfig(permissionPreset)
+        : resolveAgentConfig(permissionPreset);
     const activeGoal = useChatStore.getState().goal;
+    // 项目多根：把当前项目的工作区根与可写根透传给 Agent 工具边界。
+    const activeProject = activeProjectPath
+      ? useProjectStore.getState().projects.find((p) => p.path === activeProjectPath)
+      : undefined;
     const id = await createAgent({
       name,
       type: cfg.type,
@@ -485,12 +584,21 @@ export default function ChatInput({ position }: ChatInputProps) {
       // backend prompt material and must never render in the task header.
       displayText: trimmed,
       model: selectedModel,
-      isDeepThink,
-      // Map UI 3-level → API 2-level: low/medium → high, high → max
-      reasoningEffort: (reasoningEffort === 'low' || reasoningEffort === 'medium') ? 'high' as const : 'max' as const,
+      // Work/Code 默认思考开启（Chat 由面板思考开关控制）。
+      isDeepThink: true,
+      // Map UI 3-level → API 3-level: low → low, medium → high, high → max
+      reasoningEffort: mapThinkingLevelToEffort(reasoningEffort),
+      toolChoice: toolChoice ?? undefined,
       priority: taskPriority,
       autoApprove: cfg.autoApprove,
       mode: cfg.mode,
+      workTier: isWorkMode ? effectiveWorkTier : undefined,
+      workspaceRoots: activeProject?.roots && activeProject.roots.length > 0
+        ? activeProject.roots
+        : undefined,
+      writableRoots: activeProject?.writableRoots && activeProject.writableRoots.length > 0
+        ? activeProject.writableRoots
+        : undefined,
       goal: activeGoal ? { text: activeGoal.text, maxRounds: 256 } : null,
     });
     if (id) {
@@ -504,7 +612,7 @@ export default function ChatInput({ position }: ChatInputProps) {
     } else {
       message.error(t('composer.createFailed'));
     }
-  }, [selectedModel, accessMode, taskPriority, isDeepThink, reasoningEffort, allSkills]);
+  }, [selectedModel, permissionPreset, taskPriority, isDeepThink, reasoningEffort, allSkills]);
 
   /** Executes a leading slash command when the user presses Enter directly. */
   const tryExecuteLeadingCommand = useCallback((raw: string): boolean => {
@@ -553,7 +661,6 @@ export default function ChatInput({ position }: ChatInputProps) {
   const recordCommand = (name: string, args: string) => {
     const sessionId = useSessionStore.getState().currentSessionId;
     const ts = Date.now();
-    useChatStore.getState().appendCommand({ name, args, ts });
     if (!sessionId) return;
     void window.electronAPI?.chatLog?.append(sessionId, [{
       type: 'command',
@@ -565,7 +672,7 @@ export default function ChatInput({ position }: ChatInputProps) {
   const handleSend = useCallback(() => {
     // In code mode the send button becomes a STOP control while the current
     // task is busy — this must win over slash commands / typing state.
-    if (isCode && currentAgentRunning && currentAgentId) {
+    if (isAgentSurface && currentAgentRunning && currentAgentId) {
       const text = inputValue.trim();
       if (text) {
         // 有输入时：排队续写，任务结束后自动跟进
@@ -581,16 +688,19 @@ export default function ChatInput({ position }: ChatInputProps) {
     // Leading slash commands run in both modes before anything else.
     if (tryExecuteLeadingCommand(inputValue)) return;
     if (isStreaming) {
+      const hasText = inputValue.trim().length > 0;
       stopStreaming();
+      // Chat 模式：允许生成期间起草，按发送 = 停止当前生成并立即发出新消息。
+      if (hasText && !isAgentSurface) window.setTimeout(() => sendMessage(), 0);
       return;
     }
     if (!inputValue.trim()) return;
-    if (sidebarMode === 'code') {
+    if (isAgentSurface) {
       startCodeTask(inputValue);
       return;
     }
     sendMessage();
-  }, [inputValue, isStreaming, sendMessage, stopStreaming, sidebarMode, startCodeTask, tryExecuteLeadingCommand]);
+  }, [inputValue, isStreaming, sendMessage, stopStreaming, isAgentSurface, startCodeTask, tryExecuteLeadingCommand]);
 
   /** Guards the auto-drain effect against explicit "interrupt & send now" flows. */
   const explicitInterruptRef = useRef(false);
@@ -600,7 +710,7 @@ export default function ChatInput({ position }: ChatInputProps) {
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      if (isCode && currentAgentRunning && currentAgentId) {
+      if (isAgentSurface && currentAgentRunning && currentAgentId) {
         // The settle transition from this explicit stop would otherwise trip
         // the auto-drain effect and fire the NEXT queued message as well.
         explicitInterruptRef.current = true;
@@ -610,12 +720,8 @@ export default function ChatInput({ position }: ChatInputProps) {
       }
       void startCodeTask(trimmed, { clearInput: false });
     },
-    [currentAgentId, currentAgentRunning, isCode, startCodeTask],
+    [currentAgentId, currentAgentRunning, isAgentSurface, startCodeTask],
   );
-
-  const agentQueue = useChatStore((s) => s.agentQueue);
-  const clearAgentQueue = useChatStore((s) => s.clearAgentQueue);
-  const queueLen = agentQueue.length;
 
   /** Send one queued message immediately (interrupts the running task). */
   const sendQueuedNow = useCallback(
@@ -623,7 +729,7 @@ export default function ChatInput({ position }: ChatInputProps) {
       const item = useChatStore.getState().agentQueue.find((q) => q.id === id);
       if (!item) return;
       useChatStore.getState().dequeueAgentMessage(id);
-      if (isCode && currentAgentRunning && currentAgentId) {
+      if (isAgentSurface && currentAgentRunning && currentAgentId) {
         // Same guard as sendQueueNow: this explicit send owns the next run,
         // so the stop it causes must not auto-drain the queue too.
         explicitInterruptRef.current = true;
@@ -633,7 +739,7 @@ export default function ChatInput({ position }: ChatInputProps) {
       }
       void startCodeTask(item.text, { clearInput: false });
     },
-    [currentAgentId, currentAgentRunning, isCode, startCodeTask],
+    [currentAgentId, currentAgentRunning, isAgentSurface, startCodeTask],
   );
 
   // Auto-continue: a message queued while the task was busy dispatches as a
@@ -643,7 +749,7 @@ export default function ChatInput({ position }: ChatInputProps) {
   useEffect(() => {
     const prev = prevAgentStatusRef.current;
     prevAgentStatusRef.current = currentAgentStatus;
-    if (!isCode || !currentAgentId) return;
+    if (!isAgentSurface || !currentAgentId) return;
     const wasBusy = prev === 'running' || prev === 'queued' || prev === 'paused';
     const settled = currentAgentStatus === 'completed'
       || currentAgentStatus === 'error'
@@ -664,7 +770,7 @@ export default function ChatInput({ position }: ChatInputProps) {
     if (!next) return;
     useChatStore.getState().dequeueAgentMessage(next.id);
     void startCodeTask(next.text, { clearInput: false });
-  }, [currentAgentStatus, currentAgentId, isCode, startCodeTask]);
+  }, [currentAgentStatus, currentAgentId, isAgentSurface, startCodeTask]);
 
   const handleMentionSelect = useCallback(
     (filePath: string) => {
@@ -855,7 +961,7 @@ export default function ChatInput({ position }: ChatInputProps) {
         }
         e.preventDefault();
         // Busy Agent: Enter → queue; Ctrl/Cmd+Enter → interrupt & send now.
-        if (isCode && currentAgentRunning && currentAgentId) {
+        if (isAgentSurface && currentAgentRunning && currentAgentId) {
           const text = inputValue.trim();
           if (!text) {
             handleSend();
@@ -877,7 +983,7 @@ export default function ChatInput({ position }: ChatInputProps) {
     [commandOpen, commandItems, commandSelected, handleCommandSelect,
       mentionOpen, mentionSessions, mentionItems, mentionSelected, mentionQuery, handleMentionSelect, handleMentionSessionSelect, handleSend,
       dollarOpen, dollarSkills, dollarSelected, handleDollarSelect,
-      isCode, currentAgentRunning, currentAgentId, inputValue, sendQueueNow],
+      isAgentSurface, currentAgentRunning, currentAgentId, inputValue, sendQueueNow],
   );
 
   /* ── Click outside → close custom panels ── */
@@ -921,46 +1027,57 @@ export default function ChatInput({ position }: ChatInputProps) {
     setInputValue(next);
   }, [pendingImages, inputValue, setInputValue]);
 
+  /** 将文件/图片统一转为输入区文本块（选择、拖拽、粘贴共用）。 */
+  const appendFiles = useCallback(async (files: File[]) => {
+    if (files.length === 0) return;
+    const parts: string[] = [];
+    for (const file of files) {
+      const isImage = file.type.startsWith('image/');
+      if (isImage) {
+        if (file.size > 5 * 1024 * 1024) { parts.push(t('composer.imageTooLarge', { name: file.name })); continue; }
+        try {
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(file);
+          });
+          parts.push(`【图片: ${file.name}】\n${dataUrl}`);
+        } catch { parts.push(t('composer.imageReadFailed', { name: file.name })); }
+      } else {
+        if (file.size > 100 * 1024) { parts.push(t('composer.attachmentTooLarge', { name: file.name })); continue; }
+        try {
+          const text = await file.text();
+          const ext = file.name.includes('.') ? file.name.split('.').pop() : '';
+          parts.push(`【附件: ${file.name}】\n\`\`\`${ext || ''}\n${text}\n\`\`\``);
+        } catch { parts.push(t('composer.attachmentReadFailed', { name: file.name })); }
+      }
+    }
+    if (parts.length > 0) {
+      const { inputValue: iv, setInputValue: sv } = useChatStore.getState();
+      sv(iv + (iv.trim() ? '\n\n' : '') + parts.join('\n\n'));
+    }
+  }, [t]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    void appendFiles(Array.from(e.dataTransfer.files ?? []));
+  }, [appendFiles]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+  }, []);
+
   const pickFiles = useCallback((accept: string) => {
-    const isImage = accept === 'image/*';
     const input = document.createElement('input');
     input.type = 'file';
     input.multiple = true;
     input.accept = accept;
-    input.onchange = async () => {
-      const files = Array.from(input.files || []);
-      if (files.length === 0) return;
-      const parts: string[] = [];
-      for (const file of files) {
-        if (isImage) {
-          // Image upload: convert to base64 data URL
-          if (file.size > 5 * 1024 * 1024) { parts.push(t('composer.imageTooLarge', { name: file.name })); continue; }
-          try {
-            const dataUrl = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = () => reject(reader.error);
-              reader.readAsDataURL(file);
-            });
-            parts.push(`【图片: ${file.name}】\n${dataUrl}`);
-          } catch { parts.push(t('composer.imageReadFailed', { name: file.name })); }
-        } else {
-          // File upload: inline as text
-          if (file.size > 100 * 1024) { parts.push(t('composer.attachmentTooLarge', { name: file.name })); continue; }
-          try {
-            const text = await file.text();
-            const ext = file.name.includes('.') ? file.name.split('.').pop() : '';
-            parts.push(`【附件: ${file.name}】\n\`\`\`${ext || ''}\n${text}\n\`\`\``);
-          } catch { parts.push(t('composer.attachmentReadFailed', { name: file.name })); }
-        }
-      }
-      if (parts.length > 0) {
-        const { inputValue: iv, setInputValue: sv } = useChatStore.getState();
-        sv(iv + (iv.trim() ? '\n\n' : '') + parts.join('\n\n'));
-      }
+    input.onchange = () => {
+      void appendFiles(Array.from(input.files || []));
     };
     input.click();
-  }, []);
+  }, [appendFiles]);
 
   const handleMicClick = useCallback(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -997,26 +1114,55 @@ export default function ChatInput({ position }: ChatInputProps) {
     }
   }, []);
 
+  /** 项目目录 · 本地 · Git 分支状态行：Work 在输入框下方，Code 在输入框上方。 */
+  const renderWorkspaceStatus = (placement: 'above' | 'below') => (
+    <div className={clsx('flex items-center gap-1.5', placement === 'above' ? 'mb-2' : 'mt-2')}>
+      <button
+        type="button"
+        className="flex items-center gap-1.5 h-8 px-2.5 min-w-0 border-none bg-transparent text-xs text-text-secondary rounded-full cursor-pointer transition-[background,color] duration-fast hover:bg-[var(--color-hover)] hover:text-text-primary"
+        aria-label={t('composer.selectProjectDir')}
+        title={projectPath ?? t('composer.selectProjectDir')}
+        onClick={pickProjectDirectory}
+      >
+        <FolderOpenIcon size={14} className="shrink-0 text-text-muted" />
+        <span className="max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap">
+          {projectPath ? projectPath.split(/[\\/]/).pop() : t('composer.selectProjectDir')}
+        </span>
+      </button>
+      <span className="w-px h-4 bg-[var(--color-border-dim)] shrink-0" aria-hidden="true" />
+      <span className="inline-flex items-center gap-1.5 h-8 px-2.5 text-xs text-text-secondary rounded-full">
+        <DesktopIcon size={14} className="shrink-0 text-text-muted" />
+        {t('composer.local')}
+      </span>
+      {sidebarMode === 'work' && (
+        <span
+          className="inline-flex items-center gap-1.5 h-8 px-2.5 text-xs text-text-secondary rounded-full"
+          title={t('work.docsOnlyTip')}
+        >
+          <FileTextIcon size={14} className="shrink-0 text-text-muted" />
+          {t('work.docsOnly')}
+        </span>
+      )}
+      {gitBranch && (
+        <span
+          className="inline-flex items-center gap-1.5 h-8 px-2.5 text-xs text-text-secondary rounded-full"
+          title={t('composer.branchTip', { branch: gitBranch })}
+        >
+          <GitBranchIcon size={14} className="shrink-0 text-text-muted" />
+          <span className="max-w-[160px] overflow-hidden text-ellipsis whitespace-nowrap">
+            {gitBranch}
+          </span>
+        </span>
+      )}
+    </div>
+  );
+
   const inputCard = (
     <div className="relative w-full max-w-[var(--content-max-width)] z-10">
       <div className="flex flex-col items-start w-full max-w-[var(--content-max-width)] mx-auto">
         <InputDock onSendNow={sendQueueNow} />
-        {/* Project directory — Agent mode only, always sits ABOVE the composer
-            (start screen and running state), never inside the toolbar. */}
-        {isAgentSurface && (
-          <button
-            type="button"
-            className="flex items-center gap-1.5 h-7 px-2.5 mb-2 min-w-0 border-none bg-transparent text-xs text-text-secondary rounded-full cursor-pointer transition-[background,color] duration-fast hover:bg-[var(--color-hover)] hover:text-text-primary"
-            aria-label={t('composer.selectProjectDir')}
-            title={projectPath ?? t('composer.selectProjectDir')}
-            onClick={pickProjectDirectory}
-          >
-            <FolderOpenIcon size={14} />
-            <span className="max-w-[220px] overflow-hidden text-ellipsis whitespace-nowrap">
-              {projectPath ? projectPath.split(/[\\/]/).pop() : t('composer.selectProjectDir')}
-            </span>
-          </button>
-        )}
+        {/* Workspace status：Code 恒在输入框上方；Work 居中时在下方、贴底时在上方。 */}
+        {isAgentSurface && (sidebarMode !== 'work' || !heroSizing) && renderWorkspaceStatus('above')}
         {pendingPlan ? (
           <PlanApprovalPanel plan={pendingPlan} />
         ) : (
@@ -1044,27 +1190,33 @@ export default function ChatInput({ position }: ChatInputProps) {
           </div>
         )}
         {/* Row 1: transparent textarea — full width, multi-line */}
-        <div className={clsx('w-full relative flex border-none bg-transparent outline-none shadow-none pl-4 pr-3 pt-1', isCenter ? 'min-h-[52px]' : 'min-h-[40px]')}>
+        <div className={clsx('w-full relative flex border-none bg-transparent outline-none shadow-none pl-4 pr-3 pt-1', heroSizing ? 'min-h-[52px]' : 'min-h-[40px]')}>
           <textarea
             ref={textareaRef}
             value={inputValue}
             onChange={handleInputChange}
             onKeyDown={handleKeyDownWithMention}
+            onPaste={(e) => {
+              const files = Array.from(e.clipboardData?.files ?? []);
+              if (files.length > 0) {
+                e.preventDefault();
+                void appendFiles(files);
+              }
+            }}
             onFocus={() => setIsFocused(true)}
             onBlur={handleBlur}
             className={clsx(
               'ax-composer-textarea',
-              isCenter ? 'text-lg leading-[30px] max-h-[240px] px-1' : 'text-lg leading-[30px] max-h-[160px] px-1',
+              heroSizing ? 'text-lg leading-[30px] max-h-[240px] px-1' : 'text-lg leading-[30px] max-h-[160px] px-1',
             )}
             placeholder={
-              sidebarMode === 'code'
-                ? (pendingPlanMode
+              sidebarMode === 'chat'
+                ? t('composer.placeholder.chat')
+                : (pendingPlanMode
                     ? t('composer.placeholder.plan')
                     : t('composer.placeholder.agent'))
-                : t('composer.placeholder.chat')
             }
             rows={1}
-            disabled={isStreaming}
           />
           {commandOpen && (
             <CommandDropdown items={commandItems} selected={commandSelected} onSelect={handleCommandSelect} onHover={setCommandSelected} position={resolvedPosition} />
@@ -1085,35 +1237,12 @@ export default function ChatInput({ position }: ChatInputProps) {
               skills={dollarSkills}
               query={dollarQuery}
               selected={dollarSelected}
+              position={resolvedPosition}
               onSelect={handleDollarSelect}
               onHover={setDollarSelected}
             />
           )}
         </div>
-
-        {/* Queue status — visible while an agent is busy */}
-        {isCode && queueLen > 0 && (
-          <div className="flex items-center gap-2 px-4 pb-1 -mt-0.5">
-            <span className="inline-flex items-center gap-1.5 min-w-0 max-w-[58%] h-5 px-2 rounded-full bg-border-dim text-2xs text-text-secondary">
-              <span className="shrink-0 text-text-muted">{t('composer.queued', { n: queueLen })}</span>
-              <span className="truncate" title={agentQueue[0].text}>{agentQueue[0].text}</span>
-            </span>
-            <button
-              type="button"
-              className="shrink-0 border-none bg-transparent p-0 text-2xs text-primary cursor-pointer hover:opacity-75"
-              onClick={() => sendQueuedNow(agentQueue[0].id)}
-            >
-              {t('composer.sendNow')}
-            </button>
-            <button
-              type="button"
-              className="shrink-0 border-none bg-transparent p-0 text-2xs text-text-muted cursor-pointer hover:text-text-secondary"
-              onClick={clearAgentQueue}
-            >
-              {t('composer.cancel')}
-            </button>
-          </div>
-        )}
 
         {/* Row 2: toolbar — attach/tools on the left, model · mic · send on the right */}
         <div className="ax-composer-toolbar">
@@ -1149,24 +1278,43 @@ export default function ChatInput({ position }: ChatInputProps) {
           )}
         </div>
 
-        {/* Code-mode task settings — access pill; plan mode is armed via /plan */}
-        {isCode && (
+        {/* Agent-surface task settings — unified permission pill; plan mode
+            is armed via /plan or Work mode's plan-first personality. */}
+        {isAgentSurface && (
           <>
-            {pendingPlanMode && (
-              <span className="inline-flex items-center gap-[3px] self-center h-6 px-2 pl-2.5 text-xs font-medium text-primary bg-primary-soft rounded-full" title={t('runmode.planTip')}>
+            {pendingPlanMode && !(sidebarMode === 'work' && workAutonomyTier === 'plan') && (
+              <span className="inline-flex items-center gap-1 self-center h-8 pl-2.5 pr-1 text-xs leading-5 font-medium text-primary bg-primary-soft rounded-full" title={t('runmode.planTip')}>
+                <ListChecks size={14} className="shrink-0" />
                 {t('runmode.plan')}
                 <button
                   type="button"
-                  className="shrink-0 border-none bg-transparent cursor-pointer text-text-muted w-[20px] h-[20px] rounded-full flex items-center justify-center text-2xs leading-none hover:bg-[var(--color-hover)] hover:text-text-secondary"
+                  className="shrink-0 border-none bg-transparent cursor-pointer text-text-muted w-5 h-5 rounded-full flex items-center justify-center text-2xs leading-none hover:bg-[var(--color-hover)] hover:text-text-secondary"
                   onClick={() => useChatStore.getState().setPendingPlanMode(false)}
                   aria-label={t('runmode.cancelPlan')}
                 >✕</button>
               </span>
             )}
-            <AccessSelector
-              accessMode={accessMode}
-              onChangeAccess={setAccessMode}
-            />
+            {pendingToolChoice && (
+              <span className="inline-flex items-center gap-1 self-center h-8 pl-2.5 pr-1 text-xs leading-5 font-medium text-primary bg-primary-soft rounded-full" title={t('runmode.toolChoiceTip')}>
+                <Wrench size={14} className="shrink-0" />
+                {typeof pendingToolChoice === 'string' ? `tool: ${pendingToolChoice}` : `tool: ${pendingToolChoice.function.name}`}
+                <button
+                  type="button"
+                  className="border-none bg-transparent cursor-pointer text-text-muted w-5 h-5 rounded-full flex items-center justify-center text-2xs leading-none hover:bg-[var(--color-hover)] hover:text-text-secondary"
+                  onClick={() => setPendingToolChoice(null)}
+                  aria-label={t('runmode.cancelToolChoice')}
+                >✕</button>
+              </span>
+            )}
+            {sidebarMode === 'work' ? (
+              <WorkTierSelector popDirection={heroSizing ? 'down' : 'up'} />
+            ) : (
+              <PermissionSelector
+                preset={permissionPreset}
+                onChangePreset={setPermissionPreset}
+                popDirection={heroSizing ? 'down' : 'up'}
+              />
+            )}
           </>
         )}
 
@@ -1179,9 +1327,23 @@ export default function ChatInput({ position }: ChatInputProps) {
           <ContextMeter />
           <ModeTrigger ref={modeTriggerRef} onClick={toggleModePanel} open={modePanelOpen} />
 
+          {/* DeepSeek 风格：思考开关（Chat only），紧挨联网搜索 */}
+          {sidebarMode === 'chat' && (
+            <Tooltip title={isDeepThink ? t('think.switchOn') : t('think.switchOff')} placement="top">
+              <button
+                className={clsx('ax-icon-button', isDeepThink && '!bg-primary-soft !text-primary')}
+                onClick={toggleDeepThink}
+                aria-label={t('think.switch')}
+                aria-pressed={isDeepThink}
+              >
+                <Brain size={16} weight={isDeepThink ? 'fill' : 'regular'} />
+              </button>
+            </Tooltip>
+          )}
+
           {/* Web search toggle is chat-only: Agent mode already has the
               WebSearch/WebFetch tools, so the model searches on its own. */}
-          {!isCode && (
+          {sidebarMode === 'chat' && (
             <Tooltip title={isWebSearch ? t('composer.webSearchOn') : t('composer.webSearch')} placement="top">
               <button
                 className={clsx('ax-icon-button', isWebSearch && '!bg-primary-soft !text-primary')}
@@ -1194,11 +1356,13 @@ export default function ChatInput({ position }: ChatInputProps) {
             </Tooltip>
           )}
 
-          <Tooltip title={t('composer.mic')}>
-            <button className="ax-icon-button" onClick={handleMicClick} aria-label={t('composer.mic')}>
-              <Microphone size={16} />
-            </button>
-          </Tooltip>
+          {sidebarMode === 'chat' && micSupported && (
+            <Tooltip title={t('composer.mic')}>
+              <button className="ax-icon-button" onClick={handleMicClick} aria-label={t('composer.mic')}>
+                <Microphone size={16} />
+              </button>
+            </Tooltip>
+          )}
 
           <button
             type="button"
@@ -1208,18 +1372,18 @@ export default function ChatInput({ position }: ChatInputProps) {
             )}
             onClick={handleSend}
             disabled={!hasInput && !isStreaming && !currentAgentRunning}
-            title={currentAgentRunning ? (hasInput ? t('composer.queueSend') : t('composer.stopTask')) : isStreaming ? t('composer.stopGenerate') : isCode ? t('composer.startTask') : t('composer.send')}
-            aria-label={currentAgentRunning ? (hasInput ? t('composer.queueSend') : t('composer.stopTask')) : isStreaming ? t('composer.stopGenerate') : isCode ? t('composer.startTask') : t('composer.send')}
+            title={currentAgentRunning ? (hasInput ? t('composer.queueSend') : t('composer.stopTask')) : isStreaming ? (hasInput ? t('composer.sendAfterStop') : t('composer.stopGenerate')) : isAgentSurface ? t('composer.startTask') : t('composer.send')}
+            aria-label={currentAgentRunning ? (hasInput ? t('composer.queueSend') : t('composer.stopTask')) : isStreaming ? (hasInput ? t('composer.sendAfterStop') : t('composer.stopGenerate')) : isAgentSurface ? t('composer.startTask') : t('composer.send')}
           >
             {(isStreaming || currentAgentRunning) ? (
               hasInput ? (
                 <ArrowUp size={16} weight="bold" />
               ) : (
-                <span className="inline-flex items-center justify-center w-[18px] h-[18px]">
+                <span className="inline-flex items-center justify-center w-5 h-5">
                   <span className="inline-block w-[10px] h-[10px] bg-current rounded-md" />
                 </span>
               )
-            ) : isCode ? (
+            ) : isAgentSurface ? (
               // Launch a parallel agent task — a "play/run" glyph
               <Play size={16} weight="fill" />
             ) : (
@@ -1255,6 +1419,7 @@ export default function ChatInput({ position }: ChatInputProps) {
 
       </div>
         )}
+        {sidebarMode === 'work' && heroSizing && renderWorkspaceStatus('below')}
       </div>{/* /inputGroup */}
     </div>
   );
@@ -1262,10 +1427,14 @@ export default function ChatInput({ position }: ChatInputProps) {
   return (
     <div
       ref={containerRef}
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
       className={clsx(
         'chat-input svg-center w-full flex flex-col items-center',
         isCenter
           ? 'absolute inset-0 flex items-center justify-center p-5 z-15 pointer-events-none'
+          : isFlowCenter
+            ? 'w-full max-w-[var(--content-max-width)] mx-auto relative z-10 px-2 py-1'
           : 'px-6 pb-5 shrink-0 relative z-20',
       )}
     >
@@ -1277,10 +1446,11 @@ export default function ChatInput({ position }: ChatInputProps) {
           <div className="ax-hero-headline flex flex-col items-start w-full">
             <span className="flex items-center gap-2">
               <img src={logoPng} alt="Auraxis" className="w-9 h-9 object-contain" />
-              {ACCOUNT_NAME ? `${ACCOUNT_NAME}${t('chat.greetingComma')}` : ''}{greeting()}{t('chat.greetingComma')}
+              {greeting()}{t('chat.greetingComma')}
+              {accountName && <span>{accountName}</span>}
             </span>
             <span className="mt-1 text-md font-semibold leading-6 text-[var(--color-text-muted)]">
-              {t('chat.heroPrompt')}
+              {t(heroSubtitleKey ?? 'chat.heroPrompt')}
             </span>
           </div>
           {inputCard}

@@ -34,6 +34,18 @@ class PluginManager {
 
   /** Install from a dynamically loaded module object */
   install(plugin: Plugin, filePath: string): boolean {
+    return this.installInternal(plugin, filePath, true);
+  }
+
+  /**
+   * 静默安装随应用打包的内置插件：不弹原生 confirm。
+   * 内置插件来源可信、零权限，首次启动自动装配一次即可。
+   */
+  installBuiltin(plugin: Plugin, filePath: string): boolean {
+    return this.installInternal(plugin, filePath, false);
+  }
+
+  private installInternal(plugin: Plugin, filePath: string, requireConfirm: boolean): boolean {
     const store = usePluginStore.getState();
     if (store.installedPlugins.find((p) => p.id === plugin.id)) return false;
 
@@ -54,10 +66,12 @@ class PluginManager {
       ? `\n\n${riskLines.join('\n')}`
       : '';
 
-    const confirmed = confirm(
-      `安装插件 "${plugin.name}" v${plugin.version}？\n\n${summary}${riskText}\n\n插件将运行在渲染进程中，请确保来源可信。`,
-    );
-    if (!confirmed) return false;
+    if (requireConfirm) {
+      const confirmed = confirm(
+        `安装插件 "${plugin.name}" v${plugin.version}？\n\n${summary}${riskText}\n\n插件将运行在渲染进程中，请确保来源可信。`,
+      );
+      if (!confirmed) return false;
+    }
 
     const info: InstalledPlugin = {
       id: plugin.id, name: plugin.name, version: plugin.version,

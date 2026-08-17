@@ -8,6 +8,8 @@ import { useInspectorStore } from '../useInspectorStore';
 
 type ChatCallbacks = {
   onChunk?: (chunk: string) => void;
+  onThinking?: (chunk: string) => void;
+  onUsage?: (usage: any) => void;
   onDone?: () => void;
   onError?: (error: string) => void;
   onEvent?: (event: any) => void;
@@ -16,22 +18,44 @@ type ChatCallbacks = {
 const mocks = vi.hoisted(() => ({
   chatStream: vi.fn(),
   sendQuery: vi.fn(),
+  clearQueryContext: vi.fn(),
   getProjectContext: vi.fn(),
   getByProject: vi.fn(),
+  readForQuery: vi.fn(),
   chatLogAppend: vi.fn(),
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
   (window as any).electronAPI = {
-    ai: { chatStream: mocks.chatStream, sendQuery: mocks.sendQuery },
+    ai: { chatStream: mocks.chatStream, sendQuery: mocks.sendQuery, clearQueryContext: mocks.clearQueryContext },
     context: { getProjectContext: mocks.getProjectContext },
-    memory: { getByProject: mocks.getByProject },
+    memory: { getByProject: mocks.getByProject, readForQuery: mocks.readForQuery },
     chatLog: { append: mocks.chatLogAppend },
     undo: { revertLast: vi.fn() },
   };
   mocks.getProjectContext.mockResolvedValue({ ok: true, data: { instructionsMd: '', fileTree: '', packageJson: '' } });
   mocks.getByProject.mockResolvedValue({ ok: true, data: [] });
+  mocks.readForQuery.mockResolvedValue({
+    ok: true,
+    data: {
+      context: [],
+      policy: { requireCitation: true, refuseOnUncertain: true, scope: 'C:/proj', maxTokens: 900, defaultRules: [] },
+      facts: [],
+      diagnostics: {
+        routes: [],
+        budget: { allocated: 900, used: 0, truncated: false },
+        missingEvidence: false,
+        unsupportedExtraction: false,
+        staleState: false,
+        retrievalLoss: false,
+        modelBehaviorFlagged: false,
+        latencyMs: 1,
+        deterministic: true,
+      },
+      readRunId: 'run-1',
+    },
+  });
   mocks.chatLogAppend.mockResolvedValue({ ok: true });
   useSessionStore.setState({ sessions: [], currentSessionId: null });
   useChatStore.setState({ messages: [], isStreaming: false, inputValue: '' });
@@ -92,6 +116,136 @@ describe('useChatStore — sendMessage 聊天路径', () => {
     expect(mocks.chatStream).not.toHaveBeenCalled();
     expect(useChatStore.getState().messages).toHaveLength(0);
   });
+
+  it('关闭思考与联网搜索时，请求体明确传 false', async () => {
+    let cb: ChatCallbacks = {};
+    mocks.chatStream.mockImplementation((_p: unknown, callbacks: ChatCallbacks) => {
+      cb = callbacks;
+      return { unsubscribe: vi.fn() };
+    });
+    useChatStore.setState({ inputValue: '普通问题', isDeepThink: false, isWebSearch: false });
+
+    await useChatStore.getState().sendMessage();
+    const payload = mocks.chatStream.mock.calls[0][0] as any;
+    expect(payload.isDeepThink).toBe(false);
+    expect(payload.isWebSearch).toBe(false);
+    expect(useChatStore.getState().messages[1].thinkingEnabled).toBe(false);
+
+    cb.onChunk!('普通回答');
+    cb.onDone!();
+    expect(useChatStore.getState().messages[1].thinkingBlocks).toBeUndefined();
+  });
+
+  it('开启思考时 onThinking 流式写入思考块', async () => {
+    let cb: ChatCallbacks = {};
+    mocks.chatStream.mockImplementation((_p: unknown, callbacks: ChatCallbacks) => {
+      cb = callbacks;
+      return { unsubscribe: vi.fn() };
+    });
+    useChatStore.setState({ inputValue: '复杂问题', isDeepThink: true, isWebSearch: true });
+
+    await useChatStore.getState().sendMessage();
+    const payload = mocks.chatStream.mock.calls[0][0] as any;
+    expect(payload.isDeepThink).toBe(true);
+    expect(payload.isWebSearch).toBe(true);
+    expect(useChatStore.getState().messages[1].thinkingEnabled).toBe(true);
+
+    cb.onThinking!('第一步推理');
+    cb.onThinking!('，第二步推理');
+    cb.onChunk!('最终答案');
+    cb.onDone!();
+
+    const assistant = useChatStore.getState().messages[1];
+    expect(assistant.thinkingBlocks).toEqual([{ content: '第一步推理，第二步推理' }]);
+    expect(assistant.content).toBe('最终答案');
+  });
+
+  it('Chat onUsage 累积输入/输出/推理/缓存命中 tokens', async () => {
+    let cb: ChatCallbacks = {};
+    mocks.chatStream.mockImplementation((_p: unknown, callbacks: ChatCallbacks) => {
+      cb = callbacks;
+      return { unsubscribe: vi.fn() };
+    });
+    useChatStore.setState({
+      inputValue: '用量测试',
+      isDeepThink: false,
+      isWebSearch: false,
+      exactInputTokens: 0,
+      exactOutputTokens: 0,
+      reasoningOutputTokens: 0,
+      cacheHitTokens: 0,
+      cacheMissTokens: 0,
+    });
+
+    await useChatStore.getState().sendMessage();
+    cb.onUsage!({ inputTokens: 100, outputTokens: 20, reasoningTokens: 8, cacheHitTokens: 70, cacheMissTokens: 30 });
+    cb.onDone!();
+
+    const s = useChatStore.getState();
+    expect(s.exactInputTokens).toBe(100);
+    expect(s.exactOutputTokens).toBe(20);
+    expect(s.reasoningOutputTokens).toBe(8);
+    expect(s.cacheHitTokens).toBe(70);
+    expect(s.cacheMissTokens).toBe(30);
+  });
+
+  it('continueCode 使用前缀续写并流式写入助手消息', async () => {
+    let cb: ChatCallbacks = {};
+    mocks.chatStream.mockImplementation((_p: unknown, callbacks: ChatCallbacks) => {
+      cb = callbacks;
+      return { unsubscribe: vi.fn() };
+    });
+    useChatStore.setState({
+      messages: [],
+      isStreaming: false,
+      inputValue: '',
+      exactInputTokens: 0,
+      exactOutputTokens: 0,
+      reasoningOutputTokens: 0,
+      cacheHitTokens: 0,
+      cacheMissTokens: 0,
+    });
+
+    useChatStore.getState().continueCode('ts', 'const a = 1;');
+    const payload = mocks.chatStream.mock.calls[0][0] as any;
+    expect(payload.prefix).toEqual({ content: '```ts\nconst a = 1;', stop: ['```'] });
+    expect(payload.isDeepThink).toBe(false);
+
+    cb.onChunk!('const b = 2;');
+    cb.onUsage!({ inputTokens: 10, outputTokens: 2 });
+    cb.onDone!();
+
+    const assistant = useChatStore.getState().messages.at(-1)!;
+    expect(assistant.role).toBe('assistant');
+    expect(assistant.content).toContain('```ts');
+    expect(assistant.content).toContain('const b = 2;');
+    expect(useChatStore.getState().isStreaming).toBe(false);
+    expect(useChatStore.getState().exactInputTokens).toBe(10);
+  });
+});
+
+describe('useChatStore — 会话级草稿', () => {
+  it('不同会话的草稿互不串味，发送后清空当前会话草稿', async () => {
+    useSessionStore.setState({ currentSessionId: 'session-a' });
+    useChatStore.getState().setInputValue('草稿 A');
+    useSessionStore.setState({ currentSessionId: 'session-b' });
+    useChatStore.getState().setInputValue('草稿 B');
+
+    expect(useChatStore.getState().drafts['session-a']).toBe('草稿 A');
+    expect(useChatStore.getState().drafts['session-b']).toBe('草稿 B');
+    expect(useChatStore.getState().inputValue).toBe('草稿 B');
+
+    useSessionStore.setState({ currentSessionId: 'session-a' });
+    expect(useChatStore.getState().inputValue).toBe('草稿 B'); // 未调用 switchSession，仅验证草稿映射
+  });
+
+  it('clearMessages 清空当前会话草稿', () => {
+    useSessionStore.setState({ currentSessionId: 'session-c' });
+    useChatStore.getState().setInputValue('待清空');
+    useChatStore.getState().clearMessages();
+    expect(useChatStore.getState().inputValue).toBe('');
+    expect(useChatStore.getState().drafts['session-c']).toBe('');
+  });
 });
 
 describe('useChatStore — sendMessage 统一引擎路径', () => {
@@ -114,6 +268,7 @@ describe('useChatStore — sendMessage 统一引擎路径', () => {
 
   it('工具/思考/压缩/披露等事件全部落到消息状态', async () => {
     const { getCb, payload } = setupQuery();
+    useSessionStore.setState({ currentSessionId: 'session-q' });
     useChatStore.setState({ inputValue: '做点事', currentProjectPath: 'C:/proj' });
 
     await useChatStore.getState().sendMessage();
@@ -144,6 +299,21 @@ describe('useChatStore — sendMessage 统一引擎路径', () => {
     expect(useInspectorStore.getState().systemMessages).toHaveLength(1);
     expect(state.isStreaming).toBe(false);
     expect(payload().projectRoot).toBe('C:/proj');
+    expect(payload().sessionId).toBe('session-q');
+  });
+
+  it('编辑历史消息时通知主进程作废规范上下文', async () => {
+    setupQuery();
+    useSessionStore.setState({ currentSessionId: 'session-q' });
+    useChatStore.setState({
+      inputValue: '',
+      messages: [
+        { id: 'u1', role: 'user', content: '旧问题', timestamp: 1 },
+        { id: 'a1', role: 'assistant', content: '旧回答', timestamp: 2 },
+      ],
+    });
+    useChatStore.getState().editMessage('u1', '新问题');
+    expect(mocks.clearQueryContext).toHaveBeenCalledWith('session-q');
   });
 
   it('工具错误与中止状态落盘', async () => {
@@ -187,9 +357,25 @@ describe('useChatStore — 记忆与项目指令注入', () => {
       return { unsubscribe: vi.fn() };
     });
     mocks.getProjectContext.mockResolvedValue({ ok: true, data: { instructionsMd: 'RULES', fileTree: '', packageJson: '' } });
-    mocks.getByProject.mockResolvedValue({
+    mocks.readForQuery.mockResolvedValue({
       ok: true,
-      data: [{ id: 'm1', type: 'decision', title: 'T', content: '使用 React', timestamp: 1, importance: 4 }],
+      data: {
+        context: [{ beliefId: 'm1', title: 'T', text: '使用 React', evidenceIds: [], ts: 1, supportStrength: 0.5, score: 0.9, routes: ['keyword'] }],
+        policy: { requireCitation: true, refuseOnUncertain: true, scope: 'C:/proj', maxTokens: 900, defaultRules: [] },
+        facts: ['- [project] T：使用 React'],
+        diagnostics: {
+          routes: [],
+          budget: { allocated: 900, used: 1, truncated: false },
+          missingEvidence: false,
+          unsupportedExtraction: false,
+          staleState: false,
+          retrievalLoss: false,
+          modelBehaviorFlagged: false,
+          latencyMs: 1,
+          deterministic: true,
+        },
+        readRunId: 'run-1',
+      },
     });
     useChatStore.setState({ inputValue: '做点事', currentProjectPath: 'C:/proj' });
 
@@ -197,6 +383,8 @@ describe('useChatStore — 记忆与项目指令注入', () => {
 
     const sentMessages = mocks.sendQuery.mock.calls[0][0].messages as any[];
     expect(sentMessages.some((m) => String(m.content).includes('RULES'))).toBe(true);
+    expect(mocks.sendQuery.mock.calls[0][0].memoryContext).toContain('## 项目记忆（带证据溯源，来自之前的会话）');
+    expect(sentMessages.some((m) => String(m.content).startsWith('## 项目记忆（带证据溯源，来自之前的会话）'))).toBe(false);
     expect(useChatStore.getState().messages.some((m) => (m as any).disclosure?.source === 'memory')).toBe(true);
     cb.onDone!();
   });

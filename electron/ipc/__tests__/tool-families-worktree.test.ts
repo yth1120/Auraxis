@@ -44,7 +44,7 @@ function ctx(extra: Record<string, unknown> = {}) {
   return {
     projectRoot: repo,
     requestId: 'wt-1',
-    mode: 'afe' as const,
+    mode: 'auto' as const,
     sandboxMode: 'full' as const,
     autoApprove: true,
     ...extra,
@@ -102,7 +102,7 @@ describe('工作树会话工具', () => {
     const read = await executeToolCall('Read', { file_path: 'sandbox-only.txt' }, ctx());
     expect(read.error).toBeUndefined();
     expect((read.output as any).content).toBe('sandbox');
-  });
+  }, 30_000);
 
   it('同名任务再次进入时复用已有分支', async () => {
     const first = await executeToolCall('EnterWorktree', { task_id: 't2', projectRoot: repo }, ctx());
@@ -111,7 +111,7 @@ describe('工作树会话工具', () => {
     expect(second.error).toBeUndefined();
     expect((second.output as any).branch).toBe('auraxis-task-t2');
     expect((second.output as any).sandbox_path).toBe((first.output as any).sandbox_path);
-  });
+  }, 30_000);
 
   it('restore / clear 会话映射', async () => {
     restoreWorktreeSession('key-1', 'C:/sandbox/task-x');

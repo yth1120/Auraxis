@@ -18,6 +18,15 @@ export type SessionEventType =
   | 'system'
   | 'agent_status';
 
+/** Canonical LLM context snapshot persisted as a `system` event in chat logs.
+ *  Stores the exact messages array sent to the model so the next turn can
+ *  replay tool calls/results byte-identically (cache-aligned prefix reuse). */
+export const LLM_CONTEXT_SNAPSHOT_EVENT = 'llm_context_v1' as const;
+
+/** Tombstone appended when the renderer edits/truncates conversation history;
+ *  any snapshot with a lower seq is no longer trusted. */
+export const LLM_CONTEXT_CLEAR_EVENT = 'llm_context_clear' as const;
+
 export interface SessionEvent {
   /** Monotonic per-session sequence number (assigned by the store). */
   seq: number;
@@ -34,7 +43,7 @@ export interface SessionMeta {
   updated?: number;
   model?: string;
   projectRoot?: string;
-  mode?: 'chat' | 'code';
+  mode?: 'chat' | 'work' | 'code';
   messageCount?: number;
   pinned?: boolean;
   branchedFrom?: { sessionId: string; messageId: string; title: string };
@@ -54,7 +63,7 @@ export interface SessionSummary {
   updated: number;
   model?: string;
   projectRoot?: string;
-  mode?: 'chat' | 'code';
+  mode?: 'chat' | 'work' | 'code';
   pinned?: boolean;
   branchedFrom?: { sessionId: string; messageId: string; title: string };
   messageCount: number;
@@ -90,7 +99,7 @@ export interface ProjectedSession {
   updated: number;
   model?: string;
   projectRoot?: string;
-  mode?: 'chat' | 'code';
+  mode?: 'chat' | 'work' | 'code';
   pinned?: boolean;
   branchedFrom?: { sessionId: string; messageId: string; title: string };
   messageCount: number;

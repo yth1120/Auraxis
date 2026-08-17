@@ -28,6 +28,9 @@ import { registerStatsHandlers } from './stats-handlers';
 import { registerSkillHandlers } from './skill-handlers';
 import { registerGoalHandlers } from './goal-handlers';
 import { registerCredentialHandlers } from './credentials-handlers';
+import { registerAuthHandlers } from './auth-handlers';
+import { registerConnectorHandlers } from './connector-handlers';
+import { registerInstructionsHandlers } from './instructions-handlers';
 import { registerActionHandlers } from './actions-handlers';
 import { registerTerminalHandlers, cleanupTerminalSessions, registerAgentShellHandlers, cleanupAgentShellWatchers } from './terminal-handlers';
 import { registerTerminalTaskHandlers } from './task-monitor';
@@ -41,6 +44,7 @@ import { registerFeedbackHandlers } from './feedback-handlers';
 import { registerTitleHandlers } from './title-handlers';
 import { registerPluginStateHandlers } from './plugin-state-handlers';
 import { registerCoverageIpc } from './coverage-handlers';
+import { registerTokenizerIpc } from '../tokenizer';
 import { readSettings, writeSettings } from './settings-store';
 import { getAllModels } from './model-config';
 import { getActiveWorktree } from './tool-handlers';
@@ -50,6 +54,22 @@ export function isWindows11(): boolean {
   if (process.platform !== 'win32') return false;
   const build = Number(os.release().split('.')[2] ?? 0);
   return Number.isFinite(build) && build >= 22000;
+}
+
+/**
+ * Whether the current window was created with `transparent: true` and the
+ * Acrylic material pre-applied. This can only be decided at window creation;
+ * a window started by an older main process needs a full restart to gain the
+ * frosted-glass client area.
+ */
+let acrylicWindowReady = false;
+
+export function markAcrylicWindowReady(): void {
+  acrylicWindowReady = true;
+}
+
+export function isAcrylicWindowReady(): boolean {
+  return acrylicWindowReady;
 }
 
 /** Broadcast worktree sandbox status change to all renderer windows. */
@@ -104,7 +124,16 @@ export function registerIpcHandlers() {
     if (!win) return { ok: false, error: 'window unavailable' };
     if (!isWindows11()) return { ok: false, error: 'unsupported' };
     try {
-      win.setBackgroundMaterial(enabled ? 'acrylic' : 'none');
+      if (enabled) {
+        // 窗口必须先变为全透明，侧边栏的半透明底色才能透出 Acrylic 的模糊桌面。
+        // 只切 material 不切底色时，页面透明但窗口底色仍是不透明深色，
+        // 表现为"侧边栏看起来实心、只有边框线变化"。
+        win.setBackgroundColor('#00000000');
+        win.setBackgroundMaterial('acrylic');
+      } else {
+        win.setBackgroundMaterial('none');
+        win.setBackgroundColor('#0a0202');
+      }
       return { ok: true };
     } catch (error: any) {
       return { ok: false, error: error?.message || String(error) };
@@ -113,6 +142,10 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('window:backgroundMaterialSupported', (_event) => {
     return { ok: true, data: isWindows11() };
+  });
+
+  ipcMain.handle('window:glassState', (_event) => {
+    return { ok: true, data: { supported: isWindows11(), ready: acrylicWindowReady } };
   });
 
   ipcMain.handle('shell:openExternal', async (_event, url: string) => {
@@ -172,7 +205,19 @@ export function registerIpcHandlers() {
   });
 
   // Settings handlers
-  const API_KEY_KEYS = new Set(['deepseekApiKey']);
+  const API_KEY_KEYS = new Set([
+    'deepseekApiKey',
+    'exaApiKey',
+    'perplexityApiKey',
+    'slackToken',
+    'driveToken',
+    'notionToken',
+  ]);
+  const PROVIDER_KEY_FIELDS: Record<string, string> = {
+    deepseek: 'deepseekApiKey',
+    exa: 'exaApiKey',
+    perplexity: 'perplexityApiKey',
+  };
 
   ipcMain.handle('settings:get', async (_event, key: string) => {
     try {
@@ -206,7 +251,8 @@ export function registerIpcHandlers() {
   ipcMain.handle('settings:getApiKey', async (_event, provider: string) => {
     try {
       const settings = await readSettings();
-      const keyField = `${provider}ApiKey` as keyof typeof settings;
+      const keyField = PROVIDER_KEY_FIELDS[provider];
+      if (!keyField) return { ok: false, error: `不支持的 provider: ${provider}` };
       const key = (settings as Record<string, unknown>)[keyField];
       return { ok: true, data: (typeof key === 'string' ? key : '') || '' };
     } catch (error: any) {
@@ -214,13 +260,15 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('api:setKey', async (_event, _provider: string, apiKey: string) => {
+  ipcMain.handle('api:setKey', async (_event, provider: string, apiKey: string) => {
     try {
       if (typeof apiKey !== 'string') return { ok: false, error: 'API Key 不能为空' };
+      const field = PROVIDER_KEY_FIELDS[provider];
+      if (!field) return { ok: false, error: `不支持的 provider: ${provider}` };
       const settings = await readSettings();
       // Empty string = explicit clear. Rejecting it here meant "清除 API Key"
       // only wiped the in-memory copy, and the old key came back on restart.
-      settings.deepseekApiKey = apiKey;
+      settings[field] = apiKey;
       await writeSettings(settings);
       return { ok: true };
     } catch (error: any) {
@@ -238,6 +286,9 @@ export function registerIpcHandlers() {
   });
 
   // Register domain handlers
+  registerAuthHandlers();
+  registerConnectorHandlers();
+  registerInstructionsHandlers();
   registerFileHandlers();
   registerProjectHandlers();
   registerAiHandlers();
@@ -256,6 +307,7 @@ export function registerIpcHandlers() {
   registerUndoIpc();
   registerSnapshotHandlers();
   registerLintHandlers();
+  registerTokenizerIpc();
   registerPlanHandlers();
   registerCronIpc();
   initCronJobs();

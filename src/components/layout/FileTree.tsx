@@ -170,19 +170,19 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
         {isDir && (
           <>
     <Tooltip title={t('ft.newFile')} placement="top">
-              <button className="flex items-center justify-center w-[18px] h-[18px] border-none bg-transparent text-faint rounded-[5px] cursor-pointer transition-colors duration-150 ease-out hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => { e.stopPropagation(); handleStartCreate(entryPath, 'createFile'); }}>
+              <button className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-faint rounded-md cursor-pointer transition-colors duration-150 ease-out hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => { e.stopPropagation(); handleStartCreate(entryPath, 'createFile'); }}>
                 <FileAddOutlined style={{ fontSize: 10 }} />
               </button>
             </Tooltip>
     <Tooltip title={t('ft.newFolder')} placement="top">
-              <button className="flex items-center justify-center w-[18px] h-[18px] border-none bg-transparent text-faint rounded-[5px] cursor-pointer transition-colors duration-150 ease-out hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => { e.stopPropagation(); handleStartCreate(entryPath, 'createFolder'); }}>
+              <button className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-faint rounded-md cursor-pointer transition-colors duration-150 ease-out hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => { e.stopPropagation(); handleStartCreate(entryPath, 'createFolder'); }}>
                 <FolderAddOutlined style={{ fontSize: 10 }} />
               </button>
             </Tooltip>
           </>
         )}
     <Tooltip title={t('ft.rename')} placement="top">
-          <button className="flex items-center justify-center w-[18px] h-[18px] border-none bg-transparent text-faint rounded-[5px] cursor-pointer transition-colors duration-150 ease-out hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => { e.stopPropagation(); handleStartRename(entryPath, entryName); }}>
+          <button className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-faint rounded-md cursor-pointer transition-colors duration-150 ease-out hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => { e.stopPropagation(); handleStartRename(entryPath, entryName); }}>
             <EditOutlined style={{ fontSize: 10 }} />
           </button>
         </Tooltip>
@@ -198,7 +198,7 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
             style: { color: '#fff' },
           }}
         >
-          <button className="flex items-center justify-center w-[18px] h-[18px] border-none bg-transparent text-faint rounded-[5px] cursor-pointer transition-colors duration-150 ease-out hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => e.stopPropagation()}>
+          <button className="flex items-center justify-center w-5 h-5 border-none bg-transparent text-faint rounded-md cursor-pointer transition-colors duration-150 ease-out hover:bg-[var(--color-hover)] hover:text-text-primary" onClick={(e) => e.stopPropagation()}>
             <DeleteOutlined style={{ fontSize: 10 }} />
           </button>
         </Popconfirm>
@@ -320,7 +320,7 @@ export default function FileTree({ onFileSelect }: FileTreeProps) {
 
   /* ── Empty / loading states ────────────────────────── */
 
-  const btnBase = 'inline-flex items-center gap-1 mt-2 px-[14px] py-[5px] text-xs rounded-md cursor-pointer transition-colors duration-150 ease-out';
+  const btnBase = 'inline-flex items-center gap-1 mt-2 px-3.5 py-1.5 text-xs rounded-md cursor-pointer transition-colors duration-150 ease-out';
   const selectBtn = `${btnBase} border border-primary-border bg-transparent text-text-primary hover:bg-primary-soft`;
   const refreshBtn = 'flex items-center justify-center w-[22px] h-[22px] border-none bg-transparent text-muted rounded-md cursor-pointer text-xs shrink-0 transition-colors duration-150 ease-out hover:bg-primary-soft hover:text-primary';
 

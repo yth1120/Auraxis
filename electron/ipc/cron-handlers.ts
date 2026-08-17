@@ -340,7 +340,7 @@ async function runCronAgent(job: CronJob): Promise<void> {
       apiKey,
       priority: 'normal',
       autoApprove: true,
-      mode: 'afe',
+      mode: 'auto',
       maxIterations: 50,
       metadata: { cronJobId: job.id },
     },

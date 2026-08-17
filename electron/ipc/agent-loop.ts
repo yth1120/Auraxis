@@ -5,14 +5,18 @@ import axios from 'axios';
 import { executeToolCall } from './tool-handlers';
 import { runHooksFor } from '../hooks';
 import { loadAgentInstructions } from '../agent-instructions';
+import { appendWorkRules } from '../work-docs-policy';
 import type { ToolDef } from '../tool-defs';
 import type { BatchToolResult } from '../tool-registry';
 import { estimateTokensForMessages } from '../utils/token-counter';
+import { compressHistorySteps } from '../step-compressor';
+import { workspaceDrift, driftSummary } from '../workspace-drift';
 import { devLog } from './shared';
 import { invokeLlm, llmClientInvoke } from './llm-adapter';
 import { runStep, createStepState } from './step-engine';
 import type { StepEngineConfig } from './step-engine';
 import { makeTurnId } from './engine-events';
+import type { DeepSeekToolChoice } from '../contracts/advanced';
 
 function safeStringify(v: unknown): string {
   try { return JSON.stringify(v); } catch { return String(v).slice(0, 500); }
@@ -37,7 +41,8 @@ export async function readErrorBody(err: any): Promise<string> {
 }
 import { stripModelArtifacts, createStreamFilter } from './text-filter';
 import type { AgentLogEntry } from '../advanced-defs';
-import type { PermissionMode } from '../types';
+import type { ApprovalPolicy } from '../types';
+import type { WorkAutonomyTier } from '../types';
 import type { SandboxMode } from '../sandbox-policy';
 
 // ─── Shared types ──────────────────────────────────────
@@ -101,6 +106,13 @@ export interface ContextConfig {
   maxRounds: number;
   /** Fraction of oldest rounds to compress (0-1). Default 0.5 */
   compressRatio: number;
+  /**
+   * 'round' = 传统轮次压缩（LLM/规则摘要）；'step' = AGORA 步骤级压缩
+   * （动作语法完整保留，免推理）。默认 'round'；agent 循环默认 'step'。
+   */
+  compressMode?: 'round' | 'step';
+  /** step 模式下始终保留的最近步骤数（AGORA always-keep floor）。默认 6。 */
+  stepKeepRecent?: number;
   /** Use LLM to generate summaries (default true). Falls back to rule-based on failure. */
   useLLMSummary?: boolean;
   /**
@@ -131,6 +143,8 @@ export interface AgentStateSnapshot {
   toolCallCount: number;
   messagesCount: number;
   plan: TaskPlan | null;
+  /** Which UI surface created this task (used to separate work / code lists). */
+  surface?: 'chat' | 'work' | 'code';
 }
 
 export interface AgentLoopConfig {
@@ -149,8 +163,16 @@ export interface AgentLoopConfig {
   signal?: AbortSignal;
   checkPermission?: (toolName: string, input: Record<string, unknown>, toolCallId?: string) => Promise<boolean>;
   autoApprove?: boolean;
-  mode: PermissionMode;
+  mode: ApprovalPolicy;
   approvedPlanSteps?: string[];
+  /** Work 模式执行自主度档位（透传到工具门禁）。 */
+  workTier?: WorkAutonomyTier;
+  /** Which UI surface created this run — 'work' enforces docs-only writes. */
+  surface?: 'chat' | 'work' | 'code';
+  /** 项目工作区根目录（含主根）。 */
+  workspaceRoots?: string[];
+  /** 项目可写根目录（roots 的子集）。 */
+  writableRoots?: string[];
   /** Called after a plan is generated in 'plan' mode. Await to pause the loop
    *  until the user approves. Returns approved step IDs, or null on timeout/reject. */
   onPlanGenerated?: (plan: TaskPlan) => Promise<string[] | null>;
@@ -158,10 +180,14 @@ export interface AgentLoopConfig {
   /** Sub-agent recursion depth for this run. Threaded into tool ctx so the
    *  Agent tool can enforce the max-depth limit. Top-level run = 0. */
   depth?: number;
+  /** Agent 显示名（MAP-Graph 角色自动绑定；默认按名称推导）。 */
+  agentName?: string;
   temperature?: number;
   contextConfig?: ContextConfig;
   isDeepThink?: boolean;
-  reasoningEffort?: 'high' | 'max';
+  reasoningEffort?: 'low' | 'high' | 'max';
+  /** DeepSeek tool_choice：auto/none/required/强制指定工具。 */
+  toolChoice?: DeepSeekToolChoice;
   /** Business iteration cap — agent exits gracefully with result when hit. Default 25. */
   maxIterations?: number;
   /** Per-call sandbox mode for tool execution (falls back to env, then full). */
@@ -174,6 +200,8 @@ export interface AgentLoopConfig {
   planModel?: string;
   /** LLM adapter id — defaults to the built-in deepseek adapter. */
   adapter?: string;
+  /** 主模型重试耗尽后的降级模型。 */
+  fallbackModel?: string;
   /** Test seam — overrides the real tool dispatcher. */
   executeTool?: typeof executeToolCall;
   /** Active goal for this run （目标状态）: injected into the prompt and
@@ -207,15 +235,29 @@ export type AgentLoopEvent =
   | { type: 'plan_created'; plan: TaskPlan }
   | { type: 'plan_updated'; plan: TaskPlan }
   | { type: 'deviance_warning'; message: string }
-  | { type: 'context_injected'; source: 'instructions' | 'memory'; producer: string; detail?: string }
+  | { type: 'context_injected'; source: 'instructions' | 'memory' | 'workspace'; producer: string; detail?: string }
   | { type: 'context_compressed'; tokensBefore: number; tokensAfter: number; messagesRemoved?: number; tokensSaved?: number }
-  | { type: 'usage'; inputTokens: number; outputTokens: number }
+  | {
+      type: 'usage';
+      inputTokens: number;
+      outputTokens: number;
+      reasoningTokens?: number;
+      cacheHitTokens?: number;
+      cacheMissTokens?: number;
+    }
   | { type: 'done' }
   | { type: 'error'; error: string }
   // ── Unified engine lifecycle (engine-events contract) ──
   | { type: 'tool_aborted'; toolCallId: string; toolName: string; input: Record<string, unknown>; error: string; stepGroupId: string }
   | { type: 'system_message'; level: 'warning' | 'info'; content: string }
-  | { type: 'usage_update'; inputTokens: number; outputTokens: number; reasoningTokens?: number }
+  | {
+      type: 'usage_update';
+      inputTokens: number;
+      outputTokens: number;
+      reasoningTokens?: number;
+      cacheHitTokens?: number;
+      cacheMissTokens?: number;
+    }
   | { type: 'turn_start'; turnId: string; timestamp: number }
   | { type: 'turn_end'; turnId: string; reason: string; timestamp: number }
   | { type: 'step_start'; iteration: number; timestamp: number }
@@ -592,10 +634,16 @@ export async function toolExecutorExecute(params: {
   autoApprove?: boolean;
   toolCallId?: string;
   abortSignal?: AbortSignal;
-  mode: PermissionMode;
+  mode: ApprovalPolicy;
   approvedPlanSteps?: string[];
+  workTier?: WorkAutonomyTier;
+  workspaceRoots?: string[];
+  writableRoots?: string[];
 }): Promise<ToolResults> {
-  const { toolCalls, projectRoot, requestId, checkPermission, autoApprove, toolCallId, abortSignal, mode, approvedPlanSteps } = params;
+  const {
+    toolCalls, projectRoot, requestId, checkPermission, autoApprove, toolCallId,
+    abortSignal, mode, approvedPlanSteps, workTier, workspaceRoots, writableRoots,
+  } = params;
   const results: ToolResult[] = [];
   let hasErrors = false;
 
@@ -614,6 +662,9 @@ export async function toolExecutorExecute(params: {
         toolCallId: tc.id,
         mode,
         approvedPlanSteps,
+        workTier,
+        workspaceRoots,
+        writableRoots,
       });
       output = result.output;
       error = result.error;
@@ -886,6 +937,14 @@ export const ContextManager = {
     // Early return: check both token and round thresholds
     if (!useTokenBased && countRounds(messages) <= config.maxRounds) return messages;
     if (useTokenBased && estimateTokens(messages) <= config.maxTokensBeforeCompress!) return messages;
+
+    // AGORA 步骤级压缩：整步保留/整步丢弃，永不拆分工具调用与结果。
+    if ((config.compressMode ?? 'round') === 'step') {
+      return compressHistorySteps(messages, {
+        keepRecentSteps: config.stepKeepRecent ?? 6,
+        plan,
+      });
+    }
 
     // Identify system messages (always at very beginning)
     const systemMsgs: any[] = [];
@@ -1179,6 +1238,8 @@ async function runPlanningPhase(params: {
       systemPrompt: PLANNING_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: planningUserMsg }],
       tools: [],
+      // 官方 JSON Output：保证计划输出是合法 JSON，避免 markdown 包裹导致的解析失败。
+      responseFormat: 'json_object',
       signal: signal || new AbortController().signal,
     });
     if (planAssistant?.rawText) {
@@ -1202,14 +1263,14 @@ async function runPlanningPhase(params: {
   return null;
 }
 
-function setupInitialMessages(systemPrompt: string, activePlan: TaskPlan | null, mode: PermissionMode = 'ask'): any[] {
+function setupInitialMessages(systemPrompt: string, activePlan: TaskPlan | null, mode: ApprovalPolicy = 'ask'): any[] {
   const msgs: any[] = [];
   const workGuide =
     '请根据 system prompt 中的任务描述开始工作。\n' +
     '节奏由你自主决定：可以直接执行，也可以先探索理解再动手；多步骤任务如需跟踪进度可以使用 TodoWrite。\n' +
     (mode === 'plan'
       ? '当前为计划模式：先制定执行计划并等待用户批准，批准后再开始执行；未批准前不要调用修改类工具。'
-      : mode === 'afe'
+      : mode === 'auto'
         ? '当前为全自动模式：可自主决定并执行所有工具，无需向用户请求确认。'
         : '当前为交互模式：写文件、执行命令等风险操作需要先向用户确认。');
   msgs.push({ role: 'system', content: systemPrompt });
@@ -1337,10 +1398,36 @@ export async function agentLoopRun(config: AgentLoopConfig): Promise<AgentLoopRe
   if (config.goal) {
     effectiveSystemPrompt += `\n\n## 当前目标\n${config.goal.text}\n（最多执行 ${config.goal.maxRounds} 轮；达到轮次上限时总结当前进展并结束）`;
   }
+  if (config.surface === 'work') {
+    try {
+      const { readSettings } = await import('./settings-store');
+      const settings = await readSettings();
+      const before = effectiveSystemPrompt;
+      effectiveSystemPrompt = appendWorkRules(effectiveSystemPrompt, config.surface, {
+        clarify: settings.clarifyBeforeWork !== false,
+      });
+      if (effectiveSystemPrompt !== before) {
+        observer.emit({
+          type: 'context_injected',
+          source: 'instructions',
+          producer: 'Work 规则',
+          detail: '已注入 Work 边界与澄清规则',
+        });
+      }
+    } catch {
+      // Settings unavailable — still keep docs-only rule from the caller.
+      effectiveSystemPrompt = appendWorkRules(effectiveSystemPrompt, config.surface, { clarify: true });
+    }
+  }
   void runHooksFor('SessionStart', { projectRoot, model }, projectRoot).catch(() => {});
-  const contextConfig = config.contextConfig || (model.startsWith('deepseek-v4')
+  const baseContextConfig = config.contextConfig || (model.startsWith('deepseek-v4')
     ? { maxRounds: 20, compressRatio: 0.5, maxTokensBeforeCompress: 900_000 }
     : DEFAULT_CONTEXT_CONFIG);
+  // AGORA 步骤级压缩作为 agent 循环默认策略；显式指定 compressMode 时尊重调用方。
+  const contextConfig: ContextConfig = {
+    ...baseContextConfig,
+    compressMode: baseContextConfig.compressMode ?? 'step',
+  };
   const dd = createDevianceDetector();
   dd.reset();
 
@@ -1389,7 +1476,7 @@ export async function agentLoopRun(config: AgentLoopConfig): Promise<AgentLoopRe
     }
 
     // 规划阶段为可选 (plan mode or explicit
-    // forcePlanning). Ordinary ask/afe runs start executing directly — the
+    // forcePlanning). Ordinary ask/auto runs start executing directly — the
     // first thing the user sees is the model's own reasoning/tool choice.
     const shouldPlan = mode === 'plan' || config.forcePlanning === true;
     if (shouldPlan) {
@@ -1437,6 +1524,12 @@ export async function agentLoopRun(config: AgentLoopConfig): Promise<AgentLoopRe
   state.iteration = startIter - 1;
   state.toolCallCount = toolCallCount;
   state.allText = allText;
+  /** Auto tier: a failed ReviewArtifact pauses the loop for a human check. */
+  interface ReviewGate { toolCallId: string; checkType: string; summary: string; }
+  let reviewGate: ReviewGate | null = null;
+  // Read through a function so TS does not narrow the closure-assigned
+  // variable to `null` at the consumption site below.
+  const pendingReviewGate = (): ReviewGate | null => reviewGate;
   const resolvedApprovedSteps = activePlan?.approvedSteps ?? approvedPlanSteps;
 
   const engineConfig: StepEngineConfig = {
@@ -1448,26 +1541,36 @@ export async function agentLoopRun(config: AgentLoopConfig): Promise<AgentLoopRe
     tools,
     mode,
     approvedPlanSteps: resolvedApprovedSteps,
+    workTier: config.workTier,
+    surface: config.surface,
+    workspaceRoots: config.workspaceRoots,
+    writableRoots: config.writableRoots,
     checkPermission,
     autoApprove,
     signal,
     isDeepThink: config.isDeepThink,
     reasoningEffort: config.reasoningEffort,
+    toolChoice: config.toolChoice,
     temperature: config.temperature,
     depth: config.depth,
+    agentName: config.agentName,
     sandboxMode: config.sandboxMode,
     timeContext: config.timeContext ?? true,
     tmuxContext: config.tmuxContext ?? process.env.AURAXIS_TMUX_CONTEXT === '1',
     plan: activePlan,
     compactTokenThreshold: contextConfig.maxTokensBeforeCompress || 900_000,
+    // ContextConfig 的 'round' 对应 step-engine/context-manager 的 'snip' 策略。
+    compressMode: contextConfig.compressMode === 'round' ? 'snip' : (contextConfig.compressMode ?? 'step'),
+    stepKeepRecent: contextConfig.stepKeepRecent,
     compactModel: model,
     retryBaseDelayMs: 1000,
     adapter: config.adapter,
+    fallbackModel: config.fallbackModel,
     executeTool: config.executeTool,
     makeToolCallId: (tc) => tc.id,
     onToolSummary: (r, tc) => buildToolSummary(tc.name, r.output, r.input),
     emit: (event) => observer.emit(event),
-    onUsage: (inputTokens, outputTokens) => observer.emit({ type: 'usage', inputTokens, outputTokens }),
+    onUsage: (usage) => observer.emit({ type: 'usage', ...usage }),
     onBeforeRequest: async (msgs) => {
       // UserPromptSubmit 生命周期钩子。
       const lastUser = [...msgs].reverse().find((m) => m.role === 'user');
@@ -1557,7 +1660,9 @@ export async function agentLoopRun(config: AgentLoopConfig): Promise<AgentLoopRe
           model, apiKey, apiBase, adapter: config.adapter,
           systemPrompt: PLANNING_SYSTEM_PROMPT,
           messages: [{ role: 'user', content: replanPrompt }],
-          tools: [], signal: signal || new AbortController().signal,
+          tools: [],
+          responseFormat: 'json_object',
+          signal: signal || new AbortController().signal,
         });
         if (!replanResult?.rawText) return { output: null, error: '重规划失败：LLM 返回空响应。' };
         const parsed = parsePlanFromLLMText(replanResult.rawText);
@@ -1572,6 +1677,19 @@ export async function agentLoopRun(config: AgentLoopConfig): Promise<AgentLoopRe
     },
     onToolResult: (r, tc, toolCallId) => {
       emitToolObserverForResult(r, observer, activePlan, dd, '', tc.name);
+      // Auto tier only: full access intentionally skips the gate, ask/plan
+      // already involve the user. ReviewArtifact reports `passed:false`
+      // inside its output (not as a tool error), so detect it here.
+      if (tc.name === 'ReviewArtifact' && config.mode === 'auto' && !config.autoApprove && !r.error) {
+        const out = (r.output ?? null) as Record<string, unknown> | null;
+        if (out && out.passed === false) {
+          reviewGate = {
+            toolCallId,
+            checkType: String(out.check_type ?? 'check'),
+            summary: String(out.summary ?? ''),
+          };
+        }
+      }
     },
   };
 
@@ -1630,6 +1748,23 @@ export async function agentLoopRun(config: AgentLoopConfig): Promise<AgentLoopRe
         observer.emit({ type: 'system_message', level: 'info', content: `收到外部指令：${trimmed.slice(0, 120)}` });
       }
     }
+    // SWE-Touch：检测用户/其它进程在任务执行期间对工作区的外部修改。
+    if (projectRoot) {
+      try {
+        const drifted = await workspaceDrift.takeDrift(projectRoot);
+        if (drifted.length > 0) {
+          const driftMsg = { role: 'user' as const, content: driftSummary(drifted) };
+          markInjected(driftMsg);
+          messages.push(driftMsg);
+          observer.emit({
+            type: 'context_injected',
+            source: 'workspace',
+            producer: 'drift-detector',
+            detail: `检测到 ${drifted.length} 个文件被外部修改：${drifted.map((d) => d.filePath).join('、')}`,
+          });
+        }
+      } catch { /* 漂移检测不允许影响主循环 */ }
+    }
     observer.emit({ type: 'iteration_start', iteration: iter });
     observer.onStateChange({ iteration: iter, toolCallCount: state.toolCallCount, messagesCount: messages.length, plan: activePlan });
 
@@ -1640,6 +1775,50 @@ export async function agentLoopRun(config: AgentLoopConfig): Promise<AgentLoopRe
       llmLatencyMs: Date.now() - iterStartTime,
       firstTokenMs: outcome.metrics?.firstTokenMs,
       outputTokens: outcome.metrics?.outputTokens });
+
+    // ── Auto-review gate (auto tier) ─────────────────────
+    // A failed ReviewArtifact pauses after the iteration completes so the
+    // user can decide: approve → the loop continues with an explicit
+    // instruction; deny → the task stops for manual handling.
+    const gate = pendingReviewGate();
+    if (gate) {
+      reviewGate = null;
+      observer.emit({
+        type: 'system_message',
+        level: 'warning',
+        content: `质量门未通过（${gate.checkType}），正在等待你确认是否继续修复。`,
+      });
+      const allowed = config.checkPermission
+        ? await config.checkPermission('ReviewArtifact', {
+            action: 'continue_after_failed_review',
+            check_type: gate.checkType,
+            summary: gate.summary.slice(0, 300),
+          }, gate.toolCallId)
+        : true;
+      if (allowed) {
+        const m = {
+          role: 'user' as const,
+          content: '[用户] 已确认继续修复质量门失败项。请根据 ReviewArtifact 的失败输出修复，完成后再次调用 ReviewArtifact 验证通过。',
+        };
+        markInjected(m);
+        messages.push(m);
+        observer.emit({
+          type: 'context_injected',
+          source: 'instructions',
+          producer: 'review-gate',
+          detail: `用户确认继续修复质量门失败项（${gate.checkType}）`,
+        });
+      } else {
+        const errMsg = `质量门未通过（${gate.checkType}），已暂停。请人工处理后继续。`;
+        observer.emit({ type: 'error', error: errMsg });
+        state.allText += `\n\n⚠️ ${errMsg}`;
+        break;
+      }
+      // The user may have paused/stopped while the gate was waiting — honor
+      // the abort immediately instead of running another iteration.
+      if (signal?.aborted) break;
+    }
+
     if (outcome.status === 'stop' || outcome.status === 'aborted') break;
   }
 

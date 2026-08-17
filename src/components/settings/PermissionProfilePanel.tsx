@@ -15,11 +15,39 @@ const BUILTIN_FALLBACK: PermissionProfile[] = [
     fileScopes: [{ pattern: '**', access: 'write' }],
     networkScopes: [{ pattern: '*', access: 'allow' }],
   },
+  {
+    id: 'readonly',
+    name: 'profile.readonly',
+    description: 'profile.readonlyDesc',
+    builtin: true,
+    toolPolicy: 'ask',
+    fileScopes: [{ pattern: '**', access: 'read' }],
+    networkScopes: [{ pattern: '*', access: 'allow' }],
+  },
+  {
+    id: 'sandbox',
+    name: 'profile.sandbox',
+    description: 'profile.sandboxDesc',
+    builtin: true,
+    toolPolicy: 'auto',
+    fileScopes: [{ pattern: '**', access: 'write' }],
+    networkScopes: [{ pattern: '*', access: 'deny' }],
+  },
 ];
 
 const FILE_ACCESS_LABEL: Record<string, I18nKey> = { read: 'profile.fileAccess.read', write: 'profile.fileAccess.write', deny: 'profile.fileAccess.deny' };
 const NET_ACCESS_LABEL: Record<string, I18nKey> = { allow: 'profile.netAccess.allow', deny: 'profile.netAccess.deny' };
-const POLICY_LABEL: Record<string, I18nKey> = { ask: 'profile.policy.ask', plan: 'profile.policy.plan', afe: 'profile.policy.afe' };
+const POLICY_LABEL: Record<string, I18nKey> = { ask: 'profile.policy.ask', plan: 'profile.policy.plan', auto: 'profile.policy.auto' };
+const BUILTIN_NAME_KEY: Record<string, I18nKey> = {
+  standard: 'profile.standard',
+  readonly: 'profile.readonly',
+  sandbox: 'profile.sandbox',
+};
+const BUILTIN_DESC_KEY: Record<string, I18nKey> = {
+  standard: 'profile.standardDesc',
+  readonly: 'profile.readonlyDesc',
+  sandbox: 'profile.sandboxDesc',
+};
 
 const fileAccessOptions = Object.entries(FILE_ACCESS_LABEL).map(([value, label]) => ({ value, label }));
 const netAccessOptions = Object.entries(NET_ACCESS_LABEL).map(([value, label]) => ({ value, label }));
@@ -35,10 +63,11 @@ export default function PermissionProfilePanel() {
       ?.list()
       .then((r) => {
         if (r?.ok && r.data) {
-          // Coarse built-in tiers (readonly/sandbox) are superseded by the
-          // input-area Access pill — keep 标准 + custom profiles only.
+          // Built-in tiers are surfaced here too: the composer presets align
+          // with standard/readonly, and sandbox (network-off) stays reachable
+          // as a named profile layered on top of the selected preset.
           const data = r.data;
-          const visible = data.profiles.filter((p) => !p.builtin || p.id === 'standard');
+          const visible = data.profiles;
           const nextActive = visible.some((p) => p.id === data.activeId) ? data.activeId : 'standard';
           setProfiles(visible);
           setActiveId(nextActive);
@@ -149,12 +178,20 @@ export default function PermissionProfilePanel() {
           {t('profile.newCustom')}
         </Button>
       </div>
-      <SettingItem title={t('profile.current')} description={active?.id === 'standard' ? t('profile.standardDesc') : active?.description}>
+      <SettingItem
+        title={t('profile.current')}
+        description={active?.builtin
+          ? t(BUILTIN_DESC_KEY[active.id] ?? 'profile.standardDesc')
+          : active?.description}
+      >
         <Select
           value={activeId}
           onChange={(v) => persist(profiles, v)}
           style={{ width: '100%' }}
-          options={profiles.map((p) => ({ value: p.id, label: p.builtin ? t('profile.standard') : p.name }))}
+          options={profiles.map((p) => ({
+            value: p.id,
+            label: p.builtin ? t(BUILTIN_NAME_KEY[p.id] ?? 'profile.standard') : p.name,
+          }))}
           getPopupContainer={(t) => t.parentElement || document.body}
         />
       </SettingItem>

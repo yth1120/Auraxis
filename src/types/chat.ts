@@ -1,9 +1,17 @@
 import type { ToolCall } from './tools';
 import { BUILT_IN_MODELS as SHARED_MODELS } from '../../electron/types';
-import type { PermissionRequest } from './advanced';
+import type { PermissionRequest, DeepSeekToolChoice, WorkAutonomyTier } from './advanced';
 
 // Re-export for convenience
 export type ModelProvider = 'deepseek';
+
+/** DeepSeek API reasoning_effort 三档（官方 low/high/max）。 */
+export type ApiReasoningEffort = 'low' | 'high' | 'max';
+
+/** UI 三档 → API 三档：轻度→low、中度→high、深度→max。 */
+export function mapThinkingLevelToEffort(level: 'low' | 'medium' | 'high'): ApiReasoningEffort {
+  return level === 'low' ? 'low' : level === 'high' ? 'max' : 'high';
+}
 
 export interface AIModel {
   id: string;
@@ -69,6 +77,9 @@ export interface Message {
   timestamp: number;
   codeBlocks?: CodeBlock[];
   thinkingBlocks?: { content: string }[];
+  /** Whether this request had thinking enabled（Chat 开关；Agent 恒为 true）。
+   *  关闭时即使模型泄漏 <thinking> 标签也不展示思考块。 */
+  thinkingEnabled?: boolean;
   isStreaming?: boolean;
   toolCalls?: ToolCall[];
   tags?: ('warning' | 'error' | 'system' | 'injected')[];
@@ -115,16 +126,26 @@ export interface AgentQueueItem {
 
 export interface ChatStore {
   messages: Message[];
-  commands: { id: string; name: string; args: string; ts: number }[];
   isStreaming: boolean;
   inputValue: string;
+  /** 按会话保存的输入草稿（会话切换不串味）。 */
+  drafts: Record<string, string>;
   isDeepThink: boolean;
   /** Thinking depth: low/medium → API reasoning_effort="high", high → "max" */
   reasoningEffort: 'low' | 'medium' | 'high';
+  /** Per-mode thinking snapshot — each surface restores its own switch + depth
+   *  when switched back to (Chat 自己记住开关，Work/Code 各自记住深度). */
+  modeThinkingPrefs: Partial<Record<'chat' | 'work' | 'code', {
+    isDeepThink: boolean;
+    reasoningEffort: 'low' | 'medium' | 'high';
+  }>>;
   isWebSearch: boolean;
+  /** Legacy per-send auto-approve flag — the permission preset owns this axis now. */
   autoApprove: boolean;
   /** /plan arms the next Agent task to run in plan mode (plan → approve → execute). */
   pendingPlanMode: boolean;
+  /** /tool 武装的下一个 Agent 任务的 tool_choice（auto/none/required/指定工具）。 */
+  pendingToolChoice: DeepSeekToolChoice | null;
   /** Code-mode task launcher: scheduler priority for new tasks. Persisted. */
   taskPriority: 'high' | 'normal' | 'low';
   /** Agent-mode messages queued while the current task is running (FIFO drain). */
@@ -142,6 +163,9 @@ export interface ChatStore {
   exactInputTokens: number;
   exactOutputTokens: number;
   reasoningOutputTokens: number;
+  /** DeepSeek 上下文硬盘缓存命中/未命中 tokens（API 实测值，会话级累计）。 */
+  cacheHitTokens: number;
+  cacheMissTokens: number;
   lastCompression: { tokensBefore: number; tokensAfter: number; timestamp: number; messagesRemoved?: number; tokensSaved?: number } | null;
   lastUserMessage: string | null;
   /** Bumped when another view asks the composer to focus (diff 继续改, 错误修复). */
@@ -151,19 +175,29 @@ export interface ChatStore {
   pendingNewTask: boolean;
 
   sendMessage: () => Promise<void>;
+  /** 对话前缀续写（Beta）：让模型从给定代码块继续输出，结果作为新的助手消息流式渲染。 */
+  continueCode: (language: string, code: string, instruction?: string) => void;
   retryLastMessage: () => void;
+  /** 从任意助手消息重新生成：截断到该消息之前并重发前一条用户消息。 */
+  regenerateFromMessage: (messageId: string) => void;
   retryTool: (requestId: string, toolCallId: string, toolName: string) => void;
   editMessage: (messageId: string, newContent: string) => void;
   deleteMessage: (messageId: string) => void;
   setInputValue: (value: string) => void;
-  appendCommand: (cmd: { name: string; args: string; ts: number }) => void;
   requestComposerFocus: () => void;
+  /** 非持久化：状态栏等外部入口请求打开模型选择面板。 */
+  modelPanelRequest: number;
+  requestModelPanel: () => void;
+  /** 消费一次模型面板请求，避免历史请求在组件重挂载时重放。 */
+  consumeModelPanelRequest: () => void;
   setPendingNewTask: (v: boolean) => void;
   toggleDeepThink: () => void;
   setReasoningEffort: (effort: 'low' | 'medium' | 'high') => void;
   toggleWebSearch: () => void;
+  /** @deprecated — superseded by the composer permission preset. */
   toggleAutoApprove: () => void;
   setPendingPlanMode: (enabled: boolean) => void;
+  setPendingToolChoice: (choice: DeepSeekToolChoice | null) => void;
   setTaskPriority: (priority: 'high' | 'normal' | 'low') => void;
   enqueueAgentMessage: (text: string) => void;
   dequeueAgentMessage: (id: string) => void;
@@ -227,17 +261,23 @@ export interface AppStore {
   paneSizes: number[] | null;
   activeLeftPanel: LeftPanelTab;
   fileTreeVersion: number;
+  /** 主布局是否已挂载：玻璃只在实体面板就绪后才生效，避免启动期整窗透明。 */
+  glassLayoutMounted: boolean;
 
   // Workbench multi-tab
   tabs: WorkbenchTab[];
   activeTabId: string | null;
   rightPanelView: 'file-tree' | 'inspector' | 'timeline' | 'review' | 'preview' | 'none';
-  /** Sidebar content mode — 'chat' = conversation surface, 'code' = agent tasks. */
-  sidebarMode: 'chat' | 'code';
+  /** Sidebar content mode — 'chat' = conversation surface, 'work'/'code' = agent tasks. */
+  sidebarMode: 'chat' | 'work' | 'code';
+  /** Work 模式执行自主度档位（切换模式后保留，仅 Work 使用）。 */
+  workAutonomyTier: WorkAutonomyTier;
   /** Tool entry view shown instead of the chat/task surface ('' = normal). */
   activeToolView: ToolView;
   /** Settings pane to open next time the Settings modal is shown. */
   settingsInitialKey: string;
+  /** 全局搜索弹窗（由侧边栏搜索按钮唤起）。 */
+  globalSearchOpen: boolean;
   /** Bottom terminal drawer height (px). */
   terminalHeight: number;
   /** Cross-panel focus request: timeline → agent log row. */
@@ -276,13 +316,15 @@ export interface AppStore {
   toggleTheme: () => void;
   setTheme: (mode: ThemeMode) => void;
   toggleSidebar: () => void;
-  setSidebarMode: (mode: 'chat' | 'code') => void;
+  setSidebarMode: (mode: 'chat' | 'work' | 'code') => void;
+  setWorkAutonomyTier: (tier: WorkAutonomyTier) => void;
   toggleRightPanel: () => void;
   setShowSettings: (show: boolean) => void;
   setActiveToolView: (view: ToolView) => void;
   /** Toggle a tool entry view — clicking the active entry returns to chat. */
   openToolView: (view: Exclude<ToolView, 'none'>) => void;
   setSettingsInitialKey: (key: string) => void;
+  setGlobalSearchOpen: (open: boolean) => void;
   setTerminalHeight: (h: number) => void;
   requestAgentLogFocus: (agentId: string, toolCallId: string) => void;
   clearAgentLogFocus: () => void;
@@ -304,6 +346,7 @@ export interface AppStore {
   setRightPanelWidth: (w: number) => void;
   setPaneSizes: (sizes: number[]) => void;
   setActiveLeftPanel: (tab: LeftPanelTab) => void;
+  setGlassLayoutMounted: (v: boolean) => void;
   incrementFileTreeVersion: () => void;
   requestOpenFile: (path: string) => void;
   clearOpenFileRequest: () => void;

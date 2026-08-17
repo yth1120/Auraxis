@@ -8,7 +8,7 @@
 
 import { ipcMain } from 'electron';
 import { invokeLlm } from './llm-adapter';
-import { resolveApiBase } from './model-config';
+import { resolveModelApiBase, resolveModelApiKey } from './model-config';
 import { readSettings } from './settings-store';
 import { resolveCredential } from '../credentials';
 
@@ -53,12 +53,13 @@ export async function generateSessionTitle(
   const settings = (await readSettings().catch(() => ({}))) as Record<string, any>;
   const model = opts.model || process.env.AURAXIS_TITLE_MODEL || settings.titleModel || 'deepseek-v4-flash';
   const apiKey = opts.apiKey
+    || (await resolveModelApiKey(model))
     || process.env.DEEPSEEK_API_KEY
     || (await resolveCredential('DEEPSEEK_API_KEY').catch(() => undefined))?.value
     || settings.deepseekApiKey
     || '';
   if (!apiKey) return null;
-  const apiBase = opts.apiBase || resolveApiBase(model);
+  const apiBase = opts.apiBase || (await resolveModelApiBase(model));
   const { system, user } = buildTitlePrompt(messages);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TITLE_TIMEOUT_MS);

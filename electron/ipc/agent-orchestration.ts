@@ -14,6 +14,8 @@ export interface OrchestrationCaller {
   checkPermission?: (toolName: string, input: Record<string, unknown>, toolCallId?: string) => Promise<boolean>;
   autoApprove?: boolean;
   abortSignal?: AbortSignal;
+  /** Which UI surface created this run — 'work' enforces docs-only writes. */
+  surface?: 'chat' | 'work' | 'code';
 }
 
 /** Foreground sub-agent run (waits for completion). */
@@ -33,6 +35,7 @@ export async function orchestrateRunSubAgent(
       checkPermission: caller.checkPermission,
       autoApprove: caller.autoApprove,
       parentSignal: caller.abortSignal,
+      surface: caller.surface,
     });
     return r.error ? { ok: false, error: r.error } : { ok: true, output: r.output };
   } catch (err: any) {
@@ -58,6 +61,7 @@ export async function orchestrateStartBackgroundSubAgent(
       autoApprove: caller.autoApprove,
       parentSignal: caller.abortSignal,
       background: true,
+      surface: caller.surface,
     });
     return r.error ? { ok: false, error: r.error } : { ok: true, output: r.output };
   } catch (err: any) {

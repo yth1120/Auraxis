@@ -3,8 +3,10 @@ import os from 'os';
 import path from 'path';
 import fs from 'fs';
 
+const ipcHandlers = vi.hoisted(() => new Map<string, Function>());
+
 vi.mock('electron', () => ({
-  ipcMain: { handle: vi.fn() },
+  ipcMain: { handle: vi.fn((ch: string, fn: Function) => ipcHandlers.set(ch, fn)) },
   app: { getPath: () => process.env.AURAXIS_TEST_USERDATA || os.tmpdir() },
   safeStorage: {
     isEncryptionAvailable: () => false,
@@ -18,6 +20,8 @@ import {
   evaluateFileProfile,
   evaluateNetworkProfile,
   evaluateToolProfileGate,
+  loadPermissionProfiles,
+  registerPermissionProfileIpc,
   BUILTIN_PROFILES,
   type PermissionProfile,
 } from '../../permission-profile';
@@ -130,10 +134,103 @@ describe('permission profiles', () => {
     expect(search.allowed).toBe(false);
   });
 
+  it('project-level override wins over the global profile', async () => {
+    await writeSettings({
+      activePermissionProfile: 'standard',
+      projectPermissionProfiles: { [projectRoot]: 'readonly' },
+    });
+    const denied = await evaluateToolProfileGate('Write', { file_path: 'src/a.ts' }, projectRoot);
+    expect(denied.allowed).toBe(false);
+    expect(denied.reason).toContain('只读');
+
+    // 未覆盖的项目仍走全局 Profile。
+    const other = path.join(os.tmpdir(), 'other-project');
+    const allowed = await evaluateToolProfileGate('Write', { file_path: 'src/a.ts' }, other);
+    expect(allowed.allowed).toBe(true);
+  });
+
+  it('unknown project override falls back to the global profile', async () => {
+    await writeSettings({
+      activePermissionProfile: 'standard',
+      projectPermissionProfiles: { [projectRoot]: 'no-such-profile' },
+    });
+    const verdict = await evaluateToolProfileGate('Write', { file_path: 'src/a.ts' }, projectRoot);
+    expect(verdict.allowed).toBe(true);
+  });
+
+  it('multi-root：附加工作区根同样按项目 Profile 评估', async () => {
+    await writeSettings({
+      activePermissionProfile: 'standard',
+      projectPermissionProfiles: { [projectRoot]: 'readonly' },
+    });
+    const secondary = path.join(os.tmpdir(), 'auraxis-secondary-root');
+    const secondaryFile = path.join(secondary, 'src/a.ts');
+    const denied = await evaluateToolProfileGate(
+      'Write',
+      { file_path: secondaryFile },
+      projectRoot,
+      [secondary],
+    );
+    expect(denied.allowed).toBe(false);
+    expect(denied.reason).toContain('只读');
+  });
+
+  it('loadPermissionProfiles exposes project overrides', async () => {
+    await writeSettings({
+      activePermissionProfile: 'sandbox',
+      projectPermissionProfiles: { [projectRoot]: 'readonly' },
+    });
+    const { profiles, activeId, overrides } = await loadPermissionProfiles();
+    expect(activeId).toBe('sandbox');
+    expect(overrides[projectRoot]).toBe('readonly');
+    expect(profiles.some((p) => p.id === 'custom')).toBe(false);
+  });
+
   it('ignores paths outside the project root', async () => {
     await writeSettings({ activePermissionProfile: 'readonly' });
     const outside = path.join(os.tmpdir(), 'outside-file.txt');
     const verdict = await evaluateToolProfileGate('Write', { file_path: outside }, projectRoot);
     expect(verdict.allowed).toBe(true);
+  });
+});
+
+describe('project permission profile IPC', () => {
+  beforeEach(() => {
+    ipcHandlers.clear();
+    registerPermissionProfileIpc();
+  });
+
+  it('setProjectProfile persists per-project override and clears it', async () => {
+    const set = ipcHandlers.get('permission:setProjectProfile')!;
+    const list = ipcHandlers.get('permission:listProjectProfiles')!;
+
+    const saved = await set({}, { path: projectRoot, profileId: 'readonly' });
+    expect(saved.ok).toBe(true);
+
+    const listed = await list({});
+    expect(listed.data.overrides[projectRoot]).toBe('readonly');
+
+    const cleared = await set({}, { path: projectRoot, profileId: null });
+    expect(cleared.ok).toBe(true);
+    const after = await list({});
+    expect(after.data.overrides[projectRoot]).toBeUndefined();
+  });
+
+  it('rejects unknown profile ids and empty paths', async () => {
+    const set = ipcHandlers.get('permission:setProjectProfile')!;
+    expect((await set({}, { path: projectRoot, profileId: 'no-such' })).ok).toBe(false);
+    expect((await set({}, { path: '', profileId: 'readonly' })).ok).toBe(false);
+  });
+
+  it('moveProjectProfile 把项目覆盖迁移到新目录', async () => {
+    const set = ipcHandlers.get('permission:setProjectProfile')!;
+    const move = ipcHandlers.get('permission:moveProjectProfile')!;
+    const list = ipcHandlers.get('permission:listProjectProfiles')!;
+    await set({}, { path: projectRoot, profileId: 'readonly' });
+    const other = path.join(os.tmpdir(), 'moved-project');
+    expect((await move({}, { from: projectRoot, to: other })).ok).toBe(true);
+    const after = await list({});
+    expect(after.data.overrides[other]).toBe('readonly');
+    expect(after.data.overrides[projectRoot]).toBeUndefined();
   });
 });

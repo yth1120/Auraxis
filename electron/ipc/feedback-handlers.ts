@@ -6,12 +6,15 @@ import { ipcMain, app } from 'electron';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { flushTelemetry } from './session-telemetry';
+import { captureFeedbackEvidence } from './memory-evidence';
 
 export interface MessageFeedbackRecord {
   messageId: string;
   sessionId: string;
   rating: 'up' | 'down' | null;
   note?: string;
+  /** INO 纠错闭环：携带项目路径时，down 评分/备注会固化为证据。 */
+  projectPath?: string;
   ts: number;
 }
 
@@ -62,6 +65,12 @@ export async function appendMessageFeedback(
       `${JSON.stringify({ ...record, ts: Date.now() })}\n`,
       'utf8',
     );
+    // INO：纠错即证据（best-effort，失败不影响反馈落盘）。
+    if (record.projectPath && (record.rating === 'down' || record.note)) {
+      try {
+        captureFeedbackEvidence({ ...record, ts: Date.now() });
+      } catch { /* evidence capture is best-effort */ }
+    }
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e?.message ?? String(e) };

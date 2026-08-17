@@ -4,9 +4,10 @@ import { waitForPlanApproval } from './plan-handlers';
 import type { ToolDef } from '../tool-defs';
 import type { SandboxMode } from '../sandbox-policy';
 import { getAllTools } from '../tool-registry';
-import { resolveApiBase } from './model-config';
+import { resolveModelApiBase, resolveModelApiKey } from './model-config';
 import { agentLoopRun, AgentObserver, AgentStateSnapshot } from './agent-loop';
 import { appendAgentLog } from '../session-log';
+import { appendWorkDocsSystemRule, type WorkSurface } from '../work-docs-policy';
 
 const agents = new Map<string, AgentInfo>();
 const agentAborts = new Map<string, AbortController>();
@@ -274,14 +275,22 @@ function createAgentObserver(
           });
           break;
         case 'usage':
-          emitEvent(win, agent.id, { type: 'usage', requestId: agent.id, inputTokens: event.inputTokens, outputTokens: event.outputTokens });
+          emitEvent(win, agent.id, {
+            type: 'usage',
+            requestId: agent.id,
+            inputTokens: event.inputTokens,
+            outputTokens: event.outputTokens,
+            ...(event.reasoningTokens !== undefined ? { reasoningTokens: event.reasoningTokens } : {}),
+            ...(event.cacheHitTokens !== undefined ? { cacheHitTokens: event.cacheHitTokens } : {}),
+            ...(event.cacheMissTokens !== undefined ? { cacheMissTokens: event.cacheMissTokens } : {}),
+          });
           break;
         case 'done':
           break;
       }
       // Durable agent run log (SDK / ACP / CLI tasks persist and become
       // searchable like scheduler tasks).
-      void appendAgentLog(agent.id, [event as unknown as Record<string, unknown>]).catch(() => {});
+      void appendAgentLog(agent.id, [event as unknown as Record<string, unknown>], agent.projectRoot).catch(() => {});
     },
 
     onStateChange(snapshot: AgentStateSnapshot) {
@@ -301,8 +310,14 @@ export async function runSubAgent(params: {
   projectRoot: string;
   requestId: string;
   depth?: number;
+  /** Which UI surface created this sub-agent — 'work' enforces docs-only. */
+  surface?: WorkSurface;
   checkPermission?: (toolName: string, input: Record<string, unknown>, toolCallId?: string) => Promise<boolean>;
   autoApprove?: boolean;
+  /** 项目工作区根目录（含主根），子 Agent 继承同一套边界。 */
+  workspaceRoots?: string[];
+  /** 项目可写根目录（roots 的子集）。 */
+  writableRoots?: string[];
   parentSignal?: AbortSignal;
   agentId?: string;
   /** When true, start the child in the background and return immediately with
@@ -318,7 +333,8 @@ export async function runSubAgent(params: {
   const settings: Record<string, any> = await readSettings();
   const model: string = settings.executeModel || settings.selectedModel || 'deepseek-v4-pro';
   const planModel: string = settings.planModel || model;
-  const apiBase = resolveApiBase(model);
+  const fallbackModel = (settings.fallbackModel as string) || undefined;
+  const apiBase = await resolveModelApiBase(model);
   const maxIterations = Number(settings.agentMaxIterations) || 200;
   const sandboxMode: SandboxMode =
     settings.sandboxMode === 'read' || settings.sandboxMode === 'workspace-write' || settings.sandboxMode === 'full'
@@ -326,13 +342,14 @@ export async function runSubAgent(params: {
       : 'workspace-write';
   const timeContext = settings.timeContext !== false;
 
-  const apiKey = settings.deepseekApiKey || process.env.DEEPSEEK_API_KEY || '';
+  const apiKey = (await resolveModelApiKey(model)) || settings.deepseekApiKey || process.env.DEEPSEEK_API_KEY || '';
 
   if (!apiKey) return { output: null, error: '未配置 DeepSeek API Key' };
 
   const platform = process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux';
   const shellHint = process.platform === 'win32' ? 'On Windows, the shell is Git Bash — standard Unix commands work natively. Use them freely.' : 'Use standard Unix shell commands.';
   let systemPrompt = agentDef.getSystemPrompt(params.prompt, platform, shellHint, params.projectRoot);
+  systemPrompt = appendWorkDocsSystemRule(systemPrompt, params.surface);
   let mode = 'ask' as const;
 
   const agentId = params.agentId || `sub-${genAgentId()}`;
@@ -390,12 +407,16 @@ export async function runSubAgent(params: {
     subAgentObservers.set(agentId, observer);
     return agentLoopRun({
       model, apiKey, apiBase,
+      fallbackModel,
       systemPrompt,
       projectRoot: params.projectRoot,
+      agentName: agent.name,
       tools,
       signal: controller.signal,
       checkPermission: params.checkPermission,
       autoApprove: params.autoApprove,
+      workspaceRoots: params.workspaceRoots,
+      writableRoots: params.writableRoots,
       observer,
       isDeepThink: true,
       reasoningEffort: 'high',
@@ -409,6 +430,7 @@ export async function runSubAgent(params: {
       onPlanGenerated: (plan) =>
         waitForPlanApproval(plan, win, { projectRoot: params.projectRoot, title: agent.name }),
       depth,
+      surface: params.surface,
     });
   };
 

@@ -1,10 +1,11 @@
 import type { SlashCommand } from '../../constants/commands';
 import { useT, slashCommandDescKey } from '../../i18n';
+import clsx from 'clsx';
 
 interface CommandDropdownProps {
   items: SlashCommand[];
   selected: number;
-  position?: 'center' | 'bottom';
+  position?: 'center' | 'center-flow' | 'bottom';
   onSelect: (item: SlashCommand) => void;
   onHover: (idx: number) => void;
 }
@@ -14,13 +15,18 @@ export default function CommandDropdown({ items, selected, position, onSelect, o
   if (items.length === 0) return null;
 
   return (
-    <div className="mention-dropdown absolute bottom-[calc(100%+6px)] left-[-6px] right-[-6px] bg-[var(--color-bg-elevated)] rounded-card overflow-hidden z-[100] max-h-[260px] flex flex-col border border-[var(--color-border-dim)] shadow-[var(--shadow-md)]">
+    <div className={clsx(
+      'mention-dropdown absolute left-[-6px] right-[-6px] bg-[var(--color-bg-elevated)] rounded-card overflow-hidden z-[100] max-h-[260px] flex flex-col border border-[var(--color-border-dim)] shadow-[var(--shadow-md)]',
+      position === 'center' || position === 'center-flow'
+        ? 'top-[calc(100%+6px)]'
+        : 'bottom-[calc(100%+6px)]',
+    )}>
       <div className="overflow-y-auto flex-1">
         {items.map((cmd, idx) => (
           <div
             key={cmd.name}
             className={[
-              'px-3 py-[9px] cursor-pointer text-text-secondary font-body text-sm flex items-center gap-[10px]',
+              'px-3 py-2 cursor-pointer text-text-secondary font-body text-sm flex items-center gap-2',
               'transition-colors duration-150',
               idx === selected
                 ? 'bg-primary-soft text-text-primary'
@@ -29,7 +35,7 @@ export default function CommandDropdown({ items, selected, position, onSelect, o
             onMouseDown={(e) => { e.preventDefault(); onSelect(cmd); }}
             onMouseEnter={() => onHover(idx)}
           >
-            <span className="w-[18px] h-[18px] rounded-md flex items-center justify-center text-sm font-bold font-mono shrink-0 text-accent bg-accent-soft">/</span>
+            <span className="w-5 h-5 rounded-md flex items-center justify-center text-sm font-bold font-mono shrink-0 text-accent bg-accent-soft">/</span>
             <span className="overflow-hidden text-ellipsis whitespace-nowrap">
               <strong>{cmd.name}</strong>
               <span style={{ opacity: 0.5, marginLeft: 8, fontSize: 11 }}>{t(slashCommandDescKey(cmd.name))}</span>

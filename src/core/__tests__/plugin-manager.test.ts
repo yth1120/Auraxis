@@ -56,6 +56,17 @@ describe('pluginManager — install / enable / disable', () => {
     expect(usePluginStore.getState().installedPlugins).toHaveLength(0);
   });
 
+  it('内置插件静默安装：不弹 confirm，重复安装拒绝', () => {
+    const spy = vi.mocked(confirm);
+    expect(pluginManager.installBuiltin(plugin() as any, 'builtin:p1')).toBe(true);
+    expect(spy).not.toHaveBeenCalled();
+    expect(usePluginStore.getState().installedPlugins).toHaveLength(1);
+    expect(usePluginStore.getState().installedPlugins[0]).toMatchObject({
+      id: 'p1', enabled: false, path: 'builtin:p1',
+    });
+    expect(pluginManager.installBuiltin(plugin() as any, 'builtin:p1')).toBe(false);
+  });
+
   it('校验警告与风险进入确认文案', () => {
     vi.mocked(validatePlugin).mockReturnValue({ valid: false, warnings: ['缺 name'] });
     const p = plugin();

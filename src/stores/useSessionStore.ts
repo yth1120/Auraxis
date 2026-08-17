@@ -19,8 +19,8 @@ export interface Session {
   messages: Message[];
   /** Absolute project path this session belongs to (drives SiderNav project grouping). */
   projectRoot?: string;
-  /** Which sidebar mode produced this session: 'chat' = conversation, 'code' = agent. */
-  mode?: 'chat' | 'code';
+  /** Which sidebar mode produced this session: 'chat' = conversation, 'work'/'code' = agent. */
+  mode?: 'chat' | 'work' | 'code';
   /** Pinned sessions stay at the top of the session list and Activity view. */
   pinned?: boolean;
   /** Archived sessions are hidden from workspace lists (kept, not deleted). */
@@ -32,16 +32,16 @@ export interface SessionStore {
   sessions: Session[];
   currentSessionId: string | null;
   /** Mode stamped onto the next session created via newSession (until saveSession). */
-  pendingMode: 'chat' | 'code';
+  pendingMode: 'chat' | 'work' | 'code';
 
-  saveSession: (messages: Message[], model: string, projectRoot?: string, mode?: 'chat' | 'code', targetId?: string) => void;
+  saveSession: (messages: Message[], model: string, projectRoot?: string, mode?: 'chat' | 'work' | 'code', targetId?: string) => void;
   loadSession: (id: string) => Session | undefined;
   deleteSession: (id: string) => void;
   renameSession: (id: string, name: string) => void;
   togglePin: (id: string) => void;
   toggleArchive: (id: string) => void;
   moveSessionToProject: (id: string, projectRoot: string) => void;
-  newSession: (mode?: 'chat' | 'code') => string;
+  newSession: (mode?: 'chat' | 'work' | 'code') => string;
   exportSession: (id: string, format: 'json' | 'md') => string | null;
   /**
    * Fork a session into a new copy.

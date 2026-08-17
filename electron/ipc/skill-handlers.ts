@@ -1,6 +1,6 @@
 import { ipcMain, app } from 'electron';
 import path from 'path';
-import { ensureSkillsDirectory, listSkills, readSkill } from '../skill-store';
+import { ensureSkillsDirectory, listSkills, readSkill, seedBuiltinSkills } from '../skill-store';
 
 function skillsRoot(): string {
   return path.join(app.getPath('userData'), 'skills');
@@ -12,6 +12,7 @@ export function registerSkillHandlers() {
     try {
       const root = skillsRoot();
       await ensureSkillsDirectory(root);
+      await seedBuiltinSkills(root);
       return { ok: true, data: await listSkills(root) };
     } catch (error: any) {
       return { ok: false, error: error.message };

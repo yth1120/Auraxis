@@ -15,13 +15,16 @@ interface UseSmartDropdownOptions {
   panelHeight?: number;
   /** Gap between the trigger and the panel in px (default 10) */
   gap?: number;
+  /** Fixed placement: 'auto' picks by viewport space (default). 'up'/'down'
+   *  force the direction (composer 中央向下、底部向上). */
+  direction?: 'auto' | 'up' | 'down';
 }
 
 export function useSmartDropdown(
   triggerRef: RefObject<HTMLElement | null>,
   options: UseSmartDropdownOptions = {},
 ) {
-  const { panelHeight = 180, gap = 10 } = options;
+  const { panelHeight = 180, gap = 10, direction = 'auto' } = options;
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<DropdownPosition | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -33,7 +36,12 @@ export function useSmartDropdown(
     const spaceAbove = rect.top;
 
     // Choose direction: prefer down unless there's not enough room below
-    const shouldDropUp = spaceBelow < panelHeight + gap && spaceAbove > spaceBelow;
+    const shouldDropUp =
+      direction === 'up'
+        ? true
+        : direction === 'down'
+          ? false
+          : spaceBelow < panelHeight + gap && spaceAbove > spaceBelow;
 
     setPosition({
       left: rect.left,
@@ -42,7 +50,7 @@ export function useSmartDropdown(
         : { top: rect.bottom + gap }),
       direction: shouldDropUp ? 'up' : 'down',
     });
-  }, [triggerRef, panelHeight, gap]);
+  }, [triggerRef, panelHeight, gap, direction]);
 
   useEffect(() => {
     if (open) {

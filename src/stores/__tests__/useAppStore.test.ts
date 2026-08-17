@@ -81,6 +81,14 @@ describe('useAppStore — theme & sidebar', () => {
     expect(useAppStore.getState().activeLeftPanel).toBe('files');
   });
 
+  it('glassLayoutMounted 默认 false，由主布局挂载后置位', () => {
+    expect(useAppStore.getState().glassLayoutMounted).toBe(false);
+    useAppStore.getState().setGlassLayoutMounted(true);
+    expect(useAppStore.getState().glassLayoutMounted).toBe(true);
+    useAppStore.getState().setGlassLayoutMounted(false);
+    expect(useAppStore.getState().glassLayoutMounted).toBe(false);
+  });
+
   it('incrementFileTreeVersion 自增', () => {
     const v1 = useAppStore.getState().fileTreeVersion;
     useAppStore.getState().incrementFileTreeVersion();

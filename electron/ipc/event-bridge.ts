@@ -37,9 +37,25 @@ export function toToolStreamEvent(event: EngineEvent, requestId: string): ToolSt
     case 'context_compressed':
       return { type: 'context_compressed', requestId, tokensBefore: event.tokensBefore, tokensAfter: event.tokensAfter, messagesRemoved: event.messagesRemoved, tokensSaved: event.tokensSaved };
     case 'usage':
-      return { type: 'usage_update', requestId, inputTokens: event.inputTokens, outputTokens: event.outputTokens };
+      return {
+        type: 'usage_update',
+        requestId,
+        inputTokens: event.inputTokens,
+        outputTokens: event.outputTokens,
+        ...(event.reasoningTokens !== undefined ? { reasoningTokens: event.reasoningTokens } : {}),
+        ...(event.cacheHitTokens !== undefined ? { cacheHitTokens: event.cacheHitTokens } : {}),
+        ...(event.cacheMissTokens !== undefined ? { cacheMissTokens: event.cacheMissTokens } : {}),
+      };
     case 'usage_update':
-      return { type: 'usage_update', requestId, inputTokens: event.inputTokens, outputTokens: event.outputTokens, reasoningTokens: event.reasoningTokens };
+      return {
+        type: 'usage_update',
+        requestId,
+        inputTokens: event.inputTokens,
+        outputTokens: event.outputTokens,
+        ...(event.reasoningTokens !== undefined ? { reasoningTokens: event.reasoningTokens } : {}),
+        ...(event.cacheHitTokens !== undefined ? { cacheHitTokens: event.cacheHitTokens } : {}),
+        ...(event.cacheMissTokens !== undefined ? { cacheMissTokens: event.cacheMissTokens } : {}),
+      };
     case 'plan_created':
     case 'plan_updated':
       return {

@@ -10,7 +10,11 @@ const electronMock = vi.hoisted(() => ({
   app: { getPath: vi.fn(() => '/tmp/auraxis-userdata'), getVersion: vi.fn(() => '2.0.0') },
 }));
 const settingsStoreMock = vi.hoisted(() => ({ readSettings: vi.fn() }));
-const modelConfigMock = vi.hoisted(() => ({ resolveApiBase: vi.fn() }));
+const modelConfigMock = vi.hoisted(() => ({
+  resolveApiBase: vi.fn(),
+  resolveModelApiBase: vi.fn(async () => 'https://api.example.com/v1'),
+  resolveModelApiKey: vi.fn(async () => undefined),
+}));
 const contextManagerMock = vi.hoisted(() => ({
   compactHistory: vi.fn(),
   estimateTokens: vi.fn(() => 10),
@@ -83,7 +87,7 @@ import { registerContextHandlers } from '../context-handlers';
 import { registerSshHandlers } from '../ssh-handlers';
 import { registerStatsHandlers } from '../stats-handlers';
 import { readSettings } from '../settings-store';
-import { resolveApiBase } from '../model-config';
+import { resolveModelApiBase } from '../model-config';
 import { compactHistory, estimateTokens } from '../context-manager';
 import { listSshConnections, saveSshConnection, removeSshConnection } from '../../ssh-store';
 import {
@@ -264,7 +268,7 @@ describe('IPC 中型处理器（project/file/context/ssh/stats）', () => {
     it('compact — 组装配置并返回压缩结果', async () => {
       const h = await capture(registerContextHandlers);
       vi.mocked(readSettings).mockResolvedValue({ selectedModel: 'deepseek-v4-pro', deepseekApiKey: 'sk-1' });
-      vi.mocked(resolveApiBase).mockReturnValue('https://api.example.com/v1');
+      vi.mocked(resolveModelApiBase).mockResolvedValue('https://api.example.com/v1');
       vi.mocked(compactHistory).mockResolvedValue({
         messages: [{ role: 'user', content: 'sum' }],
         messagesRemoved: 2,

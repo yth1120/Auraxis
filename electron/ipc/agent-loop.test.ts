@@ -581,6 +581,55 @@ describe('ContextManager — compressHistory', () => {
   });
 });
 
+describe('ContextManager — 步骤级压缩（AGORA）', () => {
+  it('compressMode=step 时保留最近步骤并保护动作语法', async () => {
+    const messages: any[] = [
+      { role: 'system', content: 'sys' },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: '第一步' },
+          { type: 'tool_use', id: 't1', name: 'Grep', input: { pattern: 'x' } },
+        ],
+      },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'nothing' }] },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: '第二步' },
+          { type: 'tool_use', id: 't2', name: 'Read', input: { file_path: 'src/app.ts' } },
+        ],
+      },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't2', content: '{"file_path":"src/app.ts","content":"x","total_lines":20}' }] },
+      { role: 'assistant', content: [{ type: 'text', text: '最近一轮' }] },
+    ];
+    const plan = makePlan([{ description: 'fix src/app.ts module' }]);
+    const result = await ContextManager.compressHistory(
+      messages,
+      plan,
+      { maxRounds: 2, compressRatio: 0.5, compressMode: 'step', stepKeepRecent: 1 },
+    );
+    // 摘要标记存在；关键 Read 步骤被救回；Grep 步骤被整步压缩。
+    expect(result.some((m: any) => m.STEP_COMPRESSED)).toBe(true);
+    expect(result.some((m: any) => JSON.stringify(m).includes('t2'))).toBe(true);
+    expect(result.some((m: any) => JSON.stringify(m).includes('t1'))).toBe(false);
+    // 动作语法：任何保留的 tool_use 必须能找到其 tool_result 配对。
+    const assistantMsgs = result.filter((m: any) => m.role === 'assistant');
+    for (const am of assistantMsgs) {
+      const blocks = Array.isArray(am.content) ? am.content : [];
+      for (const b of blocks) {
+        if (b?.type === 'tool_use') {
+          const hasResult = result.some(
+            (m: any) => Array.isArray(m.content) &&
+              m.content.some((c: any) => c?.type === 'tool_result' && c.tool_use_id === b.id),
+          );
+          expect(hasResult).toBe(true);
+        }
+      }
+    }
+  });
+});
+
 // ══════════════════════════════════════════════════════════
 // 10. AssistantMessage — isFinal detection logic
 // ══════════════════════════════════════════════════════════
