@@ -1010,3 +1010,54 @@ Vite 和 TypeScript 均配置 `@/` 别名映射到 `src/`：
 // 等价于 src/components/chat/MessageBubble.tsx
 import { MessageBubble } from '@/components/chat/MessageBubble';
 ```
+
+---
+
+## 附录：快速参考
+
+### 常用命令
+
+```bash
+npm run electron:dev     # 完整开发环境
+npm run dev              # 仅前端（Vite HMR，无 Electron）
+npm run electron:compile # 仅编译主进程
+npm test                 # 运行所有测试
+npm run test:backend     # 后端测试
+npm run test:frontend    # 前端测试
+npm run test:coverage    # 覆盖率测试
+npm run build            # 生产构建
+```
+
+### 关键文件索引
+
+| 文件 | 职责 |
+|------|------|
+| [electron/main.ts](../electron/main.ts) | 应用入口 |
+| [electron/preload.ts](../electron/preload.ts) | IPC 桥接 |
+| [electron/ipc/index.ts](../electron/ipc/index.ts) | IPC 注册总入口 |
+| [electron/tool-defs.ts](../electron/tool-defs.ts) | 工具定义 |
+| [electron/ipc/step-engine.ts](../electron/ipc/step-engine.ts) | 统一 ReAct 步进引擎 |
+| [electron/ipc/query-engine.ts](../electron/ipc/query-engine.ts) | 聊天驱动 |
+| [electron/ipc/query-context.ts](../electron/ipc/query-context.ts) | 规范上下文快照（缓存对齐重放 / 记忆去重 / 失效墓碑） |
+| [electron/ipc/agent-loop.ts](../electron/ipc/agent-loop.ts) | Agent 驱动（规划/审批/偏差/停止策略） |
+| [electron/ipc/agent-scheduler.ts](../electron/ipc/agent-scheduler.ts) | 多 Agent 调度 |
+| [electron/ipc/tool-handlers.ts](../electron/ipc/tool-handlers.ts) | 工具执行 |
+| [electron/ipc/permission-handlers.ts](../electron/ipc/permission-handlers.ts) | 权限控制 |
+| [electron/code-mode.ts](../electron/code-mode.ts) | Code Mode（TS 工具编排） |
+| [electron/step-compressor.ts](../electron/step-compressor.ts) | AGORA 步骤级压缩 |
+| [electron/workspace-drift.ts](../electron/workspace-drift.ts) | SWE-Touch 工作区漂移 |
+| [electron/approval-fatigue.ts](../electron/approval-fatigue.ts) | Oversight 审批疲劳 |
+| [electron/tool-inertia.ts](../electron/tool-inertia.ts) | AutoTool 工具惯性 |
+| [electron/skill-gate.ts](../electron/skill-gate.ts) | VaG 技能门禁 |
+| [electron/auth-store.ts](../electron/auth-store.ts) | 本地账户（注册/登录/头像） |
+| [electron/ipc/memory-read.ts](../electron/ipc/memory-read.ts) | Eywa 确定性读路径 |
+| [electron/ipc/memory-graph.ts](../electron/ipc/memory-graph.ts) | MAP-Graph 授权门控 |
+| [electron/contracts/](../electron/contracts/) | 跨进程类型契约 |
+| [electron/session-store.ts](../electron/session-store.ts) | 统一事件日志 |
+| [src/App.tsx](../src/App.tsx) | React 根组件 |
+| [src/stores/useChatStore.ts](../src/stores/useChatStore.ts) | 聊天状态 |
+| [src/components/auth/AuthGate.tsx](../src/components/auth/AuthGate.tsx) | 登录门 |
+| [src/components/work/WorkExecutionFlow.tsx](../src/components/work/WorkExecutionFlow.tsx) | Work 执行流程视图 |
+| [src/components/input/ThinkingDepthSelector.tsx](../src/components/input/ThinkingDepthSelector.tsx) | 思考深度滑轨（磁吸流式特效） |
+| [src/core/plugin-manager.ts](../src/core/plugin-manager.ts) | 插件管理 |
+| [src/styles/theme.ts](../src/styles/theme.ts) | 主题配置 |

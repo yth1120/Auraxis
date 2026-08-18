@@ -1014,3 +1014,54 @@ Vite and TypeScript both map `@/` to `src/`:
 // Equivalent to src/components/chat/MessageBubble.tsx
 import { MessageBubble } from '@/components/chat/MessageBubble';
 ```
+
+---
+
+## Appendix: Quick Reference
+
+### Common Commands
+
+```bash
+npm run electron:dev     # Full dev environment
+npm run dev              # Frontend only (Vite HMR, no Electron)
+npm run electron:compile # Compile main process only
+npm test                 # Run all tests
+npm run test:backend     # Backend tests
+npm run test:frontend    # Frontend tests
+npm run test:coverage    # Coverage tests
+npm run build            # Production build
+```
+
+### Key File Index
+
+| File | Responsibility |
+|------|------|
+| [electron/main.ts](../electron/main.ts) | App entry |
+| [electron/preload.ts](../electron/preload.ts) | IPC bridge |
+| [electron/ipc/index.ts](../electron/ipc/index.ts) | IPC registration entry |
+| [electron/tool-defs.ts](../electron/tool-defs.ts) | Tool definitions |
+| [electron/ipc/step-engine.ts](../electron/ipc/step-engine.ts) | Unified ReAct step engine |
+| [electron/ipc/query-engine.ts](../electron/ipc/query-engine.ts) | Chat driver |
+| [electron/ipc/query-context.ts](../electron/ipc/query-context.ts) | Canonical context snapshots (cache-aligned replay / memory dedup / invalidation tombstones) |
+| [electron/ipc/agent-loop.ts](../electron/ipc/agent-loop.ts) | Agent driver (plan/approval/deviance/stop) |
+| [electron/ipc/agent-scheduler.ts](../electron/ipc/agent-scheduler.ts) | Multi-agent scheduling |
+| [electron/ipc/tool-handlers.ts](../electron/ipc/tool-handlers.ts) | Tool execution |
+| [electron/ipc/permission-handlers.ts](../electron/ipc/permission-handlers.ts) | Permission control |
+| [electron/code-mode.ts](../electron/code-mode.ts) | Code Mode (TS tool orchestration) |
+| [electron/step-compressor.ts](../electron/step-compressor.ts) | AGORA step compression |
+| [electron/workspace-drift.ts](../electron/workspace-drift.ts) | SWE-Touch workspace drift |
+| [electron/approval-fatigue.ts](../electron/approval-fatigue.ts) | Oversight approval fatigue |
+| [electron/tool-inertia.ts](../electron/tool-inertia.ts) | AutoTool tool inertia |
+| [electron/skill-gate.ts](../electron/skill-gate.ts) | VaG skill gate |
+| [electron/auth-store.ts](../electron/auth-store.ts) | Local account (register/login/avatar) |
+| [electron/ipc/memory-read.ts](../electron/ipc/memory-read.ts) | Eywa deterministic read path |
+| [electron/ipc/memory-graph.ts](../electron/ipc/memory-graph.ts) | MAP-Graph authorization gating |
+| [electron/contracts/](../electron/contracts/) | Cross-process type contracts |
+| [electron/session-store.ts](../electron/session-store.ts) | Unified event logs |
+| [src/App.tsx](../src/App.tsx) | React root component |
+| [src/stores/useChatStore.ts](../src/stores/useChatStore.ts) | Chat state |
+| [src/components/auth/AuthGate.tsx](../src/components/auth/AuthGate.tsx) | Login gate |
+| [src/components/work/WorkExecutionFlow.tsx](../src/components/work/WorkExecutionFlow.tsx) | Work execution flow view |
+| [src/components/input/ThinkingDepthSelector.tsx](../src/components/input/ThinkingDepthSelector.tsx) | Thinking-depth slider (magnetic streaming effect) |
+| [src/core/plugin-manager.ts](../src/core/plugin-manager.ts) | Plugin management |
+| [src/styles/theme.ts](../src/styles/theme.ts) | Theme configuration |
