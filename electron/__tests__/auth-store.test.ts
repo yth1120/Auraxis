@@ -14,6 +14,7 @@ import {
   getAuthStatus,
   changeAccountPassword,
   setAccountAvatar,
+  changeAccountName,
   getDeepSeekUserId,
 } from '../auth-store';
 
@@ -136,5 +137,22 @@ describe('auth-store — 本地账户登录系统', () => {
     const cleared = await setAccountAvatar('');
     expect(cleared.ok).toBe(true);
     expect((await getAuthStatus()).avatar).toBeUndefined();
+  });
+
+  it('修改账户名：trim 后保存并同步到状态，空名/超长拒绝', async () => {
+    await setupAccount({ name: '小明', email: 'a@b.com', password: 'secret1', rememberMe: false });
+    const ok = await changeAccountName({ name: '  大刘  ' });
+    expect(ok.ok).toBe(true);
+    expect((await getAuthStatus()).name).toBe('大刘');
+
+    expect((await changeAccountName({ name: '   ' })).ok).toBe(false);
+    expect((await changeAccountName({ name: 'x'.repeat(41) })).ok).toBe(false);
+    expect((await getAuthStatus()).name).toBe('大刘');
+  });
+
+  it('无账户时修改账户名被拒绝', async () => {
+    const res = await changeAccountName({ name: 'A' });
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain('尚未创建账户');
   });
 });

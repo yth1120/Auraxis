@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { App, Button, Input, message } from 'antd';
 import { Key, ShieldCheck } from '@/components/common/icons';
 import { useT } from '../../i18n';
@@ -63,13 +63,33 @@ export default function AccountPane() {
   const avatar = useAuthStore((s) => s.avatar);
   const changePassword = useAuthStore((s) => s.changePassword);
   const setAvatar = useAuthStore((s) => s.setAvatar);
+  const changeName = useAuthStore((s) => s.changeName);
   const logout = useAuthStore((s) => s.logout);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [nameDraft, setNameDraft] = useState(name);
+  const [savingName, setSavingName] = useState(false);
   const [currentPwd, setCurrentPwd] = useState('');
   const [nextPwd, setNextPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setNameDraft(name);
+  }, [name]);
+
+  const submitName = async () => {
+    const trimmed = nameDraft.trim();
+    if (!trimmed) {
+      message.warning(t('auth.nameInvalid'));
+      return;
+    }
+    setSavingName(true);
+    const res = await changeName(trimmed);
+    setSavingName(false);
+    if (res.ok) message.success(t('auth.nameChanged'));
+    else message.error(res.error || t('auth.failed'));
+  };
 
   const submitChange = async () => {
     if (!currentPwd || !nextPwd) {
@@ -174,6 +194,20 @@ export default function AccountPane() {
               }}
             />
           </div>
+        </div>
+      </SettingItem>
+
+      <SettingItem title={t('auth.changeName')} description={t('auth.changeNameDesc')}>
+        <div className="flex items-center gap-2 w-full">
+          <Input
+            value={nameDraft}
+            onChange={(e) => setNameDraft(e.target.value)}
+            maxLength={40}
+            placeholder={t('auth.namePlaceholder')}
+          />
+          <Button loading={savingName} onClick={() => void submitName()}>
+            {t('auth.saveName')}
+          </Button>
         </div>
       </SettingItem>
 

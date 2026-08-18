@@ -46,6 +46,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     changePassword: (params: { currentPassword: string; newPassword: string }) =>
       ipcRenderer.invoke('auth:changePassword', params),
     setAvatar: (avatar: string) => ipcRenderer.invoke('auth:setAvatar', avatar),
+    changeName: (name: string) => ipcRenderer.invoke('auth:changeName', { name }),
   },
 
   // --- File operations ---

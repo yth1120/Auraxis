@@ -107,6 +107,7 @@ export interface ElectronAPI {
     logout: () => Promise<{ ok: boolean; error?: string }>;
     changePassword: (params: AuthChangePasswordParams) => Promise<{ ok: boolean; error?: string }>;
     setAvatar: (avatar: string) => Promise<{ ok: boolean; error?: string }>;
+    changeName: (name: string) => Promise<{ ok: boolean; error?: string }>;
   };
   minimize: () => Promise<void>;
   maximize: () => Promise<void>;

@@ -53,8 +53,8 @@
 
 ### Quality & Release
 
-- Unit tests: 235 test files / 1,734 cases passing (+3 environment-skips)
-- Coverage: 85.43% lines / 79.03% branches / 86.61% functions
+- Unit tests: 237 test files / 1,740 cases passing (+3 environment-skips)
+- Coverage: 85.42% lines / 79.08% branches / 86.63% functions
 - E2E (real Electron via Playwright): 15/15 passing
 - Stress: 200-session cold start ~1.4s; 18/30 agents all completed; no stalls at the default 3-concurrency setting
 - Artifacts: Windows NSIS installer (x64) + blockmap + latest.yml, tag v3.0.0

@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
-import { getAuthStatus, setupAccount, loginAccount, logoutAccount, changeAccountPassword, setAccountAvatar } from '../auth-store';
-import type { AuthChangePasswordParams, AuthLoginParams, AuthSetupParams } from '../contracts/auth';
+import { getAuthStatus, setupAccount, loginAccount, logoutAccount, changeAccountPassword, setAccountAvatar, changeAccountName } from '../auth-store';
+import type { AuthChangeNameParams, AuthChangePasswordParams, AuthLoginParams, AuthSetupParams } from '../contracts/auth';
 
 export function registerAuthHandlers(): void {
   ipcMain.handle('auth:status', async () => {
@@ -47,6 +47,14 @@ export function registerAuthHandlers(): void {
   ipcMain.handle('auth:setAvatar', async (_event, avatar: string) => {
     try {
       return await setAccountAvatar(avatar);
+    } catch (error: any) {
+      return { ok: false, error: error?.message ?? String(error) };
+    }
+  });
+
+  ipcMain.handle('auth:changeName', async (_event, params: AuthChangeNameParams) => {
+    try {
+      return await changeAccountName(params ?? {});
     } catch (error: any) {
       return { ok: false, error: error?.message ?? String(error) };
     }

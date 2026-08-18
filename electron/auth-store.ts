@@ -11,7 +11,7 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { app } from 'electron';
-import type { AuthChangePasswordParams, AuthLoginParams, AuthSetupParams, AuthStatus } from './contracts/auth';
+import type { AuthChangeNameParams, AuthChangePasswordParams, AuthLoginParams, AuthSetupParams, AuthStatus } from './contracts/auth';
 
 interface StoredAccount {
   version: 1;
@@ -226,6 +226,17 @@ export async function setAccountAvatar(avatar: string): Promise<{ ok: boolean; e
     return { ok: false, error: '头像文件过大' };
   }
   account.avatar = avatar;
+  await writeAccount(account);
+  return { ok: true };
+}
+
+export async function changeAccountName(params: AuthChangeNameParams): Promise<{ ok: boolean; error?: string }> {
+  const account = await readAccount();
+  if (!account) return { ok: false, error: '尚未创建账户' };
+  const name = params?.name?.trim();
+  if (!name) return { ok: false, error: '账户名不能为空' };
+  if (name.length > 40) return { ok: false, error: '账户名不能超过 40 个字符' };
+  account.name = name;
   await writeAccount(account);
   return { ok: true };
 }

@@ -39,3 +39,7 @@ export interface AuthChangePasswordParams {
   currentPassword: string;
   newPassword: string;
 }
+
+export interface AuthChangeNameParams {
+  name: string;
+}

@@ -19,6 +19,7 @@ interface AuthStore {
   switchToSetup: () => void;
   changePassword: (params: AuthChangePasswordParams) => Promise<{ ok: boolean; error?: string }>;
   setAvatar: (avatar: string) => Promise<{ ok: boolean; error?: string }>;
+  changeName: (name: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({
@@ -104,6 +105,16 @@ export const useAuthStore = create<AuthStore>((set) => ({
     try {
       const res = (await window.electronAPI?.auth?.setAvatar(avatar)) ?? { ok: false, error: '认证服务不可用' };
       if (res.ok) set({ avatar });
+      return res;
+    } catch (error: any) {
+      return { ok: false, error: error?.message ?? String(error) };
+    }
+  },
+
+  changeName: async (name) => {
+    try {
+      const res = (await window.electronAPI?.auth?.changeName(name)) ?? { ok: false, error: '认证服务不可用' };
+      if (res.ok) set({ name: name.trim() });
       return res;
     } catch (error: any) {
       return { ok: false, error: error?.message ?? String(error) };
