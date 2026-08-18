@@ -100,9 +100,48 @@ DeepFlow v1.3.0 是 Auraxis 的前身版本：Electron 33 + React 18 + TypeScrip
 
 ### 发布产物
 
-- Windows：[DeepFlow.Setup.1.3.0.exe](https://github.com/yth1120/DeepFlow/releases/download/v1.3.0/DeepFlow.Setup.1.3.0.exe)
-- macOS（Intel）：[DeepFlow-1.3.0.dmg](https://github.com/yth1120/DeepFlow/releases/download/v1.3.0/DeepFlow-1.3.0.dmg)
-- macOS（Apple Silicon）：[DeepFlow-1.3.0-arm64.dmg](https://github.com/yth1120/DeepFlow/releases/download/v1.3.0/DeepFlow-1.3.0-arm64.dmg)
-- Linux：[DeepFlow-1.3.0.AppImage](https://github.com/yth1120/DeepFlow/releases/download/v1.3.0/DeepFlow-1.3.0.AppImage)
+- Windows：[DeepFlow.Setup.1.3.0.exe](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.3.0/DeepFlow.Setup.1.3.0.exe)
+- macOS（Intel）：[DeepFlow-1.3.0.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.3.0/DeepFlow-1.3.0.dmg)
+- macOS（Apple Silicon）：[DeepFlow-1.3.0-arm64.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.3.0/DeepFlow-1.3.0-arm64.dmg)
+- Linux：[DeepFlow-1.3.0.AppImage](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.3.0/DeepFlow-1.3.0.AppImage)
+
+源码仓库：https://github.com/yth1120/DeepFlow
+
+## v1.2.0（DeepFlow 前身版本）
+
+DeepFlow v1.2.0 是 Auraxis 前身项目 DeepFlow 的历史版本（2026-06-12）。
+
+### 发布产物
+
+- Windows：[DeepFlow.Setup.1.2.0.exe](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.2.0/DeepFlow.Setup.1.2.0.exe)
+- macOS（Intel）：[DeepFlow-1.2.0.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.2.0/DeepFlow-1.2.0.dmg)
+- macOS（Apple Silicon）：[DeepFlow-1.2.0-arm64.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.2.0/DeepFlow-1.2.0-arm64.dmg)
+- Linux：[DeepFlow-1.2.0.AppImage](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.2.0/DeepFlow-1.2.0.AppImage)
+
+源码仓库：https://github.com/yth1120/DeepFlow
+
+## v1.1.1（DeepFlow 前身版本）
+
+DeepFlow v1.1.1 是 Auraxis 前身项目 DeepFlow 的历史版本（2026-06-11）。
+
+### 发布产物
+
+- Windows：[DeepFlow.Setup.1.1.1.exe](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.1.1/DeepFlow.Setup.1.1.1.exe)
+- macOS（Intel）：[DeepFlow-1.1.1.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.1.1/DeepFlow-1.1.1.dmg)
+- macOS（Apple Silicon）：[DeepFlow-1.1.1-arm64.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.1.1/DeepFlow-1.1.1-arm64.dmg)
+- Linux：[DeepFlow-1.1.1.AppImage](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.1.1/DeepFlow-1.1.1.AppImage)
+
+源码仓库：https://github.com/yth1120/DeepFlow
+
+## v1.1.0（DeepFlow 前身版本）
+
+DeepFlow v1.1.0 是 Auraxis 前身项目 DeepFlow 的历史版本（2026-06-10）。
+
+### 发布产物
+
+- Windows：[DeepFlow.Setup.1.1.0.exe](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.1.0/DeepFlow.Setup.1.1.0.exe)
+- macOS（Intel）：[DeepFlow-1.1.0.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.1.0/DeepFlow-1.1.0.dmg)
+- macOS（Apple Silicon）：[DeepFlow-1.1.0-arm64.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.1.0/DeepFlow-1.1.0-arm64.dmg)
+- Linux：[DeepFlow-1.1.0.AppImage](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.1.0/DeepFlow-1.1.0.AppImage)
 
 源码仓库：https://github.com/yth1120/DeepFlow
