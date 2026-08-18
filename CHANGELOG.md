@@ -105,8 +105,6 @@ DeepFlow v1.3.0 是 Auraxis 的前身版本：Electron 33 + React 18 + TypeScrip
 - macOS（Apple Silicon）：[DeepFlow-1.3.0-arm64.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.3.0/DeepFlow-1.3.0-arm64.dmg)
 - Linux：[DeepFlow-1.3.0.AppImage](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.3.0/DeepFlow-1.3.0.AppImage)
 
-源码仓库：https://github.com/yth1120/DeepFlow
-
 ## v1.2.0（DeepFlow 前身版本）
 
 DeepFlow v1.2.0 是 Auraxis 前身项目 DeepFlow 的历史版本（2026-06-12）。
@@ -117,8 +115,6 @@ DeepFlow v1.2.0 是 Auraxis 前身项目 DeepFlow 的历史版本（2026-06-12�
 - macOS（Intel）：[DeepFlow-1.2.0.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.2.0/DeepFlow-1.2.0.dmg)
 - macOS（Apple Silicon）：[DeepFlow-1.2.0-arm64.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.2.0/DeepFlow-1.2.0-arm64.dmg)
 - Linux：[DeepFlow-1.2.0.AppImage](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.2.0/DeepFlow-1.2.0.AppImage)
-
-源码仓库：https://github.com/yth1120/DeepFlow
 
 ## v1.1.1（DeepFlow 前身版本）
 
@@ -131,8 +127,6 @@ DeepFlow v1.1.1 是 Auraxis 前身项目 DeepFlow 的历史版本（2026-06-11�
 - macOS（Apple Silicon）：[DeepFlow-1.1.1-arm64.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.1.1/DeepFlow-1.1.1-arm64.dmg)
 - Linux：[DeepFlow-1.1.1.AppImage](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.1.1/DeepFlow-1.1.1.AppImage)
 
-源码仓库：https://github.com/yth1120/DeepFlow
-
 ## v1.1.0（DeepFlow 前身版本）
 
 DeepFlow v1.1.0 是 Auraxis 前身项目 DeepFlow 的历史版本（2026-06-10）。
@@ -143,5 +137,3 @@ DeepFlow v1.1.0 是 Auraxis 前身项目 DeepFlow 的历史版本（2026-06-10�
 - macOS（Intel）：[DeepFlow-1.1.0.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.1.0/DeepFlow-1.1.0.dmg)
 - macOS（Apple Silicon）：[DeepFlow-1.1.0-arm64.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.1.0/DeepFlow-1.1.0-arm64.dmg)
 - Linux：[DeepFlow-1.1.0.AppImage](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.1.0/DeepFlow-1.1.0.AppImage)
-
-源码仓库：https://github.com/yth1120/DeepFlow

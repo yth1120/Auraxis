@@ -1091,6 +1091,4 @@ DeepFlow v1.3.0 是 Auraxis 的前身版本，基于 Electron 的桌面端 Agent
 - macOS（Apple Silicon）：[DeepFlow-1.3.0-arm64.dmg](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.3.0/DeepFlow-1.3.0-arm64.dmg)
 - Linux：[DeepFlow-1.3.0.AppImage](https://github.com/yth1120/Auraxis-Agent/releases/download/deepflow-1.3.0/DeepFlow-1.3.0.AppImage)
 
-DeepFlow 源码仓库：https://github.com/yth1120/DeepFlow
-
 更早版本（独立 Release）：[v1.2.0](https://github.com/yth1120/Auraxis-Agent/releases/tag/deepflow-1.2.0) · [v1.1.1](https://github.com/yth1120/Auraxis-Agent/releases/tag/deepflow-1.1.1) · [v1.1.0](https://github.com/yth1120/Auraxis-Agent/releases/tag/deepflow-1.1.0)
