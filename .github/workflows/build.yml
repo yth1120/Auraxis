@@ -68,11 +68,16 @@ jobs:
           path: release
           merge-multiple: true
 
+      - name: Prepare release notes
+        run: |
+          HEADER="## ${GITHUB_REF_NAME} ("
+          awk -v h="$HEADER" 'BEGIN{found=0} index($0,h){found=1} found{print} found && $0 ~ /^## / && index($0,h)==0{exit}' CHANGELOG.md > release-notes.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: Auraxis ${{ github.ref_name }}
           files: release/*
-          body_path: CHANGELOG.md
+          body_path: release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
