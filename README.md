@@ -48,7 +48,8 @@ Installers are available for Windows (NSIS), macOS (DMG, x64 + arm64), and Linux
 
 ## Documentation
 
-- [Architecture & development docs (中文)](docs/README.md)
+- [Architecture & development docs (English)](docs/README.md)
+- [Architecture & development docs (中文)](docs/README.zh-CN.md)
 - [Changelog](CHANGELOG.md)
 - [Engineering conventions (中文)](AGENTS.md)
 - [TypeScript SDK](packages/auraxis-sdk/README.md) · [Python SDK](python/auraxis_sdk/README.md)
