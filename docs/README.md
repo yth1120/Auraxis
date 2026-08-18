@@ -2,7 +2,7 @@
 
 # Auraxis Architecture & Development Documentation
 
-Related docs: [TS SDK](../packages/auraxis-sdk/README.md) · [Python SDK](../python/auraxis_sdk/README.md) · [Engineering conventions](../AGENTS.md)
+Related docs: [TS SDK](../packages/auraxis-sdk/README.md) · [Python SDK](../python/auraxis_sdk/README.md) · [Engineering conventions](../AGENTS.md) · [中文版](README.zh-CN.md)
 
 ## 1. Project Overview
 
