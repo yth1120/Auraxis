@@ -16,7 +16,7 @@ The project follows **paper-driven development**: 7 arXiv papers' core technique
 
 ### Tech Stack
 
-<img width="1462" height="861" alt="" src="https://github.com/user-attachments/assets/7f6f67f1-d32c-4d82-a374-dd5d4174fdcc" />
+<img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/fc6d6d43-bb90-4c2c-b2cc-4716afd3daf9" />
 
 | Layer | Technology |
 |---|---|
