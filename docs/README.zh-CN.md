@@ -38,7 +38,7 @@ Auraxis v3.0.0 是一款基于 Electron 的桌面端 Agentic 编程助手，融�
 - **终端**：底部可拖拽终端抽屉 + `Terminal*` 六件套模型工具 + PTY 持久会话 + SSH
 - **原生沙箱**：Windows restricted token / AppContainer、Linux、macOS 四种后端 + worktree 隔离 + read-before-write 观测硬门
 - **工作流隔离**：模型编排脚本运行在 worker thread，超时可强杀
-- **Work 对齐 Claude Cowork**：默认「开工前先澄清」（AskUser 提问）+ 仅文档/非代码文件硬边界；分层 Instructions（全局 → 项目根 → 嵌套文件夹 AGENTS.md）可在设置面板直接维护
+- **Work 文档协作**：默认「开工前先澄清」（AskUser 提问）+ 仅文档/非代码文件硬边界；分层 Instructions（全局 → 项目根 → 嵌套文件夹 AGENTS.md）可在设置面板直接维护
 - **专业文档技能**：`ReadDocument` / `WriteDocument` 读写 Word（.docx）、Excel（.xlsx）、PPT（.pptx）、PDF（.pdf），内置 5 个开箱即用技能（Word / Excel / PPT / PDF / 云连接器）
 - **云连接器**：Slack（列频道/发消息）、Google Drive（检索/读取）、Notion（搜索/建页），Token 经 safeStorage 加密保存，设置 → 连接器 配置
 - **会话标题**：LLM 生成 + 规则回退；**逐消息评分**、**附件画廊/灯箱**、**图片草稿栏**

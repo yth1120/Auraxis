@@ -8,7 +8,7 @@ Desktop Agentic coding assistant built with Electron + React. Auraxis brings Cha
 
 - **Three modes in one workspace**
   - **Chat** — conversational Q&A with streaming, thinking, and web search
-  - **Work** — document collaboration aligned with Claude Cowork: clarify before starting, docs-only file boundary, execution autonomy tiers, and delivery approval
+  - **Work** — document collaboration: clarify before starting, docs-only file boundary, execution autonomy tiers, and delivery approval
   - **Code** — TypeScript tool orchestration with 8-way concurrent sub-calls and hard timeouts
 - **71 built-in tools** — Bash, file read/write/edit, search, terminal (PTY / Terminal\* six-pack), SSH, LSP, NotebookEdit, Cron, Git, workflows, and more
 - **Professional document skills** — read and generate Word (.docx), Excel (.xlsx), PowerPoint (.pptx), and PDF (with embedded CJK fonts)

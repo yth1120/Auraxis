@@ -615,7 +615,7 @@ export const enUS: Record<I18nKey, string> = {
   'settings.runtime.executeModel': 'Execution model',
   'settings.runtime.executeModel.desc': 'Model used to run steps after plan approval (fast / low-cost preferred).',
   'settings.runtime.clarifyBeforeWork': 'Clarify before starting',
-  'settings.runtime.clarifyBeforeWork.desc': 'In Work mode, ask a clarifying question first when goals, scope or deliverables are ambiguous (aligned with Claude Cowork).',
+  'settings.runtime.clarifyBeforeWork.desc': 'In Work mode, ask a clarifying question first when goals, scope or deliverables are ambiguous (self-developed clarification flow).',
   'skill.codeReview.name': 'Code review',
   'skill.codeReview.desc': 'Review code quality and surface potential issues',
   'skill.bugFix.name': 'Bug fix',

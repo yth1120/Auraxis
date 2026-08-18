@@ -40,7 +40,7 @@ The project follows **paper-driven development**: 7 arXiv papers' core technique
 - **Terminal**: dockable terminal drawer + `Terminal*` six-pack model tools + persistent PTY sessions + SSH
 - **Native sandbox**: Windows restricted token / AppContainer, Linux, macOS backends + worktree isolation + read-before-write observation hard gate
 - **Workflow isolation**: model orchestration scripts run in a worker thread with hard kill on timeout
-- **Work aligned with Claude Cowork**: clarify-before-start (AskUser) by default + docs-only / non-code hard boundary; layered Instructions (global → project root → nested folder AGENTS.md) editable from Settings
+- **Work document collaboration**: clarify-before-start (AskUser) by default + docs-only / non-code hard boundary; layered Instructions (global → project root → nested folder AGENTS.md) editable from Settings
 - **Professional document skills**: `ReadDocument` / `WriteDocument` for Word (.docx), Excel (.xlsx), PPT (.pptx), PDF (.pdf); 5 built-in skills (Word / Excel / PPT / PDF / cloud connectors)
 - **Cloud connectors**: Slack (list channels / post messages), Google Drive (search / read), Notion (search / create pages); tokens encrypted with safeStorage, configured in Settings → Connectors
 - **Session titles**: LLM-generated with rule fallback; **per-message ratings**, **attachment gallery / lightbox**, **image draft bar**

@@ -1,7 +1,7 @@
 /**
  * work-docs-policy.ts — Work 模式“只改文档/非代码文件”硬边界。
  *
- * Work 模式定位为文档协作（类似 Claude Cowork）：可以创建/修改/删除
+ * Work 模式定位为文档协作（自有设计）：可以创建/修改/删除
  * 文档、文本、配置等非代码文件，但绝不修改源代码文件。这里同时提供：
  *   · 工具层硬门禁（executeToolCall 调用前拒绝）
  *   · 系统提示注入规则（让模型一开始就知道边界）
@@ -147,7 +147,7 @@ export const WORK_DOCS_ONLY_SYSTEM_RULE = `
 禁止修改任何源代码文件（如 .ts/.tsx/.js/.py/.java/.c/.cpp/.go/.rs/.html/.css/.sh 等），
 也不得通过 Bash 等命令改写代码文件。代码文件只能读取，不能写入。`;
 
-/** Work 模式默认开工前澄清规则（与 Claude Cowork 的 AskUserQuestion 对齐）。 */
+/** Work 模式默认开工前澄清规则（AskUser 提问，自主研发）。 */
 export const WORK_CLARIFY_RULE = `
 ## 开工前澄清
 开始执行多步骤任务前，如果任务存在真实歧义（目标、范围、交付物、输出格式、

@@ -624,7 +624,7 @@ export const zhCN = {
   'settings.runtime.executeModel': '执行模型',
   'settings.runtime.executeModel.desc': '计划批准后执行步骤使用的模型（快 / 便宜优先）。',
   'settings.runtime.clarifyBeforeWork': '开工前先澄清',
-  'settings.runtime.clarifyBeforeWork.desc': 'Work 模式开始多步骤任务前，若目标/范围/交付物存在歧义，先用提问澄清再动手（与 Claude Cowork 对齐）。',
+  'settings.runtime.clarifyBeforeWork.desc': 'Work 模式开始多步骤任务前，若目标/范围/交付物存在歧义，先用提问澄清再动手（自主研发的澄清流程）。',
   'skill.codeReview.name': '代码审查',
   'skill.codeReview.desc': '审查代码质量和潜在问题',
   'skill.bugFix.name': 'Bug 修复',
