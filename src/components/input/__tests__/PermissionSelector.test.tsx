@@ -45,11 +45,11 @@ describe('PermissionSelector — 统一运行权限面板', () => {
     await waitFor(() => {
       expect(document.body.querySelectorAll('[role="menuitemradio"]')).toHaveLength(4);
     });
-    expect(document.body.textContent).toContain('工作区内自动执行；质量门失败时暂停等你确认');
 
     const autoRow = [...document.querySelectorAll('[role="menuitemradio"]')].find(
       (b) => b.textContent?.includes('自动代批'),
     )!;
+    expect(autoRow.getAttribute('title')).toContain('工作区内自动执行；质量门失败时暂停等你确认');
     fireEvent.click(autoRow);
     expect(onChange).toHaveBeenCalledWith('auto');
   });

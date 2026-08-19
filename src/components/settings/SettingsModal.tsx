@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import {
   Input, InputNumber, Modal, Select, Button, Space, message, Switch, Popconfirm, Segmented, Slider,
 } from 'antd';
@@ -46,6 +46,44 @@ import PermissionProfilePanel from './PermissionProfilePanel';
 import AccountPane from './AccountPane';
 import { useI18nStore } from '../../i18n';
 import { useT, keybindingDescKey, type I18nKey } from '../../i18n';
+
+/** Read a picked image, downscale it to a wallpaper-sized JPEG data URL so the
+ *  persisted setting stays small (localStorage-friendly).
+ *  Uses FileReader → data: URL instead of URL.createObjectURL: Electron's CSP
+ *  allows `data:` images but not `blob:`, so object URLs would fail to load. */
+function readWallpaperFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const MAX = 1920;
+          const scale = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight));
+          const w = Math.max(1, Math.round(img.naturalWidth * scale));
+          const h = Math.max(1, Math.round(img.naturalHeight * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error('canvas unavailable');
+          // JPEG has no alpha — white base keeps PNG transparency from turning black.
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        } catch {
+          reject(new Error('encode failed'));
+        }
+      };
+      img.onerror = () => reject(new Error('invalid image'));
+      img.src = dataUrl;
+    };
+    reader.onerror = () => reject(new Error('read failed'));
+    reader.readAsDataURL(file);
+  });
+}
 
 // Heavy sub-panels — lazy-loaded so first open of Settings only pays
 // for the General pane. The other panes fetch their bundle on click.
@@ -184,7 +222,25 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
     setWebSearchProvider, setExaApiKey, setPerplexityApiKey,
     maxOutputTokens, setMaxOutputTokens,
     sidebarGlass, setSidebarGlass, sidebarGlassSupported, sidebarGlassReady,
+    aquaGlass, setAquaGlass, wallpaper, setWallpaper,
   } = useSettingsStore();
+  const wallpaperInputRef = useRef<HTMLInputElement>(null);
+  const [wallpaperBusy, setWallpaperBusy] = useState(false);
+
+  const pickWallpaper = async (file?: File) => {
+    if (!file) return;
+    setWallpaperBusy(true);
+    try {
+      const dataUrl = await readWallpaperFile(file);
+      setWallpaper(dataUrl);
+      message.success(t('settings.aquaWallpaper.done'));
+    } catch {
+      message.error(t('settings.aquaWallpaper.error'));
+    } finally {
+      setWallpaperBusy(false);
+      if (wallpaperInputRef.current) wallpaperInputRef.current.value = '';
+    }
+  };
 
   useEffect(() => {
     if (activeKey !== 'actions' || !projectPath) {
@@ -559,6 +615,65 @@ export default function SettingsModal({ open, onClose, initialKey }: SettingsMod
           ]}
         />
       </SettingItem>
+      </section>
+      <SectionTitle>{t('settings.section.aqua')}</SectionTitle>
+      <section className="mb-2">
+        <SettingItem
+          title={t('settings.aquaGlass')}
+          description={t('settings.aquaGlass.desc')}
+          noBorder
+        >
+          <div className="flex items-center gap-3 w-full">
+            <Slider
+              className="flex-1 min-w-0"
+              min={0}
+              max={100}
+              step={5}
+              value={aquaGlass}
+              onChange={setAquaGlass}
+              tooltip={{ formatter: (v) => `${v}%` }}
+              marks={{
+                0: t('settings.aquaGlass.off'),
+                100: t('settings.aquaGlass.max'),
+              }}
+            />
+            <span className="w-12 shrink-0 text-right text-xs tabular-nums text-text-muted">{aquaGlass}%</span>
+          </div>
+        </SettingItem>
+        <SettingItem
+          title={t('settings.aquaWallpaper')}
+          description={t('settings.aquaWallpaper.desc')}
+          noBorder
+        >
+          <div className="flex items-center gap-3 w-full">
+            {wallpaper ? (
+              <img
+                src={wallpaper}
+                alt=""
+                className="w-16 h-10 shrink-0 object-cover rounded-lg border border-[var(--color-border-dim)]"
+              />
+            ) : (
+              <span className="w-16 h-10 shrink-0 rounded-lg bg-[var(--color-bg-inset)] border border-[var(--color-border-dim)]" />
+            )}
+            <input
+              ref={wallpaperInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => void pickWallpaper(e.target.files?.[0])}
+            />
+            <div className="flex items-center gap-2">
+              <Button size="small" loading={wallpaperBusy} onClick={() => wallpaperInputRef.current?.click()}>
+                {t('settings.aquaWallpaper.choose')}
+              </Button>
+              {wallpaper && (
+                <Button size="small" onClick={() => setWallpaper(null)}>
+                  {t('settings.aquaWallpaper.remove')}
+                </Button>
+              )}
+            </div>
+          </div>
+        </SettingItem>
       </section>
       <SectionTitle>{t('settings.section.sidebar')}</SectionTitle>
       <section className="mb-2">

@@ -1,5 +1,27 @@
 # Auraxis Changelog
 
+## v3.0.1 (2026-08-20)
+
+> Patch release: Aqua glass theme, wallpaper support, preset panel redesign, and sidebar fixes.
+
+### Aqua Glass Theme
+
+- **Aqua 玻璃模式**（设置 → 外观）：顶栏与左右侧栏悬浮为圆角玻璃卡片，中间主区域透明融入背景；模糊/磨砂强度随滑块实时联动；Windows 11 优先透出桌面 Acrylic，其余环境使用内置氛围底色
+- **壁纸设置**：从本地选择图片作为玻璃背景，自动压缩为 1920px JPEG 持久化；设置页带缩略图预览与一键移除
+- **输入框**：微透玻璃底色 + 专属环绕阴影，深浅色模式自适应
+- **侧边栏打磨**：收起时滑出 + 淡出、完全归零（无外边距/阴影/模糊残留）；移除悬浮卡片多余边框与接触阴影细线
+- **工具入口调整**：移除「工具」折叠按钮，技能 / 插件中心 / 定时任务直接常驻显示
+
+### UI / Settings
+
+- **执行档位与运行权限弹窗重设计**：260px 极简单行卡片，图标 + 标题 + 选中对勾，详细说明移入悬停提示
+- **侧边栏透明化修复**：恢复透明类优先级，侧栏玻璃模式下主区与右侧面板保持实色
+- 修复壁纸图片在 Electron CSP 下因 `blob:` 被拦截导致的「图片读取失败」（改用 `data:` URL 加载）
+
+### Quality
+
+- TypeScript 检查通过；前端测试 101 文件 / 485 用例全部通过
+
 ## v3.0.0 (2026-08-18)
 
 > Major release since v2.0.0: Work-mode document collaboration, professional document skills, cloud connectors, provenance memory, research-driven modules, cache alignment, UI/visual-system overhaul, and large infrastructure upgrades.

@@ -21,10 +21,9 @@ describe('SiderNav — 侧栏按钮组', () => {
     expect(useChatStore.getState().pendingNewTask).toBe(true);
   });
 
-  it('toggles the tools group', () => {
-    const { getByText, queryByText } = render(<SiderNav collapsed={false} />);
-    expect(queryByText('技能')).toBeNull();
-    fireEvent.click(getByText('工具'));
+  it('renders tools directly without the tools button', () => {
+    const { queryByText, getByText } = render(<SiderNav collapsed={false} />);
+    expect(queryByText('工具')).toBeNull();
     expect(getByText('技能')).toBeTruthy();
   });
 

@@ -29,7 +29,6 @@ import {
   SidebarSimple as SidebarSimpleIcon,
   Stop as StopOutlined,
   Wrench,
-  Toolbox,
   NEW_CHAT_ICON,
 } from '@/components/common/icons';
 import { useAgentStore } from '../../stores/useAgentStore';
@@ -73,8 +72,10 @@ const AGENT_STATUS_COLOR: Record<string, string> = {
   review: 'text-warning',
 };
 
-/* Sidebar top functions: new chat first, then new task, then skills/tools.
-   These are normal in-flow items (they scroll with the sidebar), not a fixed bar. */
+/* Sidebar top functions: new chat first, then skills/plugins/scheduled.
+   These are normal in-flow items (they scroll with the sidebar), not a fixed
+   bar. The former 工具 group header was removed — the items sit directly in
+   the list. */
 const SIDEBAR_TOP_NAV: {
   key: 'new' | 'skills' | 'scheduled' | 'plugins';
   labelKey: I18nKey;
@@ -407,7 +408,6 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set());
   const [showAllSessions, setShowAllSessions] = useState<Set<string>>(new Set());
   const [skillsDirOpen, setSkillsDirOpen] = useState(false);
-  const [toolsOpen, setToolsOpen] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const dragStateRef = useRef<{ kind: 'workspace'; id: string } | { kind: 'session'; id: string; root: string } | null>(null);
@@ -1163,27 +1163,8 @@ export default function SiderNav({ collapsed }: SiderNavProps) {
       )}>
         {/* ── Top functions: normal in-flow items, scroll with the sidebar ── */}
         <div className={clsx('shrink-0 flex flex-col gap-0.5', visualCollapsed ? 'px-0 pb-1' : 'px-0 pb-2.5')}>
-          {SIDEBAR_TOP_NAV.filter((f) => f.key === 'new').map(renderTopItem)}
-          {sidebarMode !== 'chat' && !visualCollapsed && (
-            <div className="flex flex-col gap-0">
-              <button
-                type="button"
-                className={clsx('ax-sidebar-item h-8', toolsOpen && 'ax-sidebar-item-active', 'px-[10px]')}
-                onClick={() => setToolsOpen((v) => !v)}
-                title={t('sidebar.tools')}
-                aria-expanded={toolsOpen}
-              >
-                <span className="ax-sidebar-icon"><Toolbox size={16} /></span>
-                <span className={clsx('label-collapsible flex-1', labelCls)}>{t('sidebar.tools')}</span>
-                <CaretRight
-                  size={12}
-                  className={clsx('shrink-0 text-text-faint transition-transform duration-150', toolsOpen && 'rotate-90')}
-                />
-              </button>
-              {toolsOpen && SIDEBAR_TOP_NAV.filter((f) => f.key !== 'new').map(renderTopItem)}
-            </div>
-          )}
-          {sidebarMode !== 'chat' && visualCollapsed && SIDEBAR_TOP_NAV.filter((f) => f.key !== 'new').map(renderTopItem)}
+          {/* 「工具」按钮已移除：技能 / 插件中心 / 定时任务直接常驻显示。 */}
+          {SIDEBAR_TOP_NAV.filter((f) => f.key === 'new' || sidebarMode !== 'chat').map(renderTopItem)}
         </div>
         {sidebarMode === 'work'
           ? (!visualCollapsed && <WorkSidebarPanel />)

@@ -148,12 +148,17 @@ export default function WorkbenchLayout() {
   const openFileRequest = useAppStore((s) => s.openFileRequest);
   const projectPath = useSettingsStore((s) => s.projectPath);
   const sidebarGlass = useSettingsStore((s) => s.sidebarGlass);
+  const aquaGlass = useSettingsStore((s) => s.aquaGlass);
   const sidebarGlassSupported = useSettingsStore((s) => s.sidebarGlassSupported);
   const sidebarGlassReady = useSettingsStore((s) => s.sidebarGlassReady);
   // Frosted sidebar: only translucent when the OS actually provides Acrylic,
   // otherwise the solid panel color stays untouched (no unblurred window
   // transparency on Windows 10 / non-Windows).
   const sidebarGlassOn = sidebarGlass > 0 && sidebarGlassSupported && sidebarGlassReady;
+  const aquaGlassOn = aquaGlass > 0;
+  // Any glass surface (sidebar acrylic or Aqua mode) makes the workbench
+  // chrome transparent so the desktop / ambient backdrop can show through.
+  const glassSurfaceOn = sidebarGlassOn || aquaGlassOn;
   // At 100 the panel keeps a faint 12% tint so labels stay readable over the
   // blurred desktop; the tint grows with the value towards fully solid.
   // 曲线取 0.75 次方：中低档位更敏感，30~60% 就能看到明显磨砂，
@@ -452,8 +457,13 @@ export default function WorkbenchLayout() {
   return (
     <Layout className={clsx(
       'workbench-layout !h-screen !overflow-hidden',
-      sidebarGlassOn ? '!bg-transparent' : '!bg-[var(--color-glass-header)]',
+      // !important 是必须的：antd 会给 Layout 注入默认底色，普通 bg-transparent
+      // 优先级不够，会把 Acrylic 桌面整个盖住。
+      glassSurfaceOn ? '!bg-transparent' : '!bg-[var(--color-glass-header)]',
     )}>
+      {/* 顶栏在 Aqua 模式下悬浮成圆角卡片，窗口顶部留出的 10px 沟槽
+          需要这条透明热区维持无边框窗口的拖拽能力。 */}
+      {aquaGlassOn && <div aria-hidden className="ax-aqua-drag-strip" />}
       {/* ── Top Header Bar ── */}
       <Header className="ax-header !h-10 !pl-0 !pr-3 shrink-0">
         <div className="ax-header-group flex-1 min-w-0 gap-2.5">
@@ -761,12 +771,17 @@ export default function WorkbenchLayout() {
       {tabs.length > 1 && <TabBar />}
 
       {/* ── Body: drawer sider + Allotment (Content | optional Right Panel) ── */}
-      <div className={clsx(
-        'flex-1 flex min-h-0 min-w-0 overflow-hidden !p-0',
-        sidebarGlassOn ? '!bg-transparent' : '!bg-[var(--color-glass-panel)]',
-      )} ref={bodyRef}>
+      <div
+        data-pane="body"
+        className={clsx(
+          'flex-1 flex min-h-0 min-w-0 overflow-hidden !p-0',
+          glassSurfaceOn ? '!bg-transparent' : '!bg-[var(--color-glass-panel)]',
+        )}
+        ref={bodyRef}
+      >
         <aside
           data-pane="sider"
+          data-collapsed={sidebarCollapsed || undefined}
           className={clsx(
             'sider-drawer relative z-30 h-full shrink-0 overflow-hidden bg-[var(--color-glass-panel)] border-r border-border-dim/50 transition-[width] duration-300 ease-out',
             isResizingSider && '!transition-none',
@@ -792,14 +807,22 @@ export default function WorkbenchLayout() {
           )}
         </aside>
 
-        <div className="flex-1 min-w-0 h-full">
+        <div className="main-pane-wrap flex-1 min-w-0 h-full">
           <Allotment
             ref={allotmentRef}
             defaultSizes={initialSizes}
             onDragEnd={handleDragEnd}
           >
             <Allotment.Pane minSize={MAIN_MIN} className="!overflow-hidden">
-              <div data-pane="main" tabIndex={-1} className="relative w-full h-full !bg-bg-primary rounded-none overflow-hidden flex flex-col box-border !border-none outline-none">
+              <div
+                data-pane="main"
+                tabIndex={-1}
+                className={clsx(
+                  'relative w-full h-full rounded-none overflow-hidden flex flex-col box-border !border-none outline-none',
+                  // 只有 Aqua 模式让主区融入背景；侧栏玻璃模式下主区保持不透明。
+                  aquaGlassOn ? '!bg-transparent' : '!bg-bg-primary',
+                )}
+              >
                 <div className="flex-1 min-h-0 relative">
                   {renderTabContent()}
                 </div>
@@ -824,7 +847,9 @@ export default function WorkbenchLayout() {
           tabIndex={-1}
           aria-hidden={!hasRightPanel || undefined}
           className={clsx(
-            'relative z-20 h-full shrink-0 overflow-hidden bg-[var(--color-glass-panel)] border-l border-border-dim dark:border-l-[var(--color-border-dim)] outline-none transition-[width,max-width] duration-300 ease-out',
+            'relative z-20 h-full shrink-0 overflow-hidden border-l border-border-dim dark:border-l-[var(--color-border-dim)] outline-none transition-[width,max-width] duration-300 ease-out',
+            // Aqua 用 CSS 提供玻璃底色，这里保持普通优先级；侧栏玻璃模式保持实底。
+            aquaGlassOn ? 'bg-transparent' : 'bg-[var(--color-glass-panel)]',
             !hasRightPanel && 'border-l-transparent',
             isResizingRight && '!transition-none',
           )}

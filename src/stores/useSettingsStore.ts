@@ -39,6 +39,10 @@ export interface SettingsStore {
   zoomLevel: number;
   /** Sidebar frosted-glass transparency (0 = solid, 100 = most transparent). */
   sidebarGlass: number;
+  /** Aqua glass mode (0 = off, 100 = strongest). Whole workbench glass cards. */
+  aquaGlass: number;
+  /** Wallpaper shown behind the glass surfaces (data URL, compressed). */
+  wallpaper: string | null;
   /** Whether the current OS supports native Acrylic background material. */
   sidebarGlassSupported: boolean;
   /** Whether the current window was created with transparent + Acrylic ready.
@@ -72,6 +76,8 @@ export interface SettingsStore {
   setOutputPricePerM: (price: number) => void;
   setZoomLevel: (level: number) => void;
   setSidebarGlass: (value: number) => void;
+  setAquaGlass: (value: number) => void;
+  setWallpaper: (wallpaper: string | null) => void;
   setSidebarGlassSupported: (supported: boolean) => void;
   setPermissionPreset: (preset: PermissionPreset) => void;
   setWebSearchProvider: (provider: string) => void;
@@ -98,6 +104,8 @@ export const useSettingsStore = create<SettingsStore>()(
       outputPricePerM: 0,
       zoomLevel: 0,
       sidebarGlass: 0,
+      aquaGlass: 0,
+      wallpaper: null,
       sidebarGlassSupported: false,
       sidebarGlassReady: false,
       permissionPreset: DEFAULT_PERMISSION_PRESET,
@@ -130,6 +138,17 @@ export const useSettingsStore = create<SettingsStore>()(
         if (useSettingsStore.getState().sidebarGlassSupported && useSettingsStore.getState().sidebarGlassReady) {
           window.electronAPI?.setBackgroundMaterial?.(v > 0)?.catch?.(() => {});
         }
+      },
+
+      setAquaGlass: (value) => {
+        const v = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+        set({ aquaGlass: v });
+        window.electronAPI?.settings?.set?.('aquaGlass', v)?.catch?.(() => {});
+      },
+
+      setWallpaper: (wallpaper) => {
+        set({ wallpaper });
+        window.electronAPI?.settings?.set?.('wallpaper', wallpaper ?? '')?.catch?.(() => {});
       },
 
       setSidebarGlassSupported: (supported) => set({ sidebarGlassSupported: !!supported }),
@@ -236,6 +255,8 @@ export const useSettingsStore = create<SettingsStore>()(
         outputPricePerM: state.outputPricePerM,
         zoomLevel: state.zoomLevel,
         sidebarGlass: state.sidebarGlass,
+        aquaGlass: state.aquaGlass,
+        wallpaper: state.wallpaper,
         permissionPreset: state.permissionPreset,
         sandboxMode: state.sandboxMode,
         webSearchProvider: state.webSearchProvider,
@@ -321,6 +342,10 @@ export const useSettingsStore = create<SettingsStore>()(
             if (Number.isFinite(v)) {
               useSettingsStore.setState({ sidebarGlass: Math.max(0, Math.min(100, Math.round(v))) });
             }
+          }).catch(() => {});
+          window.electronAPI.settings.get('wallpaper').then((result) => {
+            const v = result?.data;
+            useSettingsStore.setState({ wallpaper: typeof v === 'string' && v ? v : null });
           }).catch(() => {});
           // Ask the main process whether Acrylic is available AND the current
           // window was created with it ready (needs a restart on old builds).

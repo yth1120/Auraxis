@@ -35,6 +35,8 @@ export default function App() {
   const theme = useAppStore((s) => s.theme);
   const enqueuePermission = useAdvancedStore((s) => s.enqueuePermission);
   const sidebarGlass = useSettingsStore((s) => s.sidebarGlass);
+  const aquaGlass = useSettingsStore((s) => s.aquaGlass);
+  const wallpaper = useSettingsStore((s) => s.wallpaper);
   const sidebarGlassSupported = useSettingsStore((s) => s.sidebarGlassSupported);
   const sidebarGlassReady = useSettingsStore((s) => s.sidebarGlassReady);
   const glassLayoutMounted = useAppStore((s) => s.glassLayoutMounted);
@@ -68,12 +70,20 @@ export default function App() {
   // Acrylic is available, so the desktop (blurred) can show through.
   useEffect(() => {
     const glassOn =
-      sidebarGlass > 0 && sidebarGlassSupported && sidebarGlassReady && glassLayoutMounted;
+      (sidebarGlass > 0 || aquaGlass > 0) && sidebarGlassSupported && sidebarGlassReady && glassLayoutMounted;
     document.documentElement.classList.toggle('auraxis-glass', glassOn);
     // 玻璃类与窗口材质同开同关：玻璃未真正生效时窗口保持不透明，
     // 避免透明+Acrylic 窗口在首帧露出桌面（启动/解锁瞬间全透明）。
     window.electronAPI?.setBackgroundMaterial?.(glassOn)?.catch?.(() => {});
-  }, [sidebarGlass, sidebarGlassSupported, sidebarGlassReady, glassLayoutMounted]);
+  }, [sidebarGlass, aquaGlass, sidebarGlassSupported, sidebarGlassReady, glassLayoutMounted]);
+
+  // Aqua glass mode: the slider writes a 0-100 level onto <html>; aqua.css
+  // turns it into blur radius / frost tint. No wallpaper involved.
+  useEffect(() => {
+    const level = Math.max(0, Math.min(100, aquaGlass));
+    document.documentElement.classList.toggle('auraxis-aqua', level > 0);
+    document.documentElement.style.setProperty('--ax-aqua-level', String(level));
+  }, [aquaGlass]);
 
   // 兜底：无论持久化 rehydrate 是否执行，挂载时都重新确认 Acrylic 能力。
   useEffect(() => {
@@ -505,6 +515,15 @@ export default function App() {
       <AntApp component={false}>
         <ErrorBoundary>
           <AuthGate>
+            {/* Wallpaper backdrop: fixed behind the glass surfaces. It only
+                becomes visible where the app is transparent (Aqua / acrylic). */}
+            {wallpaper && (
+              <div
+                aria-hidden
+                className="ax-wallpaper"
+                style={{ backgroundImage: `url("${wallpaper}")` }}
+              />
+            )}
             <WorkbenchLayout />
             {showSettings && (
               <Suspense fallback={null}>

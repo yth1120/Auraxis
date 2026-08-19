@@ -1,6 +1,6 @@
 {
   "name": "auraxis",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Auraxis - Agentic 编码助手，支持多智能体调度与插件扩展",
   "license": "MIT",
   "main": "dist-electron/main.js",
