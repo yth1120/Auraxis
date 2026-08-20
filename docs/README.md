@@ -15,8 +15,7 @@ The project follows **paper-driven development**: 7 arXiv papers' core technique
 - **IPC**: bidirectional communication via Electron IPC (`contextBridge` + `ipcMain/ipcRenderer`)
 
 ### Tech Stack
-
-<img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/fc6d6d43-bb90-4c2c-b2cc-4716afd3daf9" />
+<img width="1198" height="776" alt="image" src="https://github.com/user-attachments/assets/eb179070-5d95-4699-a1da-728dce6be0a1" />
 
 | Layer | Technology |
 |---|---|
