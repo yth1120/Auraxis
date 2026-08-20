@@ -131,17 +131,33 @@ function TerminalSurface({
       return true;
     });
 
+    // Coalesce rapid resize events (e.g. dragging the drawer) to one pass per
+    // frame, and only round-trip IPC when the cell grid actually changed —
+    // otherwise every pointermove triggers a fit + resize churn that shows
+    // up as continuous flicker in the terminal surface.
+    let rafId: number | null = null;
+    let lastCols = -1;
+    let lastRows = -1;
     const ro = new ResizeObserver(() => {
-      try {
-        fit.fit();
-        void api.resize(id, term.cols, term.rows);
-      } catch { /* hidden */ }
+      if (rafId != null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        try {
+          fit.fit();
+          if (term.cols !== lastCols || term.rows !== lastRows) {
+            lastCols = term.cols;
+            lastRows = term.rows;
+            void api.resize(id, term.cols, term.rows);
+          }
+        } catch { /* hidden */ }
+      });
     });
     ro.observe(el);
 
     registerClear(() => term.clear());
 
     return () => {
+      if (rafId != null) cancelAnimationFrame(rafId);
       ro.disconnect();
       inputDisposable.dispose();
       unsubData();
@@ -205,8 +221,13 @@ function AgentShellSurface({ agentId }: { agentId: string }) {
       term.write(`\r\n\x1b[90m${t('terminal.agentShellExited')}\x1b[0m\r\n`);
     });
 
+    let rafId: number | null = null;
     const ro = new ResizeObserver(() => {
-      try { fit.fit(); } catch { /* hidden */ }
+      if (rafId != null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        try { fit.fit(); } catch { /* hidden */ }
+      });
     });
     ro.observe(el);
 
@@ -223,6 +244,7 @@ function AgentShellSurface({ agentId }: { agentId: string }) {
 
     return () => {
       disposed = true;
+      if (rafId != null) cancelAnimationFrame(rafId);
       ro.disconnect();
       unsubData();
       unsubExit();

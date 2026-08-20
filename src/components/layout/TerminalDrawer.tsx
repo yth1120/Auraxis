@@ -1,4 +1,4 @@
-import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import clsx from 'clsx';
 import TerminalPanel from '../tools/TerminalPanel';
 import { useT } from '../../i18n';
@@ -22,10 +22,12 @@ export default function TerminalDrawer({
   onClose: () => void;
 }) {
   const t = useT();
+  const [dragging, setDragging] = useState(false);
   const dragRef = useRef<{ startY: number; startH: number } | null>(null);
 
   const onPointerDown = (e: ReactPointerEvent) => {
     e.preventDefault();
+    setDragging(true);
     dragRef.current = { startY: e.clientY, startH: height };
     const onMove = (ev: PointerEvent) => {
       const d = dragRef.current;
@@ -35,18 +37,22 @@ export default function TerminalDrawer({
     };
     const onUp = () => {
       dragRef.current = null;
+      setDragging(false);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
   };
 
   return (
     <div
       className={clsx(
-        'terminal-drawer shrink-0 flex flex-col bg-[var(--color-glass-panel)] border-t border-[var(--color-border-dim)] overflow-hidden transition-[height] duration-300 ease-out',
-        !open && '!border-t-transparent',
+        'terminal-drawer shrink-0 flex flex-col bg-[var(--color-glass-panel)] border-t border-[var(--color-border-dim)] overflow-hidden transition-[height,opacity,border-color] duration-300 ease-out',
+        dragging && '!transition-none',
+        !open && '!border-t-transparent !opacity-0',
       )}
       style={{ height: open ? height : 0 }}
       aria-hidden={!open || undefined}
