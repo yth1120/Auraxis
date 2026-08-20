@@ -178,14 +178,28 @@ html.auraxis-aqua [data-pane='right'][aria-hidden='true'] {
 
 /* Bottom terminal drawer: same zero-footprint rule — when collapsed, the
    glass tint, blur and hairline must not leave a ghost strip along the
-   bottom edge. The component also fades opacity to 0 while shrinking. */
+   bottom edge. The component also fades opacity to 0 while shrinking.
+   backdrop-filter is NOT removed instantly: ripping the blur off while the
+   glass is still sliding out makes the bottom edge flicker. The cleanup
+   animation fades the blur out over the same 300ms as height/opacity and
+   keeps it cleared afterwards. */
 html.auraxis-aqua .terminal-drawer[aria-hidden='true'] {
   border-color: transparent;
   box-shadow: none;
   opacity: 0;
   pointer-events: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  animation: ax-terminal-collapse-cleanup 300ms ease-out forwards;
+}
+
+@keyframes ax-terminal-collapse-cleanup {
+  from {
+    backdrop-filter: blur(var(--ax-aqua-blur)) saturate(1.35);
+    -webkit-backdrop-filter: blur(var(--ax-aqua-blur)) saturate(1.35);
+  }
+  to {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
 
 /* Tab bar (multi-tab workbench). */
