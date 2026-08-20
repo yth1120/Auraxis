@@ -51,6 +51,17 @@ if (headlessMode) {
   app.setPath('userData', cliUserData);
 }
 
+// Chromium 的磁盘缓存（网络 / Code Cache / GPU 着色器）是纯可再生数据。
+// Windows 上 Roaming 配置目录偶尔会被上次实例残留的文件锁或杀软短暂占
+// 用，Chromium 启动时移动旧缓存目录就会报 0x5「拒绝访问」，进而丢失 GPU
+// 着色器缓存（表现为启动后界面闪烁）。桌面模式下把缓存挪到 LocalAppData：
+// 同一用户可写、不参与配置同步，也从根源上避开旧缓存锁。测试/E2E 的隔离
+// userData 场景保持原样，避免与开发实例共享缓存目录。
+if (process.platform === 'win32' && !headlessMode && !process.env.AURAXIS_USER_DATA_DIR) {
+  const localAppData = process.env.LOCALAPPDATA || path.join(app.getPath('appData'), '..', 'Local');
+  app.setPath('cache', path.join(localAppData, app.getName(), 'Cache'));
+}
+
 if (!headlessMode) {
   const gotLock = app.requestSingleInstanceLock();
   if (!gotLock) {
