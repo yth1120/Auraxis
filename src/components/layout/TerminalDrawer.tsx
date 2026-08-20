@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import clsx from 'clsx';
 import TerminalPanel from '../tools/TerminalPanel';
 import { useT } from '../../i18n';
@@ -23,7 +23,19 @@ export default function TerminalDrawer({
 }) {
   const t = useT();
   const [dragging, setDragging] = useState(false);
+  // The drawer animates height over 300ms when opening/closing; during that
+  // window the terminal must not refit every frame either.
+  const [settling, setSettling] = useState(false);
   const dragRef = useRef<{ startY: number; startH: number } | null>(null);
+  const prevOpenRef = useRef(open);
+
+  useEffect(() => {
+    if (prevOpenRef.current === open) return;
+    prevOpenRef.current = open;
+    setSettling(true);
+    const timer = setTimeout(() => setSettling(false), 320);
+    return () => clearTimeout(timer);
+  }, [open]);
 
   const onPointerDown = (e: ReactPointerEvent) => {
     e.preventDefault();
@@ -66,7 +78,7 @@ export default function TerminalDrawer({
         <span className="w-10 h-1 rounded-full bg-[var(--color-border-default)] transition-colors duration-150 group-hover:bg-[var(--color-border-strong)]" />
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
-        <TerminalPanel onClose={onClose} />
+        <TerminalPanel onClose={onClose} paused={dragging || settling} />
       </div>
     </div>
   );

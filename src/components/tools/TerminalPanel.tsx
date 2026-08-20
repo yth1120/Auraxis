@@ -65,12 +65,19 @@ function TerminalSurface({
   registerClear,
   registerFocus,
   onReady,
+  paused,
 }: {
   registerClear: (fn: () => void) => void;
   registerFocus: (fn: () => void) => void;
   onReady: (id: string) => void;
+  paused?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const pausedRef = useRef(paused);
+
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -139,6 +146,12 @@ function TerminalSurface({
     let lastCols = -1;
     let lastRows = -1;
     const ro = new ResizeObserver(() => {
+      // While the user drags the drawer (or it animates open/closed), the
+      // size changes every frame — refitting the xterm canvas per frame
+      // clears and repaints it continuously, which reads as flicker. Skip
+      // the work and let the observer deliver one final size after the
+      // drag/settle ends.
+      if (pausedRef.current) return;
       if (rafId != null) return;
       rafId = requestAnimationFrame(() => {
         rafId = null;
@@ -171,8 +184,13 @@ function TerminalSurface({
 }
 
 /** Read-only mirror of the selected agent's persistent shell session. */
-function AgentShellSurface({ agentId }: { agentId: string }) {
+function AgentShellSurface({ agentId, paused }: { agentId: string; paused?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const pausedRef = useRef(paused);
+
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -223,6 +241,7 @@ function AgentShellSurface({ agentId }: { agentId: string }) {
 
     let rafId: number | null = null;
     const ro = new ResizeObserver(() => {
+      if (pausedRef.current) return;
       if (rafId != null) return;
       rafId = requestAnimationFrame(() => {
         rafId = null;
@@ -256,7 +275,7 @@ function AgentShellSurface({ agentId }: { agentId: string }) {
   return <div ref={containerRef} className="w-full h-full rounded-xl overflow-hidden border border-[var(--color-border-dim)]" />;
 }
 
-export default function TerminalPanel({ onClose }: { onClose?: () => void }) {
+export default function TerminalPanel({ onClose, paused }: { onClose?: () => void; paused?: boolean }) {
   const t = useT();
   const [sessionKey, setSessionKey] = useState(0);
   const [viewMode, setViewMode] = useState<'local' | 'agent'>('local');
@@ -499,13 +518,13 @@ export default function TerminalPanel({ onClose }: { onClose?: () => void }) {
               </div>
             )}
             <div className="flex-1 min-h-0">
-              <AgentShellSurface agentId={shellAgentId} />
+              <AgentShellSurface agentId={shellAgentId} paused={paused} />
             </div>
           </div>
         ) : (
           <div className="flex-1 min-h-0">
             {window.electronAPI?.terminal ? (
-              <TerminalSurface key={sessionKey} registerClear={registerClear} registerFocus={registerFocus} onReady={onReady} />
+              <TerminalSurface key={sessionKey} registerClear={registerClear} registerFocus={registerFocus} onReady={onReady} paused={paused} />
             ) : (
               <div className="flex items-center justify-center h-full rounded-xl border border-[var(--color-border-dim)] bg-[var(--color-bg-secondary)] text-sm text-text-muted">
                 {t('terminal.desktopOnly')}
