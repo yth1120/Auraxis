@@ -83,7 +83,7 @@
 
 ## v2.0.0 (2026-08-15)
 
-> First official major release: the full baseline of the desktop Agentic coding assistant.
+> First official major release: the full baseline of the desktop agentic workbench.
 
 ### Core Engine
 

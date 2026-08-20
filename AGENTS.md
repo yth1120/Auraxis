@@ -1,6 +1,6 @@
 # AGENTS.md — Auraxis 工程与 UI 规范
 
-桌面端 AI Agent 编码助手（Electron + React 18 + TypeScript + Zustand）。本项目是**普通桌面客户端**：功能与工具面覆盖业界主流 Agent 能力，架构与开发细节见 `docs/README.md`。
+桌面端 AI 智能体工作台（Electron + React 18 + TypeScript + Zustand）。本项目是**普通桌面客户端**：功能与工具面覆盖业界主流 Agent 能力，架构与开发细节见 `docs/README.md`。
 
 ## 常用命令
 

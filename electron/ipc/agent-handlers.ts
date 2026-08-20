@@ -131,7 +131,7 @@ Shell：${shellHint}
   'general-purpose': {
     type: 'general-purpose',
     whenToUse: 'General-purpose agent for complex multi-step coding tasks. Full tool access. Use for implementing features, fixing bugs, refactoring, or any task that requires multiple steps and tools.',
-    getSystemPrompt: (task, platform, shellHint, projectRoot) => `你是 Auraxis 的 AI 编码助手。你的职责是完整、清晰地完成用户的任务。
+    getSystemPrompt: (task, platform, shellHint, projectRoot) => `你是 Auraxis，一个桌面端 AI 智能体工作台。你的职责是完整、清晰地完成用户的任务。
 
 ## 工作方式（由你自主决定）
 
