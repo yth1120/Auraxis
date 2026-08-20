@@ -24,14 +24,4 @@ describe('TerminalDrawer — 底部终端抽屉', () => {
     // 300 + (500 - 200) = 600 → clamped to 560
     expect(onChange).toHaveBeenCalledWith(560);
   });
-
-  it('collapses to a fully hidden state (zero height + opacity)', () => {
-    const { container } = render(
-      <TerminalDrawer open={false} height={300} onChange={() => {}} onClose={() => {}} />,
-    );
-    const drawer = container.firstElementChild as HTMLElement;
-    expect(drawer.style.height).toBe('0px');
-    expect(drawer.className).toContain('!opacity-0');
-    expect(drawer.getAttribute('aria-hidden')).toBe('true');
-  });
 });

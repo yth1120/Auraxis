@@ -45,8 +45,8 @@ export default function TerminalDrawer({
   return (
     <div
       className={clsx(
-        'terminal-drawer shrink-0 flex flex-col bg-[var(--color-glass-panel)] border-t border-[var(--color-border-dim)] overflow-hidden transition-[height,opacity] duration-300 ease-out',
-        !open && '!border-t-transparent !opacity-0',
+        'terminal-drawer shrink-0 flex flex-col bg-[var(--color-glass-panel)] border-t border-[var(--color-border-dim)] overflow-hidden transition-[height] duration-300 ease-out',
+        !open && '!border-t-transparent',
       )}
       style={{ height: open ? height : 0 }}
       aria-hidden={!open || undefined}

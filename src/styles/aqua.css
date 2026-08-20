@@ -176,18 +176,6 @@ html.auraxis-aqua [data-pane='right'][aria-hidden='true'] {
   -webkit-backdrop-filter: none;
 }
 
-/* Bottom terminal drawer: same zero-footprint rule — when collapsed, the
-   glass tint, blur and hairline must not leave a ghost strip along the
-   bottom edge. The component also fades opacity to 0 while shrinking. */
-html.auraxis-aqua .terminal-drawer[aria-hidden='true'] {
-  border-color: transparent;
-  box-shadow: none;
-  opacity: 0;
-  pointer-events: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
 /* Tab bar (multi-tab workbench). */
 html.auraxis-aqua .tab-bar {
   border-bottom-color: var(--ax-aqua-hairline);
