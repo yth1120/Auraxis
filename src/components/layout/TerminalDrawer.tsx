@@ -50,7 +50,7 @@ export default function TerminalDrawer({
   return (
     <div
       className={clsx(
-        'terminal-drawer shrink-0 flex flex-col bg-[var(--color-glass-panel)] border-t border-[var(--color-border-dim)] overflow-hidden transition-[height,opacity,border-color] duration-300 ease-out',
+        'shrink-0 flex flex-col bg-[var(--color-glass-panel)] border-t border-[var(--color-border-dim)] overflow-hidden transition-[height,opacity,border-color] duration-300 ease-out',
         dragging && '!transition-none',
         !open && '!border-t-transparent !opacity-0',
       )}

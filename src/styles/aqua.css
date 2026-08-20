@@ -73,8 +73,7 @@ html.auraxis-aqua:not(.auraxis-glass) body::before {
 html.auraxis-aqua .ax-header,
 html.auraxis-aqua .tab-bar,
 html.auraxis-aqua [data-pane='sider'],
-html.auraxis-aqua [data-pane='right'],
-html.auraxis-aqua .terminal-drawer {
+html.auraxis-aqua [data-pane='right'] {
   background: var(--ax-aqua-glass);
   backdrop-filter: blur(var(--ax-aqua-blur)) saturate(1.35);
   -webkit-backdrop-filter: blur(var(--ax-aqua-blur)) saturate(1.35);
@@ -174,26 +173,6 @@ html.auraxis-aqua [data-pane='right'][aria-hidden='true'] {
   pointer-events: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-}
-
-/* Bottom terminal drawer: collapsed must leave zero footprint — the glass
-   tint, blur and hairline would otherwise linger as a ghost strip along the
-   bottom edge. The blur cleanup is deferred past the 300ms height/opacity
-   transition: ripping it off at the start flashes while the glass is still
-   sliding out, so it is cleared only once the drawer is invisible. */
-html.auraxis-aqua .terminal-drawer[aria-hidden='true'] {
-  border-color: transparent;
-  box-shadow: none;
-  opacity: 0;
-  pointer-events: none;
-  animation: ax-terminal-collapse-cleanup 1ms linear 300ms forwards;
-}
-
-@keyframes ax-terminal-collapse-cleanup {
-  to {
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
 }
 
 /* Tab bar (multi-tab workbench). */
