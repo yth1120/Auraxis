@@ -74,9 +74,14 @@ function TerminalSurface({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const pausedRef = useRef(paused);
+  const requestFitRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     pausedRef.current = paused;
+    // Sizes observed while paused were skipped, so the ResizeObserver will
+    // not necessarily fire again once the drag/settle ends. Explicitly refit
+    // so the terminal never stays at a stale row/col grid.
+    if (!paused) requestFitRef.current();
   }, [paused]);
 
   useEffect(() => {
@@ -145,13 +150,7 @@ function TerminalSurface({
     let rafId: number | null = null;
     let lastCols = -1;
     let lastRows = -1;
-    const ro = new ResizeObserver(() => {
-      // While the user drags the drawer (or it animates open/closed), the
-      // size changes every frame — refitting the xterm canvas per frame
-      // clears and repaints it continuously, which reads as flicker. Skip
-      // the work and let the observer deliver one final size after the
-      // drag/settle ends.
-      if (pausedRef.current) return;
+    const requestFit = () => {
       if (rafId != null) return;
       rafId = requestAnimationFrame(() => {
         rafId = null;
@@ -164,6 +163,16 @@ function TerminalSurface({
           }
         } catch { /* hidden */ }
       });
+    };
+    requestFitRef.current = requestFit;
+
+    const ro = new ResizeObserver(() => {
+      // While the user drags the drawer (or it animates open/closed), the
+      // size changes every frame — refitting the xterm canvas per frame
+      // clears and repaints it continuously, which reads as flicker. Skip
+      // the work; the final size is applied when pause is released.
+      if (pausedRef.current) return;
+      requestFit();
     });
     ro.observe(el);
 
@@ -171,6 +180,7 @@ function TerminalSurface({
 
     return () => {
       if (rafId != null) cancelAnimationFrame(rafId);
+      requestFitRef.current = () => {};
       ro.disconnect();
       inputDisposable.dispose();
       unsubData();
@@ -187,9 +197,11 @@ function TerminalSurface({
 function AgentShellSurface({ agentId, paused }: { agentId: string; paused?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const pausedRef = useRef(paused);
+  const requestFitRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     pausedRef.current = paused;
+    if (!paused) requestFitRef.current();
   }, [paused]);
 
   useEffect(() => {
@@ -240,13 +252,18 @@ function AgentShellSurface({ agentId, paused }: { agentId: string; paused?: bool
     });
 
     let rafId: number | null = null;
-    const ro = new ResizeObserver(() => {
-      if (pausedRef.current) return;
+    const requestFit = () => {
       if (rafId != null) return;
       rafId = requestAnimationFrame(() => {
         rafId = null;
         try { fit.fit(); } catch { /* hidden */ }
       });
+    };
+    requestFitRef.current = requestFit;
+
+    const ro = new ResizeObserver(() => {
+      if (pausedRef.current) return;
+      requestFit();
     });
     ro.observe(el);
 
@@ -264,6 +281,7 @@ function AgentShellSurface({ agentId, paused }: { agentId: string; paused?: bool
     return () => {
       disposed = true;
       if (rafId != null) cancelAnimationFrame(rafId);
+      requestFitRef.current = () => {};
       ro.disconnect();
       unsubData();
       unsubExit();
